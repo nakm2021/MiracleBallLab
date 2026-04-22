@@ -77,8 +77,8 @@ const MILESTONE_INTERVAL = 3000;
 const GIANT_EVENT_INTERVAL = 3000;
 const FINAL_SWEEP_DELAY_MS = 3000;
 
-const GOLD_RATE = 0.03;
-const RAINBOW_RATE = 0.005;
+const GOLD_RATE = 0.002;          // 1/500
+const RAINBOW_RATE = 0.0005;     // 1/2,000
 const SHAPE_RATE = 0.002;          // 1/500
 const CROWN_RATE = 0.0001;         // 1/10,000
 const SHOOTING_STAR_RATE = 0.00001;// 1/100,000
@@ -665,7 +665,7 @@ function showPopup(title: string, bodyHtml: string): void {
 function showAboutPopup(): void {
     showPopup("ミラクルボールラボについて", `
         <p><b>ミラクルボールラボ</b>は、玉を上から落として、ピンに当たりながらどの受け皿に入るかを観測するランダム実験です。</p>
-        <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王冠、流れ星、桃色ハート、黒い太陽、宇宙卵などのレア玉がまれに出ます。特に宇宙卵は<b>1兆分の1</b>の超レア演出です。</p>
+        <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王、流れ星、桃色ハート、黒い太陽、宇宙卵などのレア玉がまれに出ます。特に宇宙卵は<b>1兆分の1</b>の超レア演出です。</p>
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
         <p>3000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。</p>
@@ -721,9 +721,9 @@ function calculateGeometry(): Geometry {
     const viewportWidth = Math.max(320, window.innerWidth);
     const viewportHeight = Math.max(480, window.innerHeight);
     const small = isMobile || viewportWidth < 700;
-    const infoHeight = Math.round(clamp(viewportHeight * (small ? 0.56 : 0.40), small ? 380 : 300, small ? 620 : 500));
+    const infoHeight = Math.round(clamp(viewportHeight * (small ? 0.24 : 0.40), small ? 170 : 300, small ? 260 : 500));
     const width = viewportWidth;
-    const height = Math.max(260, viewportHeight - infoHeight);
+    const height = Math.max(360, viewportHeight - infoHeight);
     const scale = clamp(Math.min(width / BASE_WIDTH, height / BASE_HEIGHT), 0.56, 2.4);
     const pixelRatio = clamp(window.devicePixelRatio || 1, 1, 3);
 
@@ -1045,7 +1045,7 @@ function createDrop(): Matter.Body {
         } else if (miracleRoll < SHOOTING_STAR_RATE) {
             kind = "shootingStar"; radius = geometry.ballRadius * 1.7; fillStyle = "#78e7ff"; symbol = "★"; label = "流れ星"; starCreated++; showMiracle(kind, "🌠", "1 / 100,000", "10万回に1回くらい。長時間検証でやっと会える級です。");
         } else if (miracleRoll < CROWN_RATE) {
-            kind = "crown"; radius = geometry.ballRadius * 1.6; fillStyle = "#ffd54a"; symbol = "♛"; label = "王冠"; crownCreated++; showMiracle(kind, "👑", "1 / 10,000", "1万回に1回くらい。普通にレアです。王です。王。");
+            kind = "crown"; radius = geometry.ballRadius * 1.9; fillStyle = "#ffd54a"; symbol = "王"; label = "王"; crownCreated++; showMiracle(kind, "王", "1 / 10,000", "1万回に1回くらい。普通にレアです。王です。王。");
         } else {
             const shapeRoll = appRandom();
             if (shapeRoll < SHAPE_RATE) { kind = "shape"; radius = geometry.ballRadius * clamp(0.85 + appRandom() * 0.35, 0.85, 1.2); fillStyle = randomColor(); isShape = true; shapeCreated++; }
@@ -1166,9 +1166,9 @@ function showMilestone(text: string): void {
 }
 
 function pickCelebrationEffect(): { name: string; icon: string } {
-    const icons = ["🎆", "💥", "🌊", "🎂", "👍", "⚡", "🐶", "🐱", "⭐", "🔥", "🪐", "🎉", "🌈", "🦊", "🐸", "🦄", "🍀", "🍙", "🍜", "🍤", "🍣", "🥁", "🎺", "🎸", "🪩", "🛸", "🚀", "🌋", "🗿", "👺", "🥷", "🧊", "🫧", "🌪️", "☄️", "🌕", "🌞", "🦖", "🐉", "🦕"];
-    const prefixes = ["大", "超", "激", "謎", "夢", "夜", "朝", "山", "海", "森", "宇宙", "古代", "未来", "昭和", "平成", "令和", "無音", "爆速", "低速", "ぬるぬる"];
-    const suffixes = ["花火", "爆発", "祭り", "旋風", "波動", "祝福", "行進", "ダンス", "点滅", "ジャンプ", "拍手", "覚醒", "降臨", "乱舞", "パレード", "お祝い", "びっくり", "フィーバー", "チャンス", "ミラクル"];
+    const icons = ["🎆", "💥", "🌊", "🎂", "👍", "⚡", "🐶", "🐱", "⭐", "🔥", "🪐", "🎉", "🌈", "🦊", "🐸", "🦄", "🍀", "🍙", "🍜", "🍤", "🍣", "🥁", "🎺", "🎸", "🪩", "🛸", "🚀", "🌋", "🗿", "👺", "🥷", "🧊", "🫧", "🌪️", "☄️", "🌕", "🌞", "🦖", "🐉", "🦕", "🦑", "🐙", "💎", "🔮", "🎭", "🧨", "🪄", "🌌", "🤖"];
+    const prefixes = ["大", "超", "激", "謎", "夢", "夜", "朝", "山", "海", "森", "宇宙", "古代", "未来", "昭和", "平成", "令和", "無音", "爆速", "低速", "ぬるぬる", "異世界", "深海", "銀河", "幻", "七色", "黄金", "透明", "暴走", "伝説"];
+    const suffixes = ["花火", "爆発", "祭り", "旋風", "波動", "祝福", "行進", "ダンス", "点滅", "ジャンプ", "拍手", "覚醒", "降臨", "乱舞", "パレード", "お祝い", "びっくり", "フィーバー", "チャンス", "ミラクル", "カーニバル", "流星群", "オーロラ", "分身", "万華鏡", "大予言", "召喚", "タイムスリップ", "光線"];
     const i = Math.floor(appRandom() * icons.length);
     const prefix = prefixes[Math.floor(appRandom() * prefixes.length)];
     const suffix = suffixes[Math.floor(appRandom() * suffixes.length)];
@@ -1372,7 +1372,7 @@ function updateInfo(): void {
         <div>受け皿: <b>${settings.binCount}</b> + 両端捨て区画</div>
         <div>ピン段数: <b>${settings.pinRows}</b></div>
         <div>金:${goldCreated} 虹:${rainbowCreated} 巨:${giantCreated} 図:${shapeCreated}</div>
-        <div>王冠:${crownCreated} 星:${starCreated} 桃:${heartCreated} 黒:${blackSunCreated} 宇宙卵:${cosmicEggCreated}</div>
+        <div>王:${crownCreated} 星:${starCreated} 桃:${heartCreated} 黒:${blackSunCreated} 宇宙卵:${cosmicEggCreated}</div>
         <div>捨て区画: <b>${discardedCount.toLocaleString()}</b></div>
     `;
     updateRandomGraph();
@@ -1459,7 +1459,7 @@ function showFinalResult(): void {
             <div style="font-size:clamp(22px,4vw,40px);margin-bottom:18px;">${browserName} / 指定${settings.targetCount.toLocaleString()}回 / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime)}</div>
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">一番レアは <b>1兆分の1</b> の「宇宙卵」です。出たら奇跡どころか、画面が伝説になります。</div>
-            <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">捨て区画:${discardedCount} / 金:${goldCreated} 虹:${rainbowCreated} 巨:${giantCreated} 図:${shapeCreated} 王冠:${crownCreated} 流れ星:${starCreated} 桃色ハート:${heartCreated} 黒い太陽:${blackSunCreated} 宇宙卵:${cosmicEggCreated}</div>
+            <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">捨て区画:${discardedCount} / 金:${goldCreated} 虹:${rainbowCreated} 巨:${giantCreated} 図:${shapeCreated} 王:${crownCreated} 流れ星:${starCreated} 桃色ハート:${heartCreated} 黒い太陽:${blackSunCreated} 宇宙卵:${cosmicEggCreated}</div>
             <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="copy-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">結果コピー</button><button id="download-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">CSV保存</button><button id="bottom-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">閉じる</button></div>
         </div>`;
     resultOverlay.style.display = "flex";
@@ -1537,8 +1537,8 @@ function drawSpecialGlows(context: CanvasRenderingContext2D): void {
         context.arc(x, y, radius * 5, 0, Math.PI * 2);
         context.fill();
         if (plugin.symbol) {
-            context.font = `900 ${Math.round(radius * 1.65)}px "Segoe UI Symbol", "Segoe UI Emoji", sans-serif`;
-            context.fillStyle = kind === "blackSun" ? "#ff0044" : kind === "cosmicEgg" ? "#00e5ff" : "#ffffff";
+            context.font = `900 ${Math.round(radius * (kind === "crown" ? 1.35 : 1.65))}px "Noto Sans JP", "Segoe UI", "Segoe UI Symbol", "Segoe UI Emoji", sans-serif`;
+            context.fillStyle = kind === "blackSun" ? "#ff0044" : kind === "cosmicEgg" ? "#00e5ff" : kind === "crown" ? "#5a3600" : "#ffffff";
             context.textAlign = "center";
             context.textBaseline = "middle";
             context.fillText(plugin.symbol, x, y);
@@ -1688,7 +1688,7 @@ Events.on(engine, "afterUpdate", () => {
                 if (kind === "rainbow") { rainbowHits[binIndex]++; addFloatingText(`虹 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 60 * geometry.scale, "#b44cff"); triggerCameraShake(11 * geometry.scale, 240); }
                 if (kind === "giant") { giantHits[binIndex]++; addFloatingText(`巨大 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 70 * geometry.scale, "#111111"); triggerCameraShake(15 * geometry.scale, 300); }
                 if (kind === "shape") { shapeHits[binIndex]++; addFloatingText(`${plugin.shapeName ?? "図形"} → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 70 * geometry.scale, "#ffffff"); triggerCameraShake(9 * geometry.scale, 220); }
-                if (kind === "crown") { crownHits[binIndex]++; addFloatingText(`王冠 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ffd54a"); fireConfetti("miracle"); }
+                if (kind === "crown") { crownHits[binIndex]++; addFloatingText(`王 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ffd54a"); fireConfetti("miracle"); }
                 if (kind === "shootingStar") { starHits[binIndex]++; addFloatingText(`流れ星 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#78e7ff"); fireConfetti("miracle"); }
                 if (kind === "heart") { heartHits[binIndex]++; addFloatingText(`桃色ハート → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ff69b4"); triggerCameraShake(22 * geometry.scale, 480); fireConfetti("miracle"); }
                 if (kind === "blackSun") { blackSunHits[binIndex]++; addFloatingText(`黒い太陽 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ff0044"); triggerCameraShake(26 * geometry.scale, 600); fireConfetti("black"); }
