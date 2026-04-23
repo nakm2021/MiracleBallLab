@@ -23,6 +23,16 @@ type DropKind =
     | "luckySeven"
     | "timeRift"
     | "labExplosion"
+    | "crystalDragon"
+    | "goldenDaruma"
+    | "moonRabbit"
+    | "phantomCastle"
+    | "rainbowWhale"
+    | "thunderKitsune"
+    | "pocketGalaxy"
+    | "ancientClock"
+    | "mirrorCat"
+    | "meteorCrown"
     | "fragment";
 
 type ProbabilityMode = "normal" | "festival" | "hard" | "hell";
@@ -119,16 +129,29 @@ const COSMIC_EGG_RATE = 0.000000000001; // 1/1,000,000,000,000
 const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v2";
 
 const SPECIAL_EVENT_DEFS: SpecialEventDef[] = [
-    { kind: "cosmicEgg", label: "宇宙卵", rank: "GOD", rate: COSMIC_EGG_RATE, denominator: 1_000_000_000_000, symbol: "✦", emoji: "🥚", fillStyle: "#240038", radiusScale: 2.7, soundMode: "cosmic" },
-    { kind: "labExplosion", label: "研究所爆発", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "爆", emoji: "💥", fillStyle: "#ff3b30", radiusScale: 2.45, soundMode: "cosmic" },
-    { kind: "blackSun", label: "黒い太陽", rank: "EX", rate: BLACK_SUN_RATE, denominator: 10_000_000, symbol: "黒", emoji: "☀", fillStyle: "#050505", radiusScale: 2.2, soundMode: "black" },
-    { kind: "timeRift", label: "時空の裂け目", rank: "EX", rate: 0.0000005, denominator: 2_000_000, symbol: "裂", emoji: "🌀", fillStyle: "#622aff", radiusScale: 2.05, soundMode: "cosmic" },
-    { kind: "heart", label: "桃色ハート", rank: "UR", rate: HEART_RATE, denominator: 1_000_000, symbol: "♥", emoji: "💗", fillStyle: "#ff69b4", radiusScale: 1.9, soundMode: "miracle" },
-    { kind: "luckySeven", label: "ラッキーセブン", rank: "UR", rate: 1 / 777777, denominator: 777_777, symbol: "7", emoji: "7️⃣", fillStyle: "#ff2bd6", radiusScale: 1.85, soundMode: "miracle" },
-    { kind: "blueFlame", label: "青い炎", rank: "SSR", rate: 0.000004, denominator: 250_000, symbol: "炎", emoji: "🔥", fillStyle: "#00aaff", radiusScale: 1.75, soundMode: "miracle" },
-    { kind: "shootingStar", label: "流れ星", rank: "SSR", rate: SHOOTING_STAR_RATE, denominator: 100_000, symbol: "★", emoji: "🌠", fillStyle: "#78e7ff", radiusScale: 1.7, soundMode: "miracle" },
-    { kind: "silverUfo", label: "銀のUFO", rank: "SR", rate: 0.00002, denominator: 50_000, symbol: "U", emoji: "🛸", fillStyle: "#cfd8dc", radiusScale: 1.65, soundMode: "miracle" },
-    { kind: "crown", label: "王", rank: "SR", rate: CROWN_RATE, denominator: 10_000, symbol: "王", emoji: "👑", fillStyle: "#ffd54a", radiusScale: 1.9, soundMode: "miracle" },
+    { kind: "cosmicEgg", label: "宇宙卵", rank: "GOD", rate: COSMIC_EGG_RATE, denominator: 1_000_000_000_000, symbol: "卵", emoji: "卵", fillStyle: "#240038", radiusScale: 2.7, soundMode: "cosmic" },
+    { kind: "labExplosion", label: "研究所爆発", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "爆", emoji: "爆", fillStyle: "#ff3b30", radiusScale: 2.45, soundMode: "cosmic" },
+    { kind: "blackSun", label: "黒い太陽", rank: "EX", rate: BLACK_SUN_RATE, denominator: 10_000_000, symbol: "黒", emoji: "黒", fillStyle: "#050505", radiusScale: 2.2, soundMode: "black" },
+    { kind: "timeRift", label: "時空の裂け目", rank: "EX", rate: 0.0000005, denominator: 2_000_000, symbol: "裂", emoji: "裂", fillStyle: "#622aff", radiusScale: 2.05, soundMode: "cosmic" },
+
+    // 100万分の1レベル追加イベント
+    { kind: "crystalDragon", label: "水晶ドラゴン", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "竜", emoji: "竜", fillStyle: "#72f1ff", radiusScale: 2.0, soundMode: "cosmic" },
+    { kind: "goldenDaruma", label: "黄金だるま", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "達", emoji: "達", fillStyle: "#ffbf2e", radiusScale: 1.95, soundMode: "miracle" },
+    { kind: "moonRabbit", label: "月うさぎ", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "月", emoji: "月", fillStyle: "#d8e7ff", radiusScale: 1.95, soundMode: "miracle" },
+    { kind: "phantomCastle", label: "幻の城", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "城", emoji: "城", fillStyle: "#9b8cff", radiusScale: 1.95, soundMode: "cosmic" },
+    { kind: "rainbowWhale", label: "虹クジラ", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "鯨", emoji: "鯨", fillStyle: "#3ee8c9", radiusScale: 2.0, soundMode: "miracle" },
+    { kind: "thunderKitsune", label: "雷きつね", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "狐", emoji: "狐", fillStyle: "#ffe45c", radiusScale: 1.95, soundMode: "miracle" },
+    { kind: "pocketGalaxy", label: "ポケット銀河", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "銀", emoji: "銀", fillStyle: "#3547ff", radiusScale: 2.05, soundMode: "cosmic" },
+    { kind: "ancientClock", label: "古代時計", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "時", emoji: "時", fillStyle: "#b58b4a", radiusScale: 1.95, soundMode: "cosmic" },
+    { kind: "mirrorCat", label: "鏡ねこ", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "猫", emoji: "猫", fillStyle: "#f5f7ff", radiusScale: 1.95, soundMode: "miracle" },
+    { kind: "meteorCrown", label: "隕石クラウン", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "冠", emoji: "冠", fillStyle: "#ff6d3a", radiusScale: 2.05, soundMode: "cosmic" },
+
+    { kind: "heart", label: "桃色ハート", rank: "UR", rate: HEART_RATE, denominator: 1_000_000, symbol: "愛", emoji: "愛", fillStyle: "#ff69b4", radiusScale: 1.9, soundMode: "miracle" },
+    { kind: "luckySeven", label: "ラッキーセブン", rank: "UR", rate: 1 / 777777, denominator: 777_777, symbol: "7", emoji: "7", fillStyle: "#ff2bd6", radiusScale: 1.85, soundMode: "miracle" },
+    { kind: "blueFlame", label: "青い炎", rank: "SSR", rate: 0.000004, denominator: 250_000, symbol: "炎", emoji: "炎", fillStyle: "#00aaff", radiusScale: 1.75, soundMode: "miracle" },
+    { kind: "shootingStar", label: "流れ星", rank: "SSR", rate: SHOOTING_STAR_RATE, denominator: 100_000, symbol: "星", emoji: "星", fillStyle: "#78e7ff", radiusScale: 1.7, soundMode: "miracle" },
+    { kind: "silverUfo", label: "銀のUFO", rank: "SR", rate: 0.00002, denominator: 50_000, symbol: "UFO", emoji: "UFO", fillStyle: "#cfd8dc", radiusScale: 1.65, soundMode: "miracle" },
+    { kind: "crown", label: "王", rank: "SR", rate: CROWN_RATE, denominator: 10_000, symbol: "王", emoji: "王", fillStyle: "#ffd54a", radiusScale: 1.9, soundMode: "miracle" },
 ];
 
 const RANDOM_BUCKET_COUNT = 10;
@@ -241,16 +264,46 @@ const runner = Runner.create();
 // HTML / UI
 // ======================================================
 
+document.documentElement.style.margin = "0";
+document.documentElement.style.padding = "0";
+document.documentElement.style.width = "100%";
+document.documentElement.style.maxWidth = "100%";
+document.documentElement.style.height = "100%";
+document.documentElement.style.overflow = "hidden";
+document.documentElement.style.overscrollBehavior = "none";
+
 document.body.style.margin = "0";
+document.body.style.padding = "0";
 document.body.style.background = "linear-gradient(180deg, #eef3ff 0%, #f7f4ef 100%)";
 document.body.style.fontFamily = `"Segoe UI", "Noto Sans JP", sans-serif`;
 document.body.style.overflow = "hidden";
-document.body.style.width = "100vw";
+document.body.style.overflowX = "hidden";
+document.body.style.width = "100%";
+document.body.style.maxWidth = "100%";
 document.body.style.height = "100dvh";
+document.body.style.position = "fixed";
+document.body.style.left = "0";
+document.body.style.top = "0";
+document.body.style.right = "0";
+document.body.style.bottom = "0";
+document.body.style.overscrollBehavior = "none";
+document.body.style.touchAction = "pan-y";
+
+const globalStyle = document.createElement("style");
+globalStyle.textContent = `
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { max-width: 100%; overflow: hidden; }
+  body { overscroll-behavior-x: none; }
+  #miracle-horizontal-guard { width: 100%; max-width: 100%; overflow-x: hidden; }
+`;
+document.head.appendChild(globalStyle);
 
 const appRoot = document.createElement("div");
-appRoot.style.width = "100vw";
+appRoot.id = "miracle-horizontal-guard";
+appRoot.style.width = "100%";
+appRoot.style.maxWidth = "100%";
 appRoot.style.height = "100dvh";
+appRoot.style.boxSizing = "border-box";
 appRoot.style.display = "flex";
 appRoot.style.flexDirection = "column";
 appRoot.style.overflow = "hidden";
@@ -290,6 +343,8 @@ gameArea.appendChild(canvas);
 
 const info = document.createElement("div");
 info.style.flex = "0 0 auto";
+info.style.width = "100%";
+info.style.maxWidth = "100%";
 info.style.boxSizing = "border-box";
 info.style.background = "rgba(255, 255, 255, 0.88)";
 info.style.backdropFilter = "blur(18px)";
@@ -352,6 +407,9 @@ controlArea.style.gridTemplateColumns = isMobile ? "1fr" : "repeat(auto-fit, min
 controlArea.style.gap = isMobile ? "14px" : "10px 14px";
 controlArea.style.marginTop = "14px";
 controlArea.style.alignItems = "end";
+controlArea.style.width = "100%";
+controlArea.style.maxWidth = "100%";
+controlArea.style.boxSizing = "border-box";
 info.appendChild(controlArea);
 
 const buttonArea = document.createElement("div");
@@ -359,6 +417,9 @@ buttonArea.style.display = "flex";
 buttonArea.style.flexWrap = "wrap";
 buttonArea.style.gap = isMobile ? "12px" : "10px";
 buttonArea.style.marginTop = "14px";
+buttonArea.style.width = "100%";
+buttonArea.style.maxWidth = "100%";
+buttonArea.style.boxSizing = "border-box";
 info.appendChild(buttonArea);
 
 const randomGraphArea = document.createElement("div");
@@ -370,6 +431,7 @@ function createField(label: string, input: HTMLElement): HTMLDivElement {
     wrapper.style.display = "flex";
     wrapper.style.flexDirection = "column";
     wrapper.style.gap = "6px";
+    wrapper.style.minWidth = "0";
 
     const labelElement = document.createElement("label");
     labelElement.textContent = label;
@@ -425,6 +487,12 @@ function createButton(text: string, onClick: () => void): HTMLButtonElement {
     button.style.boxShadow = "0 8px 20px rgba(87,112,51,0.16)";
     button.style.color = "#26351f";
     button.style.cursor = "pointer";
+    button.style.maxWidth = "100%";
+    button.style.whiteSpace = "nowrap";
+    if (isMobile) {
+        button.style.flex = "1 1 auto";
+        button.style.minWidth = "0";
+    }
     button.onclick = onClick;
     return button;
 }
@@ -661,8 +729,10 @@ helpOverlay.style.zIndex = "130";
 helpOverlay.style.display = "none";
 helpOverlay.style.alignItems = "center";
 helpOverlay.style.justifyContent = "center";
-helpOverlay.style.padding = "24px";
+helpOverlay.style.padding = isMobile ? "10px" : "24px";
 helpOverlay.style.boxSizing = "border-box";
+helpOverlay.style.overflow = "hidden";
+helpOverlay.style.touchAction = "pan-y";
 document.body.appendChild(helpOverlay);
 
 helpOverlay.addEventListener("click", (event) => {
@@ -879,12 +949,19 @@ function closeHelpPopup(): void {
 }
 
 function showPopup(title: string, bodyHtml: string): void {
+    const panelWidth = isMobile ? "calc(100vw - 20px)" : "min(980px, 94vw)";
+    const panelMaxHeight = isMobile ? "calc(100dvh - 20px)" : "88dvh";
+    const panelPadding = isMobile ? "22px 18px 18px" : "28px";
+    const titleFont = isMobile ? "32px" : "clamp(30px,5vw,58px)";
+    const bodyFont = isMobile ? "18px" : "clamp(16px,2.5vw,24px)";
+    const closeSize = isMobile ? "54px" : "46px";
+
     helpOverlay.innerHTML = `
-        <div style="position:relative;max-width:980px;width:min(980px,94vw);max-height:88dvh;overflow:auto;padding:28px;border-radius:26px;background:rgba(250,253,244,.98);box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid rgba(87,112,51,.24);">
-            <button id="close-help-popup-button" aria-label="閉じる" style="position:absolute;right:14px;top:14px;width:46px;height:46px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;font-size:28px;font-weight:900;line-height:1;cursor:pointer;box-shadow:0 5px 14px rgba(87,112,51,.16);">×</button>
-            <div style="font-size:clamp(30px,5vw,58px);font-weight:900;margin:0 54px 18px 0;color:#26351f;">${title}</div>
-            <div style="font-size:clamp(16px,2.5vw,24px);line-height:1.72;color:#2f3a2a;text-align:left;">${bodyHtml}</div>
-            <div style="margin-top:24px;text-align:center;"><button id="bottom-close-help-popup-button" style="font-size:20px;padding:11px 24px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);color:#26351f;">閉じる</button></div>
+        <div style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:rgba(250,253,244,.98);box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid rgba(87,112,51,.24);overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
+            <button id="close-help-popup-button" aria-label="閉じる" style="position:sticky;float:right;right:0;top:0;width:${closeSize};height:${closeSize};border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;font-size:${isMobile ? "34px" : "28px"};font-weight:900;line-height:1;cursor:pointer;box-shadow:0 5px 14px rgba(87,112,51,.16);z-index:2;">×</button>
+            <div style="font-size:${titleFont};font-weight:900;margin:0 ${isMobile ? "64px" : "54px"} 18px 0;color:#26351f;line-height:1.18;word-break:keep-all;overflow-wrap:break-word;">${title}</div>
+            <div style="font-size:${bodyFont};line-height:${isMobile ? "1.62" : "1.72"};color:#2f3a2a;text-align:left;word-break:normal;overflow-wrap:break-word;">${bodyHtml}</div>
+            <div style="margin-top:24px;text-align:center;"><button id="bottom-close-help-popup-button" style="font-size:20px;padding:12px 28px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);color:#26351f;">閉じる</button></div>
         </div>`;
     helpOverlay.style.display = "flex";
     document.getElementById("close-help-popup-button")!.onclick = () => closeHelpPopup();
@@ -896,16 +973,27 @@ function showMiracleBookPopup(): void {
         const count = savedRecords.discovered[def.kind] ?? 0;
         const nowCount = specialCreated[def.kind] ?? 0;
         const found = count > 0 || nowCount > 0;
-        const name = found ? `${def.emoji} ${def.label}` : "？？？";
-        return `<div style="display:grid;grid-template-columns:86px 1fr 140px;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+        const name = found ? `${def.symbol} ${def.label}` : "？？？";
+        if (isMobile) {
+            return `<div style="padding:14px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                    <div style="font-weight:900;font-size:24px;color:${found ? "#243" : "#999"};">${def.rank}</div>
+                    <div style="font-weight:900;font-size:18px;white-space:nowrap;">発見 ${count + nowCount}回</div>
+                </div>
+                <div style="margin-top:6px;font-size:21px;font-weight:900;line-height:1.35;word-break:keep-all;overflow-wrap:break-word;">${name}</div>
+                <div style="margin-top:8px;font-size:16px;line-height:1.55;opacity:.76;word-break:normal;overflow-wrap:break-word;">確率 ${formatProbability(def.denominator)}</div>
+                <div style="margin-top:4px;font-size:16px;line-height:1.55;opacity:.76;word-break:normal;overflow-wrap:break-word;">${getProbabilityDangerText(def.denominator)}</div>
+            </div>`;
+        }
+        return `<div style="display:grid;grid-template-columns:86px minmax(0,1fr) 140px;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
             <div style="font-weight:900;font-size:24px;color:${found ? "#243" : "#999"};">${def.rank}</div>
-            <div><b>${name}</b><br><span style="opacity:.72;">確率 ${formatProbability(def.denominator)} / ${getProbabilityDangerText(def.denominator)}</span></div>
+            <div style="min-width:0;"><b>${name}</b><br><span style="opacity:.72;">確率 ${formatProbability(def.denominator)} / ${getProbabilityDangerText(def.denominator)}</span></div>
             <div style="text-align:right;font-weight:900;">発見 ${count + nowCount}回</div>
         </div>`;
     }).join("");
     showPopup("奇跡図鑑", `
-        <p>一度でも観測した低確率イベントはここに記録されます。ブラウザのlocalStorage保存なので、同じ端末・同じブラウザなら残ります。</p>
-        <div style="margin-top:16px;border-radius:22px;background:rgba(255,255,255,.75);padding:8px 16px;">${rows}</div>
+        <p style="margin-top:0;">一度でも観測した低確率イベントはここに記録されます。ブラウザのlocalStorage保存なので、同じ端末・同じブラウザなら残ります。</p>
+        <div style="margin-top:16px;border-radius:22px;background:rgba(255,255,255,.75);padding:${isMobile ? "4px 14px" : "8px 16px"};box-sizing:border-box;max-width:100%;overflow:hidden;">${rows}</div>
     `);
 }
 
@@ -1027,8 +1115,9 @@ function autoApplyLayoutSetting(): void {
 }
 
 function calculateGeometry(): Geometry {
-    const viewportWidth = Math.max(320, window.innerWidth);
-    const viewportHeight = Math.max(480, window.innerHeight);
+    const visual = window.visualViewport;
+    const viewportWidth = Math.max(320, Math.floor(visual?.width ?? window.innerWidth));
+    const viewportHeight = Math.max(480, Math.floor(visual?.height ?? window.innerHeight));
     const small = isMobile || viewportWidth < 700;
     const infoHeight = Math.round(clamp(viewportHeight * (small ? 0.24 : 0.40), small ? 170 : 300, small ? 270 : 500));
     const width = viewportWidth;
@@ -1086,7 +1175,8 @@ function applyBackgroundImage(): void {
 function resetExperiment(startNow = false): void {
     geometry = calculateGeometry();
     info.style.height = `${geometry.infoHeight}px`;
-    info.style.padding = `${Math.round(14 * geometry.scale)}px ${Math.round(20 * geometry.scale)}px`;
+    const sidePadding = isMobile ? Math.round(clamp(12 * geometry.scale, 10, 16)) : Math.round(20 * geometry.scale);
+    info.style.padding = `${Math.round(14 * geometry.scale)}px ${sidePadding}px`;
     info.style.fontSize = `${geometry.infoFont}px`;
 
     render.options.width = geometry.width;
@@ -1353,7 +1443,7 @@ function createDrop(): Matter.Body {
         const special = rollSpecialEvent();
         if (special) {
             kind = special.kind;
-            radius = geometry.ballRadius * special.radiusScale;
+            radius = Math.max(geometry.ballRadius * special.radiusScale, isMobile ? 22 : 20 * geometry.scale);
             fillStyle = special.fillStyle;
             symbol = special.symbol;
             label = special.label;
@@ -1362,7 +1452,7 @@ function createDrop(): Matter.Body {
             isHeart = special.kind === "heart";
             incrementSpecialCreated(special.kind);
             recordSpecialDiscovery(special);
-            showMiracle(special.kind, special.emoji, `[${special.rank}] ${formatProbability(special.denominator)}`, buildWeirdMiracleText(special));
+            showMiracle(special.kind, special.symbol, `[${special.rank}] ${formatProbability(special.denominator)}`, buildWeirdMiracleText(special));
         } else {
             const shapeRoll = appRandom();
             if (shapeRoll < SHAPE_RATE * getProbabilityScale()) { kind = "shape"; radius = geometry.ballRadius * clamp(0.85 + appRandom() * 0.35, 0.85, 1.2); fillStyle = randomColor(); isShape = true; shapeCreated++; }
@@ -1509,6 +1599,18 @@ function showFullScreenCelebration(count: number): void {
     window.setTimeout(() => { celebrationOverlay.style.display = "none"; celebrationOverlay.innerHTML = ""; }, 2100);
 }
 
+
+function getMiracleIconHtml(kind: DropKind, fallbackSymbol: string): string {
+    const def = findSpecialDef(kind);
+    const label = def?.symbol || fallbackSymbol || "奇";
+    const colors = getSpecialIconColors(kind);
+    const common = `display:inline-flex;align-items:center;justify-content:center;width:clamp(120px,34vw,230px);height:clamp(120px,34vw,230px);border-radius:999px;border:clamp(5px,1.2vw,10px) solid ${colors.stroke};background:radial-gradient(circle at 30% 25%, #fff 0%, ${colors.main} 36%, ${colors.sub} 100%);box-shadow:0 0 0 clamp(5px,1vw,14px) rgba(255,255,255,.18),0 0 60px ${colors.main};color:${colors.text};font-weight:1000;font-size:clamp(50px,14vw,118px);text-shadow:0 3px 0 rgba(0,0,0,.25);line-height:1;`;
+    if (kind === "crown" || kind === "meteorCrown") {
+        return `<div style="font-size:clamp(94px,27vw,210px);line-height:.86;filter:drop-shadow(0 14px 22px rgba(0,0,0,.45));">👑</div><div style="margin-top:-28px;font-size:clamp(46px,13vw,110px);font-weight:1000;color:#fff;text-shadow:0 6px 18px rgba(0,0,0,.65);">${kind === "meteorCrown" ? "冠" : "王"}</div>`;
+    }
+    return `<div style="${common}">${label}</div>`;
+}
+
 function showMiracle(kind: DropKind, symbol: string, probabilityText: string, feelingText: string): void {
     pauseForMiracle();
     const def = findSpecialDef(kind);
@@ -1518,7 +1620,7 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     miracleOverlay.innerHTML = `
         <div style="max-width:900px;animation:miracle-pop 4.8s ease-out forwards;">
             <style>@keyframes miracle-pop{0%{transform:scale(.65);opacity:0}15%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:0}}</style>
-            <div style="font-size:clamp(90px,20vw,220px);line-height:1;">${symbol}</div>
+            ${getMiracleIconHtml(kind, symbol)}
             <div style="font-size:clamp(36px,8vw,90px);font-weight:900;margin-top:12px;text-shadow:0 8px 30px rgba(0,0,0,.6);">${def?.label ?? "奇跡"} 発生</div>
             <div style="font-size:clamp(22px,4vw,44px);font-weight:900;margin-top:12px;">${probabilityText}</div>
             <div style="font-size:clamp(18px,3vw,32px);margin-top:12px;opacity:.94;line-height:1.5;">${feelingText}</div>
@@ -1848,46 +1950,199 @@ function drawSparkle(context: CanvasRenderingContext2D, x: number, y: number, si
     context.restore();
 }
 
+
+function getSpecialIconColors(kind: DropKind): { main: string; sub: string; text: string; stroke: string } {
+    if (kind === "blackSun") return { main: "#090909", sub: "#ff0044", text: "#ffffff", stroke: "#ff0044" };
+    if (kind === "cosmicEgg") return { main: "#240038", sub: "#00e5ff", text: "#ffffff", stroke: "#ffffff" };
+    if (kind === "silverUfo") return { main: "#d6dde1", sub: "#6e8799", text: "#263238", stroke: "#ffffff" };
+    if (kind === "blueFlame") return { main: "#00aaff", sub: "#002bff", text: "#ffffff", stroke: "#dff7ff" };
+    if (kind === "timeRift") return { main: "#622aff", sub: "#00e5ff", text: "#ffffff", stroke: "#dff7ff" };
+    if (kind === "labExplosion") return { main: "#ff3b30", sub: "#ffd640", text: "#ffffff", stroke: "#fff3b0" };
+    if (kind === "heart") return { main: "#ff69b4", sub: "#ff2d86", text: "#ffffff", stroke: "#ffe0f0" };
+    if (kind === "crown" || kind === "goldenDaruma" || kind === "meteorCrown") return { main: "#ffd54a", sub: "#b8860b", text: "#3a2600", stroke: "#fff4a8" };
+    if (kind === "crystalDragon") return { main: "#72f1ff", sub: "#3f6bff", text: "#06192f", stroke: "#e8fdff" };
+    if (kind === "moonRabbit") return { main: "#eef4ff", sub: "#9dbbff", text: "#223047", stroke: "#ffffff" };
+    if (kind === "phantomCastle") return { main: "#9b8cff", sub: "#3b1a84", text: "#ffffff", stroke: "#eeeaff" };
+    if (kind === "rainbowWhale") return { main: "#3ee8c9", sub: "#7d5cff", text: "#062923", stroke: "#ffffff" };
+    if (kind === "thunderKitsune") return { main: "#ffe45c", sub: "#ff7a00", text: "#3a2600", stroke: "#fff7b0" };
+    if (kind === "pocketGalaxy") return { main: "#3547ff", sub: "#ff4dff", text: "#ffffff", stroke: "#dfe4ff" };
+    if (kind === "ancientClock") return { main: "#b58b4a", sub: "#4b2e11", text: "#ffffff", stroke: "#ffe6b0" };
+    if (kind === "mirrorCat") return { main: "#f5f7ff", sub: "#93a4c7", text: "#233044", stroke: "#ffffff" };
+    return { main: "#ffd54a", sub: "#ffffff", text: "#111111", stroke: "#ffffff" };
+}
+
+function drawSpecialIcon(context: CanvasRenderingContext2D, kind: DropKind, x: number, y: number, radius: number, symbol: string): void {
+    const colors = getSpecialIconColors(kind);
+    const r = Math.max(radius * (isMobile ? 1.45 : 1.2), isMobile ? 22 : 18 * geometry.scale);
+    const time = Date.now() / 1000;
+    context.save();
+    context.translate(x, y);
+    context.rotate(kind === "timeRift" ? time * 1.8 : 0);
+
+    // 外側の太い縁。スマホでも「ただの光」に見えないよう、必ず実体を描く。
+    context.beginPath();
+    context.arc(0, 0, r * 1.08, 0, Math.PI * 2);
+    context.fillStyle = "rgba(255,255,255,.95)";
+    context.fill();
+
+    const grad = context.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
+    grad.addColorStop(0, "#ffffff");
+    grad.addColorStop(0.35, colors.main);
+    grad.addColorStop(1, colors.sub);
+    context.beginPath();
+    context.arc(0, 0, r, 0, Math.PI * 2);
+    context.fillStyle = grad;
+    context.fill();
+    context.lineWidth = Math.max(3, r * 0.14);
+    context.strokeStyle = colors.stroke;
+    context.stroke();
+
+    // 種類ごとの大きいシルエット
+    context.save();
+    context.globalAlpha = 0.95;
+    context.fillStyle = colors.text;
+    context.strokeStyle = "rgba(0,0,0,.35)";
+    context.lineWidth = Math.max(2, r * 0.07);
+
+    if (kind === "crown" || kind === "meteorCrown") {
+        context.beginPath();
+        context.moveTo(-r * 0.65, r * 0.25);
+        context.lineTo(-r * 0.45, -r * 0.38);
+        context.lineTo(-r * 0.15, r * 0.03);
+        context.lineTo(0, -r * 0.55);
+        context.lineTo(r * 0.15, r * 0.03);
+        context.lineTo(r * 0.45, -r * 0.38);
+        context.lineTo(r * 0.65, r * 0.25);
+        context.closePath();
+        context.fillStyle = "#ffd54a";
+        context.fill();
+        context.stroke();
+        context.fillStyle = "#3a2600";
+        context.font = `900 ${Math.round(r * 0.62)}px "Noto Sans JP", "Segoe UI", sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(kind === "meteorCrown" ? "冠" : "王", 0, r * 0.15);
+    } else if (kind === "silverUfo") {
+        context.beginPath();
+        context.ellipse(0, r * 0.05, r * 0.82, r * 0.28, 0, 0, Math.PI * 2);
+        context.fillStyle = "#dce3e7";
+        context.fill(); context.stroke();
+        context.beginPath();
+        context.arc(0, -r * 0.08, r * 0.36, Math.PI, 0);
+        context.fillStyle = "#9bdcff";
+        context.fill(); context.stroke();
+    } else if (kind === "blueFlame") {
+        context.beginPath();
+        context.moveTo(0, -r * 0.78);
+        context.bezierCurveTo(r * 0.72, -r * 0.1, r * 0.36, r * 0.72, 0, r * 0.78);
+        context.bezierCurveTo(-r * 0.62, r * 0.3, -r * 0.55, -r * 0.15, 0, -r * 0.78);
+        context.closePath();
+        context.fillStyle = "#00c8ff";
+        context.fill(); context.stroke();
+        context.beginPath();
+        context.moveTo(0, -r * 0.32);
+        context.bezierCurveTo(r * 0.28, r * 0.12, r * 0.10, r * 0.42, 0, r * 0.5);
+        context.bezierCurveTo(-r * 0.22, r * 0.28, -r * 0.18, 0, 0, -r * 0.32);
+        context.fillStyle = "#ffffff";
+        context.fill();
+    } else if (kind === "timeRift" || kind === "pocketGalaxy") {
+        context.lineWidth = Math.max(4, r * 0.13);
+        for (let i = 0; i < 3; i++) {
+            context.beginPath();
+            context.arc(0, 0, r * (0.28 + i * 0.18), i * 0.9, Math.PI * 1.6 + i * 0.9);
+            context.strokeStyle = i % 2 ? "#ffffff" : "#00e5ff";
+            context.stroke();
+        }
+        context.fillStyle = "#ffffff";
+        context.font = `900 ${Math.round(r * 0.44)}px "Noto Sans JP", "Segoe UI", sans-serif`;
+        context.textAlign = "center"; context.textBaseline = "middle";
+        context.fillText(kind === "timeRift" ? "裂" : "銀", 0, 0);
+    } else if (kind === "heart") {
+        context.beginPath();
+        context.moveTo(0, r * 0.58);
+        context.bezierCurveTo(-r * 0.9, -r * 0.02, -r * 0.62, -r * 0.72, 0, -r * 0.36);
+        context.bezierCurveTo(r * 0.62, -r * 0.72, r * 0.9, -r * 0.02, 0, r * 0.58);
+        context.fillStyle = "#ff4da6";
+        context.fill(); context.stroke();
+    } else if (kind === "blackSun") {
+        for (let i = 0; i < 10; i++) {
+            const a = i * Math.PI * 2 / 10;
+            context.beginPath();
+            context.moveTo(Math.cos(a) * r * 0.75, Math.sin(a) * r * 0.75);
+            context.lineTo(Math.cos(a) * r * 1.18, Math.sin(a) * r * 1.18);
+            context.strokeStyle = "#ff0044";
+            context.lineWidth = Math.max(3, r * 0.1);
+            context.stroke();
+        }
+        context.beginPath(); context.arc(0,0,r*.62,0,Math.PI*2); context.fillStyle="#050505"; context.fill(); context.strokeStyle="#ff0044"; context.stroke();
+    } else if (kind === "labExplosion") {
+        context.beginPath();
+        for (let i = 0; i < 12; i++) {
+            const a = i * Math.PI * 2 / 12;
+            const rr = i % 2 ? r * 0.45 : r * 0.95;
+            const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+            if (i === 0) context.moveTo(px, py); else context.lineTo(px, py);
+        }
+        context.closePath();
+        context.fillStyle = "#ff3b30";
+        context.fill(); context.stroke();
+        context.fillStyle = "#fff3b0";
+        context.font = `900 ${Math.round(r * 0.48)}px "Noto Sans JP", "Segoe UI", sans-serif`;
+        context.textAlign = "center"; context.textBaseline = "middle";
+        context.fillText("爆", 0, 0);
+    } else {
+        context.font = `900 ${Math.round(symbol.length >= 2 ? r * 0.58 : r * 0.78)}px "Noto Sans JP", "Yu Gothic", "Segoe UI", sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.strokeStyle = "rgba(255,255,255,.85)";
+        context.lineWidth = Math.max(3, r * 0.09);
+        context.strokeText(symbol, 0, r * 0.03);
+        context.fillStyle = colors.text;
+        context.fillText(symbol, 0, r * 0.03);
+    }
+    context.restore();
+
+    context.restore();
+}
+
 function drawSpecialGlows(context: CanvasRenderingContext2D): void {
     if (settings.simpleMode) return;
     const time = Date.now() / 1000;
     context.save();
-    context.globalCompositeOperation = "lighter";
     for (const body of engine.world.bodies) {
         const plugin = (body as any).plugin;
         if (!plugin?.isDrop) continue;
         const kind = plugin.kind as DropKind;
-        if (!["gold", "rainbow", "heart", "crown", "shootingStar", "blackSun", "cosmicEgg", "silverUfo", "blueFlame", "luckySeven", "timeRift", "labExplosion"].includes(kind)) continue;
+        const def = findSpecialDef(kind);
+        if (!def && !["gold", "rainbow"].includes(kind)) continue;
         const x = body.position.x;
         const y = body.position.y;
         const radius = body.circleRadius ?? plugin.originalRadius ?? geometry.ballRadius;
         const pulse = 0.75 + Math.sin(time * 9) * 0.25;
         let colors = ["255,215,0", "255,170,0"];
         if (kind === "rainbow") colors = ["190,100,255", "80,180,255"];
-        if (kind === "heart") colors = ["255,105,180", "255,20,147"];
-        if (kind === "shootingStar") colors = ["120,231,255", "255,255,255"];
-        if (kind === "blackSun") colors = ["255,0,68", "0,0,0"];
-        if (kind === "cosmicEgg") colors = ["124,60,255", "0,229,255"];
-        if (kind === "silverUfo") colors = ["207,216,220", "120,160,190"];
-        if (kind === "blueFlame") colors = ["0,170,255", "0,229,255"];
-        if (kind === "luckySeven") colors = ["255,43,214", "255,215,0"];
-        if (kind === "timeRift") colors = ["98,42,255", "0,229,255"];
-        if (kind === "labExplosion") colors = ["255,59,48", "255,214,64"];
-        const glow = context.createRadialGradient(x, y, radius * 0.2, x, y, radius * 5);
-        glow.addColorStop(0, `rgba(${colors[0]}, ${0.9 * pulse})`);
-        glow.addColorStop(0.65, `rgba(${colors[1]}, ${0.36 * pulse})`);
+        if (def) {
+            const c = getSpecialIconColors(kind);
+            colors = hexToRgbTriplet(c.main, "255,215,0") ? [hexToRgbTriplet(c.main, "255,215,0"), hexToRgbTriplet(c.sub, "255,170,0")] : colors;
+        }
+
+        // 光は控えめ。アイコン本体を見せるため、スマホでは特に薄くする。
+        context.save();
+        context.globalCompositeOperation = "lighter";
+        const glow = context.createRadialGradient(x, y, radius * 0.25, x, y, radius * (isMobile ? 3.0 : 4.5));
+        glow.addColorStop(0, `rgba(${colors[0]}, ${0.42 * pulse})`);
+        glow.addColorStop(0.72, `rgba(${colors[1]}, ${0.18 * pulse})`);
         glow.addColorStop(1, `rgba(${colors[1]}, 0)`);
         context.fillStyle = glow;
         context.beginPath();
-        context.arc(x, y, radius * 5, 0, Math.PI * 2);
+        context.arc(x, y, radius * (isMobile ? 3.0 : 4.5), 0, Math.PI * 2);
         context.fill();
-        if (plugin.symbol) {
-            context.font = `900 ${Math.round(radius * 1.65)}px "Segoe UI Symbol", "Segoe UI Emoji", sans-serif`;
-            context.fillStyle = kind === "blackSun" ? "#ff0044" : kind === "cosmicEgg" ? "#00e5ff" : "#ffffff";
-            context.textAlign = "center";
-            context.textBaseline = "middle";
-            context.fillText(plugin.symbol, x, y);
+        context.restore();
+
+        if (def) {
+            drawSpecialIcon(context, kind, x, y, Math.max(radius, isMobile ? 20 : 14 * geometry.scale), plugin.symbol || def.symbol);
         }
+
         if (kind === "gold" || kind === "rainbow") {
             for (let i = 0; i < 6; i++) {
                 const angle = time * 2.5 + i * Math.PI * 2 / 6;
@@ -1896,6 +2151,13 @@ function drawSpecialGlows(context: CanvasRenderingContext2D): void {
         }
     }
     context.restore();
+}
+
+function hexToRgbTriplet(hex: string, fallback: string): string {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!m) return fallback;
+    const n = parseInt(m[1], 16);
+    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
 }
 
 Events.on(render, "afterRender", () => {
@@ -2095,10 +2357,12 @@ resetExperiment(false);
 Render.run(render);
 
 let resizeTimer: number | undefined;
-window.addEventListener("resize", () => {
+function scheduleResize(): void {
     if (resizeTimer !== undefined) window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => {
         if (!applySettingsFromInputs(false)) return;
         resetExperiment(isStarted && !isFinished);
     }, 300);
-});
+}
+window.addEventListener("resize", scheduleResize);
+window.visualViewport?.addEventListener("resize", scheduleResize);
