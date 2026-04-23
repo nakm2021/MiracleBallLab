@@ -47,6 +47,12 @@ type DropKind =
     | "sunLion"
     | "violetComet"
     | "angelRing"
+    | "poseidonMode"
+    | "zeusuMode"
+    | "hadesuMode"
+    | "heartMode"
+    | "nekochanMode"
+    | "lifeQuoteMode"
     | "fragment";
 
 type ProbabilityMode = "normal" | "festival" | "hard" | "hell";
@@ -87,6 +93,7 @@ type MiracleClip = {
 };
 
 type ThemeMode = "lab" | "space" | "sunset" | "retro" | "midnight";
+type WorldMode = "poseidon" | "zeusu" | "hadesu" | "heart" | "nekochan" | null;
 
 type SavedRecords = {
     totalRuns: number;
@@ -184,6 +191,12 @@ type RareSoundFlavor = "normal" | "ur" | "ex" | "god";
 const SPECIAL_EVENT_DEFS: SpecialEventDef[] = [
     { kind: "cosmicEgg", label: "宇宙卵", rank: "GOD", rate: COSMIC_EGG_RATE, denominator: 1_000_000_000_000, symbol: "卵", emoji: "卵", fillStyle: "#240038", radiusScale: 2.7, soundMode: "cosmic" },
     { kind: "labExplosion", label: "研究所爆発", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "爆", emoji: "爆", fillStyle: "#ff3b30", radiusScale: 2.45, soundMode: "cosmic" },
+    { kind: "poseidonMode", label: "poseidon mode", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "海", emoji: "海", fillStyle: "#1e88ff", radiusScale: 2.25, soundMode: "cosmic" },
+    { kind: "zeusuMode", label: "zeusu mode", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "雷", emoji: "雷", fillStyle: "#ffd400", radiusScale: 2.25, soundMode: "miracle" },
+    { kind: "hadesuMode", label: "hadesu mode", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "死", emoji: "死", fillStyle: "#151515", radiusScale: 2.25, soundMode: "black" },
+    { kind: "heartMode", label: "heart mode", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "♥", emoji: "♥", fillStyle: "#ff5fb5", radiusScale: 2.15, soundMode: "miracle" },
+    { kind: "nekochanMode", label: "nekochan mode", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "猫", emoji: "猫", fillStyle: "#ffb36b", radiusScale: 2.15, soundMode: "miracle" },
+    { kind: "lifeQuoteMode", label: "人生名言ボイス", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "声", emoji: "声", fillStyle: "#ff9ed4", radiusScale: 2.15, soundMode: "miracle" },
     { kind: "blackSun", label: "黒い太陽", rank: "EX", rate: BLACK_SUN_RATE, denominator: 10_000_000, symbol: "黒", emoji: "黒", fillStyle: "#050505", radiusScale: 2.2, soundMode: "black" },
     { kind: "timeRift", label: "時空の裂け目", rank: "EX", rate: 0.0000005, denominator: 2_000_000, symbol: "裂", emoji: "裂", fillStyle: "#622aff", radiusScale: 2.05, soundMode: "cosmic" },
 
@@ -308,6 +321,8 @@ let comboTimer: number | undefined;
 let miracleCombo = 0;
 let lastMiracleAt = 0;
 let activeRareBackgroundKind: DropKind | null = null;
+let activeWorldMode: WorldMode = null;
+let lifeQuoteOverlayTimer: number | undefined;
 let rareBackgroundTimer: number | undefined;
 let anomalyUntil = 0;
 let anomalyLabel = "";
@@ -325,6 +340,7 @@ let animeReady = false;
 let tippyReady = false;
 let gifReady = false;
 let mobileDockRunButton: HTMLButtonElement | null = null;
+let mobileDockPauseButton: HTMLButtonElement | null = null;
 let mobileDockSettingsButton: HTMLButtonElement | null = null;
 let mobileSettingsOverlay: HTMLDivElement | null = null;
 let mobileSettingsPanel: HTMLDivElement | null = null;
@@ -1176,29 +1192,35 @@ function closeMobileSettingsPopup(): void {
 
 function setupMobileLayout(): void {
     info.style.flex = "0 0 auto";
-    info.style.height = "102px";
-    info.style.minHeight = "102px";
-    info.style.padding = "10px 12px env(safe-area-inset-bottom, 10px)";
+    info.style.height = "108px";
+    info.style.minHeight = "108px";
+    info.style.padding = "10px 10px env(safe-area-inset-bottom, 10px)";
     info.style.overflow = "hidden";
     info.innerHTML = "";
 
     const dock = document.createElement("div");
     dock.style.display = "grid";
-    dock.style.gridTemplateColumns = "1fr 1fr";
-    dock.style.gap = "10px";
+    dock.style.gridTemplateColumns = "1.15fr 1.15fr 1fr";
+    dock.style.gap = "8px";
     dock.style.height = "100%";
     dock.style.alignItems = "center";
     info.appendChild(dock);
 
     mobileDockRunButton = createButton(t("実行", "Run"), () => startExperiment());
     mobileDockRunButton.style.width = "100%";
-    mobileDockRunButton.style.height = "64px";
+    mobileDockRunButton.style.height = "66px";
     mobileDockRunButton.style.fontSize = "24px";
     dock.appendChild(mobileDockRunButton);
 
+    mobileDockPauseButton = createButton(t("一時停止", "Pause"), () => togglePause());
+    mobileDockPauseButton.style.width = "100%";
+    mobileDockPauseButton.style.height = "66px";
+    mobileDockPauseButton.style.fontSize = "22px";
+    dock.appendChild(mobileDockPauseButton);
+
     mobileDockSettingsButton = createButton(t("設定", "Settings"), () => openMobileSettingsPopup());
     mobileDockSettingsButton.style.width = "100%";
-    mobileDockSettingsButton.style.height = "64px";
+    mobileDockSettingsButton.style.height = "66px";
     mobileDockSettingsButton.style.fontSize = "24px";
     dock.appendChild(mobileDockSettingsButton);
 
@@ -1286,6 +1308,7 @@ function updateUiLanguage(): void {
     updateObsButton();
     updateTooltipText();
     if (mobileDockRunButton) mobileDockRunButton.textContent = t("実行", "Run");
+    if (mobileDockPauseButton) mobileDockPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
     if (mobileDockSettingsButton) mobileDockSettingsButton.textContent = t("設定", "Settings");
 }
 
@@ -1317,6 +1340,42 @@ function formatProbability(denominator: number): string {
 
 function findSpecialDef(kind: DropKind): SpecialEventDef | undefined {
     return SPECIAL_EVENT_DEFS.find((x) => x.kind === kind);
+}
+
+function getWorldModeByKind(kind: DropKind): WorldMode {
+    if (kind === "poseidonMode") return "poseidon";
+    if (kind === "zeusuMode") return "zeusu";
+    if (kind === "hadesuMode") return "hadesu";
+    if (kind === "heartMode") return "heart";
+    if (kind === "nekochanMode") return "nekochan";
+    return null;
+}
+
+function getWorldModePalette(mode: WorldMode): { tint: string; accent: string; subtitle: string; emoji: string; bg: string } {
+    if (mode === "poseidon") return { tint: "rgba(36,132,255,0.38)", accent: "#78c8ff", subtitle: "POSEIDON MODE", emoji: "🌊", bg: "radial-gradient(circle at 50% 18%, rgba(40,120,255,.40), rgba(2,18,42,.98))" };
+    if (mode === "zeusu") return { tint: "rgba(255,220,0,0.34)", accent: "#ffe75a", subtitle: "ZEUSU MODE", emoji: "⚡", bg: "radial-gradient(circle at 50% 18%, rgba(255,226,92,.46), rgba(35,26,2,.98))" };
+    if (mode === "hadesu") return { tint: "rgba(0,0,0,0.50)", accent: "#ff4a4a", subtitle: "HADESU MODE", emoji: "☠️", bg: "radial-gradient(circle at 50% 18%, rgba(24,24,24,.46), rgba(0,0,0,.995))" };
+    if (mode === "heart") return { tint: "rgba(255,105,180,0.30)", accent: "#ff70ba", subtitle: "HEART MODE", emoji: "💗", bg: "radial-gradient(circle at 50% 18%, rgba(255,120,190,.42), rgba(38,10,24,.98))" };
+    if (mode === "nekochan") return { tint: "rgba(255,186,120,0.28)", accent: "#ffbf76", subtitle: "NEKOCHAN MODE", emoji: "🐈", bg: "radial-gradient(circle at 50% 18%, rgba(255,190,120,.42), rgba(48,26,10,.98))" };
+    return { tint: "rgba(0,0,0,0)", accent: "#ffffff", subtitle: "", emoji: "", bg: "" };
+}
+
+function applyWorldModeBodyStyles(): void {
+    const palette = getWorldModePalette(activeWorldMode);
+    for (const body of engine.world.bodies) {
+        const plugin = (body as any).plugin;
+        const renderObj: any = (body as any).render;
+        if (!renderObj) continue;
+        if (!activeWorldMode) {
+            if (plugin?.isPin) renderObj.fillStyle = "rgba(89, 97, 115, 0.92)";
+            else if (plugin?.isDivider) renderObj.fillStyle = "rgba(196, 101, 101, 0.94)";
+            else if (!plugin?.isDrop) renderObj.fillStyle = "rgba(36, 41, 54, 0.92)";
+            continue;
+        }
+        if (plugin?.isPin) renderObj.fillStyle = palette.accent;
+        else if (plugin?.isDivider) renderObj.fillStyle = palette.accent;
+        else if (!plugin?.isDrop) renderObj.fillStyle = palette.accent;
+    }
 }
 
 function getRankScore(rank: string): number {
@@ -1688,6 +1747,15 @@ function toggleObsMode(): void {
 }
 
 function applyRareBackground(kind: DropKind): void {
+    const worldMode = getWorldModeByKind(kind);
+    if (worldMode) {
+        activeWorldMode = worldMode;
+        activeRareBackgroundKind = kind;
+        gameArea.style.background = getWorldModePalette(worldMode).bg;
+        applyWorldModeBodyStyles();
+        if (rareBackgroundTimer !== undefined) window.clearTimeout(rareBackgroundTimer);
+        return;
+    }
     activeRareBackgroundKind = kind;
     const map: Record<string, string> = {
         crown: "radial-gradient(circle at 50% 18%, rgba(255,220,80,.45), rgba(10,10,12,.96))",
@@ -1830,6 +1898,7 @@ function showAboutPopup(): void {
     showPopup("ミラクルボールラボについて", `
         <p><b>ミラクルボールラボ</b>は、玉を上から落として、ピンに当たりながらどの受け皿に入るかを観測するランダム実験です。</p>
         <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王、銀のUFO、青い炎、流れ星、ラッキーセブン、桃色ハート、時空の裂け目、黒い太陽、研究所爆発、宇宙卵などのレア玉がまれに出ます。特に宇宙卵は<b>1兆分の1</b>の超レア演出です。</p>
+        <p>さらに<b>10億分の1</b>レベルで、<b>poseidon mode / zeusu mode / hadesu mode / heart mode / nekochan mode / 人生名言ボイス</b>が発生します。mode系は出た瞬間から実験終了まで盤面全体の世界観が変わり続けます。</p>
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
         <p>5000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。</p>
@@ -1841,7 +1910,7 @@ function showButtonHelpPopup(): void {
     showPopup("ボタン説明", `
         <p><b>実行:</b> 現在の設定で実験を開始します。開始前は待機中です。</p>
         <p><b>通常 / 高速 / 超高速:</b> 玉の動く速度を変えます。超高速は処理は速いですが、レア演出を見逃しやすくなります。</p>
-        <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。奇跡演出中は自動停止して約5秒後に再開します。</p>
+        <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。奇跡演出中は自動停止して約5秒後に再開します。スマホ下部にも一時停止ボタンがあります。</p>
         <p><b>リセット:</b> 設定を読み直して、実験を最初から待機状態に戻します。</p>
         <p><b>シンプル:</b> 演出を減らして軽くします。重い場合や大量回数を試す場合に便利です。</p>
         <p><b>音:</b> npm 依存の Tone.js を使って、レア玉や激レア演出で音を鳴らします。ブラウザ仕様上、最初にボタン操作が必要です。</p>
@@ -1936,7 +2005,9 @@ function calculateGeometry(): Geometry {
     const viewportWidth = Math.max(320, Math.floor(visual?.width ?? window.innerWidth));
     const viewportHeight = Math.max(480, Math.floor(visual?.height ?? window.innerHeight));
     const small = isMobile || viewportWidth < 700;
-    const infoHeight = Math.round(clamp(viewportHeight * (small ? 0.24 : 0.40), small ? 170 : 300, small ? 270 : 500));
+    const infoHeight = isMobile
+        ? Math.round(clamp(viewportHeight * 0.115, 96, 116))
+        : Math.round(clamp(viewportHeight * (small ? 0.24 : 0.40), small ? 170 : 300, small ? 270 : 500));
     const width = viewportWidth;
     const height = Math.max(360, viewportHeight - infoHeight);
     const scale = clamp(Math.min(width / BASE_WIDTH, height / BASE_HEIGHT), 0.56, 2.4);
@@ -1950,20 +2021,20 @@ function calculateGeometry(): Geometry {
     const binRight = width - wallWidth;
     const binWidth = (binRight - binLeft) / totalBinCount;
     const groundTop = height - groundHeight;
-    const binScale = clamp(binWidth / 90, 0.35, 1.7);
-    const ballRadius = clamp(14 * scale * binScale, 4, 28);
-    const pinRadius = clamp(8 * scale * binScale, 3, 18);
-    const dividerWidth = clamp(10 * scale * binScale, 4, 18);
-    const dividerHeight = clamp(92 * scale, 58, 150);
+    const binScale = clamp(binWidth / 90, isMobile ? 0.9 : 0.55, 2.25);
+    const ballRadius = clamp(18 * scale * binScale, isMobile ? 8 : 5, isMobile ? 34 : 30);
+    const pinRadius = clamp(10 * scale * binScale, isMobile ? 5 : 3, isMobile ? 20 : 18);
+    const dividerWidth = clamp(12 * scale * binScale, 5, 22);
+    const dividerHeight = clamp(104 * scale, 68, 170);
     const dividerY = groundTop - dividerHeight / 2;
-    const labelFont = Math.round(clamp(30 * scale * binScale, 13, 52));
-    const countFont = Math.round(clamp(23 * scale * binScale, 11, 42));
-    const percentFont = Math.round(clamp(17 * scale * binScale, 10, 30));
+    const labelFont = Math.round(clamp(42 * scale * binScale, isMobile ? 24 : 16, isMobile ? 72 : 60));
+    const countFont = Math.round(clamp(28 * scale * binScale, isMobile ? 16 : 12, isMobile ? 50 : 44));
+    const percentFont = Math.round(clamp(20 * scale * binScale, isMobile ? 12 : 10, isMobile ? 36 : 32));
     const infoFont = Math.round(clamp(18 * scale, 15, isMobile ? 30 : 26));
-    const labelY = groundTop - clamp(96 * scale, 54, 145);
-    const countY = groundTop - clamp(60 * scale, 35, 95);
-    const percentY = groundTop - clamp(32 * scale, 20, 55);
-    const barY = groundTop - clamp(12 * scale, 8, 26);
+    const labelY = groundTop - clamp(118 * scale, 72, 170);
+    const countY = groundTop - clamp(74 * scale, 46, 110);
+    const percentY = groundTop - clamp(38 * scale, 24, 64);
+    const barY = groundTop - clamp(14 * scale, 9, 28);
     const ballCountY = groundTop - ballRadius - 2 * scale;
     const binCenters: number[] = [];
     for (let i = 0; i < settings.binCount; i++) {
@@ -1993,7 +2064,9 @@ function resetExperiment(startNow = false): void {
     geometry = calculateGeometry();
     info.style.height = `${geometry.infoHeight}px`;
     const sidePadding = isMobile ? Math.round(clamp(12 * geometry.scale, 10, 16)) : Math.round(20 * geometry.scale);
-    info.style.padding = `${Math.round(14 * geometry.scale)}px ${sidePadding}px`;
+    info.style.padding = isMobile
+        ? `10px 10px env(safe-area-inset-bottom, 10px)`
+        : `${Math.round(14 * geometry.scale)}px ${sidePadding}px`;
     info.style.fontSize = `${geometry.infoFont}px`;
 
     render.options.width = geometry.width;
@@ -2068,8 +2141,11 @@ function resetExperiment(startNow = false): void {
     celebrationOverlay.style.display = "none";
     miracleOverlay.style.display = "none";
     canvas.style.transform = "translate(0,0)";
+    activeWorldMode = null;
+    activeRareBackgroundKind = null;
 
     Composite.add(engine.world, [...createWallsAndFloor(), ...createPins(), ...createDividers()]);
+    applyWorldModeBodyStyles();
     if (startNow) {
         for (let i = 0; i < settings.activeLimit; i++) Composite.add(engine.world, createDrop());
         if (!isMiraclePaused) Runner.run(runner, engine);
@@ -2095,6 +2171,7 @@ function updateCameraShakeButton(): void {
 
 function updateStopButton(): void {
     stopButton.textContent = isPaused ? t("再開", "Resume") : t("ストップ", "Stop");
+    if (mobileDockPauseButton) mobileDockPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
 }
 
 async function startExperiment(): Promise<void> {
@@ -2275,6 +2352,23 @@ function createDrop(): Matter.Body {
     let symbol = "";
     let label = "";
 
+    if (activeWorldMode === "poseidon") {
+        fillStyle = ["#2a6dff", "#00a8ff", "#67d1ff"][Math.floor(appRandom() * 3)] ?? "#2a6dff";
+        symbol = "海";
+    } else if (activeWorldMode === "zeusu") {
+        fillStyle = ["#ffd400", "#fff176", "#ffb300"][Math.floor(appRandom() * 3)] ?? "#ffd400";
+        symbol = appRandom() < 0.55 ? "⚡" : "雷";
+    } else if (activeWorldMode === "hadesu") {
+        fillStyle = ["#090909", "#232323", "#3a3a3a"][Math.floor(appRandom() * 3)] ?? "#111";
+        symbol = appRandom() < 0.45 ? "☠" : "死";
+    } else if (activeWorldMode === "heart") {
+        fillStyle = ["#ff5fb5", "#ff8ec9", "#ffb7de"][Math.floor(appRandom() * 3)] ?? "#ff5fb5";
+        symbol = "♥";
+    } else if (activeWorldMode === "nekochan") {
+        fillStyle = ["#ffb36b", "#ffd7b0", "#ffc18d"][Math.floor(appRandom() * 3)] ?? "#ffb36b";
+        symbol = appRandom() < 0.5 ? "猫" : "🐾";
+    }
+
     if (giantStock > 0) {
         giantStock--;
         kind = "giant";
@@ -2315,6 +2409,11 @@ function createDrop(): Matter.Body {
     if (kind === "timeRift") { renderOptions.strokeStyle = "#00e5ff"; renderOptions.lineWidth = 5 * geometry.scale; }
     if (kind === "labExplosion") { renderOptions.strokeStyle = "#fff3b0"; renderOptions.lineWidth = 6 * geometry.scale; }
     if (kind === "cosmicEgg") { renderOptions.strokeStyle = "#ffffff"; renderOptions.lineWidth = 6 * geometry.scale; }
+    if (activeWorldMode === "poseidon") { renderOptions.strokeStyle = "#d7f2ff"; renderOptions.lineWidth = 3.5 * geometry.scale; }
+    if (activeWorldMode === "zeusu") { renderOptions.strokeStyle = "#fff7b0"; renderOptions.lineWidth = 3.8 * geometry.scale; }
+    if (activeWorldMode === "hadesu") { renderOptions.strokeStyle = "#ff4a4a"; renderOptions.lineWidth = 3.8 * geometry.scale; }
+    if (activeWorldMode === "heart") { renderOptions.strokeStyle = "#ffe3f2"; renderOptions.lineWidth = 3.8 * geometry.scale; }
+    if (activeWorldMode === "nekochan") { renderOptions.strokeStyle = "#fff3e4"; renderOptions.lineWidth = 3.8 * geometry.scale; }
 
     let body: Matter.Body;
     if (findSpecialDef(kind) && kind !== "heart") body = createSymbolBody(x, startY, radius, kind, fillStyle, symbol, label);
@@ -2493,6 +2592,59 @@ async function playAnimeMiracleEffect(def?: SpecialEventDef): Promise<void> {
         }, 0);
 }
 
+
+function speakLifeQuoteEvent(): void {
+    const text = "ふふっ、自分の人生で言葉に出来ない程の感動する感情に出会えたらどんに辛いことがあってもまたこの人生をやりたいと思えるらしい";
+    if (lifeQuoteOverlayTimer !== undefined) window.clearTimeout(lifeQuoteOverlayTimer);
+    subtitleOverlay.innerHTML = `<div style="font-size:${isMobile ? "26px" : "34px"};font-weight:1000;line-height:1.7;text-shadow:0 3px 18px rgba(0,0,0,.55);">${text}</div>`;
+    subtitleOverlay.style.display = "block";
+    subtitleOverlay.style.left = "50%";
+    subtitleOverlay.style.right = "";
+    subtitleOverlay.style.bottom = "50%";
+    subtitleOverlay.style.transform = "translate(-50%, 50%)";
+    subtitleOverlay.style.width = "min(96vw, 1200px)";
+    subtitleOverlay.style.maxWidth = "min(96vw, 1200px)";
+    subtitleOverlay.style.padding = isMobile ? "22px 18px" : "28px 30px";
+    subtitleOverlay.style.borderRadius = "24px";
+    subtitleOverlay.style.background = "rgba(0,0,0,.72)";
+
+    let duration = 8800;
+    try {
+        if ("speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = "ja-JP";
+            utter.rate = 0.95;
+            utter.pitch = 1.55;
+            utter.volume = soundEnabled ? 1 : 0.8;
+            const voices = window.speechSynthesis.getVoices();
+            const preferred = voices.find((v) => /ja-JP/i.test(v.lang) && /(female|kyoko|haruka|sakura|Google 日本語|Microsoft.*Haruka)/i.test(v.name))
+                || voices.find((v) => /ja-JP/i.test(v.lang));
+            if (preferred) utter.voice = preferred;
+            utter.onend = () => {
+                subtitleOverlay.style.display = "none";
+                subtitleOverlay.textContent = "";
+                subtitleOverlay.style.bottom = isMobile ? "104px" : "28px";
+                subtitleOverlay.style.transform = "translateX(-50%)";
+                subtitleOverlay.style.width = "";
+                subtitleOverlay.style.maxWidth = "min(92vw, 960px)";
+                subtitleOverlay.style.padding = isMobile ? "12px 18px" : "10px 18px";
+            };
+            window.speechSynthesis.speak(utter);
+            duration = 11000;
+        }
+    } catch {}
+    lifeQuoteOverlayTimer = window.setTimeout(() => {
+        subtitleOverlay.style.display = "none";
+        subtitleOverlay.textContent = "";
+        subtitleOverlay.style.bottom = isMobile ? "104px" : "28px";
+        subtitleOverlay.style.transform = "translateX(-50%)";
+        subtitleOverlay.style.width = "";
+        subtitleOverlay.style.maxWidth = "min(92vw, 960px)";
+        subtitleOverlay.style.padding = isMobile ? "12px 18px" : "10px 18px";
+    }, duration);
+}
+
 function showMiracle(kind: DropKind, symbol: string, probabilityText: string, feelingText: string): void {
     pauseForMiracle();
     const def = findSpecialDef(kind);
@@ -2500,7 +2652,8 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
         updateMiracleCombo();
         addMiracleLog(def);
         const subtitle = `${def.label} ${t("発生", "appeared")} / [${def.rank}] ${formatProbability(def.denominator)}`;
-        setSubtitle(subtitle);
+        if (kind === "lifeQuoteMode") speakLifeQuoteEvent();
+        else setSubtitle(subtitle);
         saveMiracleClip(def, subtitle);
         applyRareBackground(kind);
     }
@@ -2854,8 +3007,8 @@ function showFinalResult(): void {
 
 function drawDiscardBinLabel(context: CanvasRenderingContext2D, physicalIndex: number): void {
     const x = geometry.binLeft + physicalIndex * geometry.binWidth + geometry.binWidth / 2;
-    const labelFont = Math.round(clamp(geometry.labelFont * 0.56, 11, 24));
-    const countFont = Math.round(clamp(geometry.countFont * 0.70, 10, 24));
+    const labelFont = Math.round(clamp(geometry.labelFont * 0.78, isMobile ? 18 : 13, isMobile ? 36 : 30));
+    const countFont = Math.round(clamp(geometry.countFont * 0.88, isMobile ? 13 : 10, isMobile ? 28 : 26));
     context.save();
     context.textAlign = "center";
     context.textBaseline = "middle";
@@ -2895,6 +3048,12 @@ function getSpecialIconColors(kind: DropKind): { main: string; sub: string; text
     if (kind === "blueFlame") return { main: "#00aaff", sub: "#002bff", text: "#ffffff", stroke: "#dff7ff" };
     if (kind === "timeRift") return { main: "#622aff", sub: "#00e5ff", text: "#ffffff", stroke: "#dff7ff" };
     if (kind === "labExplosion") return { main: "#ff3b30", sub: "#ffd640", text: "#ffffff", stroke: "#fff3b0" };
+    if (kind === "poseidonMode") return { main: "#1e88ff", sub: "#002ea6", text: "#ffffff", stroke: "#bde9ff" };
+    if (kind === "zeusuMode") return { main: "#ffd400", sub: "#ff9100", text: "#3a2600", stroke: "#fff8c2" };
+    if (kind === "hadesuMode") return { main: "#111111", sub: "#5a0000", text: "#ffffff", stroke: "#ff8e8e" };
+    if (kind === "heartMode") return { main: "#ff69b4", sub: "#ff2d86", text: "#ffffff", stroke: "#ffe0f0" };
+    if (kind === "nekochanMode") return { main: "#ffb36b", sub: "#7f5032", text: "#402000", stroke: "#fff0dd" };
+    if (kind === "lifeQuoteMode") return { main: "#ff9ed4", sub: "#8f3f73", text: "#ffffff", stroke: "#ffe0f0" };
     if (kind === "heart") return { main: "#ff69b4", sub: "#ff2d86", text: "#ffffff", stroke: "#ffe0f0" };
     if (kind === "crown" || kind === "goldenDaruma" || kind === "meteorCrown") return { main: "#ffd54a", sub: "#b8860b", text: "#3a2600", stroke: "#fff4a8" };
     if (kind === "crystalDragon") return { main: "#72f1ff", sub: "#3f6bff", text: "#06192f", stroke: "#e8fdff" };
@@ -3012,6 +3171,31 @@ function drawSpecialIcon(context: CanvasRenderingContext2D, kind: DropKind, x: n
             context.stroke();
         }
         context.beginPath(); context.arc(0,0,r*.62,0,Math.PI*2); context.fillStyle="#050505"; context.fill(); context.strokeStyle="#ff0044"; context.stroke();
+    } else if (kind === "poseidonMode") {
+        context.font = `900 ${Math.round(r * 0.88)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
+        context.textAlign = "center"; context.textBaseline = "middle";
+        context.fillText("🌊", 0, 0);
+    } else if (kind === "zeusuMode") {
+        context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
+        context.textAlign = "center"; context.textBaseline = "middle";
+        context.fillText("⚡", 0, 0);
+    } else if (kind === "hadesuMode") {
+        context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
+        context.textAlign = "center"; context.textBaseline = "middle";
+        context.fillText("☠️", 0, 0);
+    } else if (kind === "heartMode") {
+        context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
+        context.textAlign = "center"; context.textBaseline = "middle";
+        context.fillText("💗", 0, 0);
+    } else if (kind === "nekochanMode") {
+        context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
+        context.textAlign = "center"; context.textBaseline = "middle";
+        context.fillText("🐈", 0, 0);
+    } else if (kind === "lifeQuoteMode") {
+        context.fillStyle = "#ffffff";
+        context.font = `900 ${Math.round(r * 0.46)}px "Noto Sans JP", "Segoe UI", sans-serif`;
+        context.textAlign = "center"; context.textBaseline = "middle";
+        context.fillText("声", 0, 0);
     } else if (kind === "labExplosion") {
         context.beginPath();
         for (let i = 0; i < 12; i++) {
@@ -3123,21 +3307,41 @@ Events.on(render, "afterRender", () => {
             context.fill();
         }
         context.font = `900 ${geometry.labelFont}px "Segoe UI", "Noto Sans JP", sans-serif`;
-        context.fillStyle = "#222";
+        context.fillStyle = activeWorldMode === "poseidon" ? "#e7f6ff" : activeWorldMode === "zeusu" ? "#3e2f00" : activeWorldMode === "hadesu" ? "#ffffff" : activeWorldMode === "heart" ? "#fff4fb" : activeWorldMode === "nekochan" ? "#4a2a11" : "#222";
         context.fillText(labels[i], x, geometry.labelY);
         context.font = `800 ${geometry.countFont}px "Segoe UI", "Noto Sans JP", sans-serif`;
-        context.fillStyle = "#003366";
+        context.fillStyle = activeWorldMode === "poseidon" ? "#d7efff" : activeWorldMode === "zeusu" ? "#5a4300" : activeWorldMode === "hadesu" ? "#ffb1b1" : activeWorldMode === "heart" ? "#fff0f8" : activeWorldMode === "nekochan" ? "#5a3416" : "#003366";
         context.fillText(count.toLocaleString(), x, geometry.countY);
         context.font = `700 ${geometry.percentFont}px "Segoe UI", "Noto Sans JP", sans-serif`;
-        context.fillStyle = "#444";
+        context.fillStyle = activeWorldMode === "poseidon" ? "#d7efff" : activeWorldMode === "zeusu" ? "#5a4300" : activeWorldMode === "hadesu" ? "#ffb1b1" : activeWorldMode === "heart" ? "#fff0f8" : activeWorldMode === "nekochan" ? "#5a3416" : "#444";
         context.fillText(`${percent.toFixed(1)}%`, x, geometry.percentY);
         const barMaxWidth = geometry.binWidth * 0.72;
         const barWidth = Math.min(barMaxWidth, barMaxWidth * (percent / 25));
         const barHeight = clamp(8 * geometry.scale, 4, 18);
-        context.fillStyle = "#d7dce7";
+        context.fillStyle = activeWorldMode === "poseidon" ? "rgba(215,239,255,.55)" : activeWorldMode === "zeusu" ? "rgba(255,247,176,.45)" : activeWorldMode === "hadesu" ? "rgba(255,120,120,.25)" : activeWorldMode === "heart" ? "rgba(255,224,240,.48)" : activeWorldMode === "nekochan" ? "rgba(255,232,210,.48)" : "#d7dce7";
         context.fillRect(x - barMaxWidth / 2, geometry.barY, barMaxWidth, barHeight);
-        context.fillStyle = "#4b8cff";
+        context.fillStyle = activeWorldMode === "poseidon" ? "#4b8cff" : activeWorldMode === "zeusu" ? "#ffd400" : activeWorldMode === "hadesu" ? "#ff4a4a" : activeWorldMode === "heart" ? "#ff5fb5" : activeWorldMode === "nekochan" ? "#ff9a52" : "#4b8cff";
         context.fillRect(x - barMaxWidth / 2, geometry.barY, barWidth, barHeight);
+    }
+    if (activeWorldMode) {
+        const palette = getWorldModePalette(activeWorldMode);
+        context.save();
+        context.fillStyle = palette.tint;
+        context.fillRect(0, 0, geometry.width, geometry.height);
+        context.strokeStyle = palette.accent;
+        context.fillStyle = palette.accent;
+        context.globalAlpha = 0.95;
+        context.font = `900 ${Math.round(clamp(30 * geometry.scale, 18, 46))}px "Segoe UI Emoji", "Noto Sans JP", sans-serif`;
+        context.fillText(`${palette.emoji} ${palette.subtitle} ${palette.emoji}`, geometry.width / 2, 34 * geometry.scale);
+        for (let i = 0; i < 12; i++) {
+            const angle = Date.now() / 900 + i * Math.PI * 2 / 12;
+            const x = geometry.width / 2 + Math.cos(angle) * geometry.width * 0.34;
+            const y = geometry.height * 0.34 + Math.sin(angle * 1.3) * geometry.height * 0.22;
+            context.globalAlpha = 0.35;
+            context.font = `900 ${Math.round(clamp(30 * geometry.scale, 18, 42))}px "Segoe UI Emoji", "Noto Sans JP", sans-serif`;
+            context.fillText(palette.emoji, x, y);
+        }
+        context.restore();
     }
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
         const item = floatingTexts[i];
