@@ -233,6 +233,8 @@ let floatingTexts: FloatingText[] = [];
 let shakeUntil = 0;
 let shakePower = 0;
 let speedLabelText = "高速";
+let isEnglish = false;
+let isFullscreenMode = false;
 
 let soundEnabled = true;
 let toneReady = false;
@@ -341,6 +343,26 @@ canvas.style.backgroundRepeat = "no-repeat";
 canvas.addEventListener("pointerdown", (event) => activateNearestPin(event));
 gameArea.appendChild(canvas);
 
+const gameFullscreenButton = document.createElement("button");
+gameFullscreenButton.textContent = "⛶";
+gameFullscreenButton.title = "fullscreen";
+gameFullscreenButton.style.position = "absolute";
+gameFullscreenButton.style.right = isMobile ? "14px" : "16px";
+gameFullscreenButton.style.bottom = isMobile ? "14px" : "16px";
+gameFullscreenButton.style.zIndex = "3";
+gameFullscreenButton.style.width = isMobile ? "54px" : "48px";
+gameFullscreenButton.style.height = isMobile ? "54px" : "48px";
+gameFullscreenButton.style.borderRadius = "999px";
+gameFullscreenButton.style.border = "1px solid rgba(255,255,255,.4)";
+gameFullscreenButton.style.background = "rgba(15,21,36,.55)";
+gameFullscreenButton.style.backdropFilter = "blur(8px)";
+gameFullscreenButton.style.color = "#fff";
+gameFullscreenButton.style.fontSize = isMobile ? "28px" : "24px";
+gameFullscreenButton.style.fontWeight = "900";
+gameFullscreenButton.style.cursor = "pointer";
+gameFullscreenButton.onclick = () => toggleGameFullscreen();
+gameArea.appendChild(gameFullscreenButton);
+
 const info = document.createElement("div");
 info.style.flex = "0 0 auto";
 info.style.width = "100%";
@@ -368,7 +390,6 @@ appHeader.style.boxShadow = "0 6px 18px rgba(87,112,51,0.10)";
 info.appendChild(appHeader);
 
 const appTitle = document.createElement("div");
-appTitle.innerHTML = `<div style="font-size:${isMobile ? 30 : 26}px;font-weight:900;color:#26351f;letter-spacing:.03em;">ミラクルボールラボ</div><div style="margin-top:3px;font-size:${isMobile ? 16 : 14}px;font-weight:700;color:#5d6d48;">ランダムに落ちる玉で、確率と奇跡を観測する実験場</div>`;
 appHeader.appendChild(appTitle);
 
 const appHeaderNote = document.createElement("div");
@@ -426,7 +447,7 @@ const randomGraphArea = document.createElement("div");
 randomGraphArea.style.marginTop = "14px";
 info.appendChild(randomGraphArea);
 
-function createField(label: string, input: HTMLElement): HTMLDivElement {
+function createField(label: string, input: HTMLElement): { wrapper: HTMLDivElement; labelEl: HTMLLabelElement } {
     const wrapper = document.createElement("div");
     wrapper.style.display = "flex";
     wrapper.style.flexDirection = "column";
@@ -441,7 +462,7 @@ function createField(label: string, input: HTMLElement): HTMLDivElement {
 
     wrapper.appendChild(labelElement);
     wrapper.appendChild(input);
-    return wrapper;
+    return { wrapper, labelEl: labelElement };
 }
 
 function createInput(value: string, type = "text"): HTMLInputElement {
@@ -497,6 +518,75 @@ function createButton(text: string, onClick: () => void): HTMLButtonElement {
     return button;
 }
 
+
+type UiFieldRefs = { wrapper: HTMLDivElement; labelEl: HTMLLabelElement; ja: string; en: string };
+const uiFieldRefs: UiFieldRefs[] = [];
+const bilingualButtons: Array<{ button: HTMLButtonElement; ja: string; en: string }> = [];
+const sectionTitles: Array<{ el: HTMLDivElement; ja: string; en: string }> = [];
+
+function setButtonLabel(button: HTMLButtonElement, ja: string, en: string): HTMLButtonElement {
+    bilingualButtons.push({ button, ja, en });
+    button.textContent = isEnglish ? en : ja;
+    return button;
+}
+
+function createSection(titleJa: string, titleEn: string): HTMLDivElement {
+    const section = document.createElement("div");
+    section.style.display = "flex";
+    section.style.flexDirection = "column";
+    section.style.gap = "10px";
+    section.style.padding = isMobile ? "14px" : "12px";
+    section.style.borderRadius = "22px";
+    section.style.background = "linear-gradient(180deg, rgba(246,250,236,.96) 0%, rgba(227,240,204,.88) 100%)";
+    section.style.border = "1px solid rgba(87,112,51,0.20)";
+    section.style.boxShadow = "0 8px 22px rgba(87,112,51,0.10)";
+    section.style.width = "100%";
+    section.style.boxSizing = "border-box";
+
+    const title = document.createElement("div");
+    title.style.fontSize = `${Math.max(18, uiFontPx - 1)}px`;
+    title.style.fontWeight = "900";
+    title.style.color = "#334321";
+    title.textContent = isEnglish ? titleEn : titleJa;
+    section.appendChild(title);
+    sectionTitles.push({ el: title, ja: titleJa, en: titleEn });
+
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.flexWrap = "wrap";
+    row.style.gap = isMobile ? "10px" : "8px";
+    section.appendChild(row);
+    buttonArea.appendChild(section);
+    return row;
+}
+
+function addField(wrapper: HTMLDivElement, labelEl: HTMLLabelElement, ja: string, en: string): void {
+    uiFieldRefs.push({ wrapper, labelEl, ja, en });
+    labelEl.textContent = isEnglish ? en : ja;
+    controlArea.appendChild(wrapper);
+}
+
+function setSelectOptions(): void {
+    probabilityModeSelect.innerHTML = isEnglish
+        ? `
+    <option value="normal">Normal: observe true low odds</option>
+    <option value="festival">Festival: easier to witness effects</option>
+    <option value="hard">Hard: much rarer</option>
+    <option value="hell">Hell: miracles almost denied</option>
+`
+        : `
+    <option value="normal">通常モード：低確率を真面目に観測</option>
+    <option value="festival">祭りモード：演出を少し観測しやすい</option>
+    <option value="hard">修羅モード：かなり出にくい</option>
+    <option value="hell">地獄モード：奇跡ほぼ拒否</option>
+`;
+    probabilityModeSelect.value = settings.probabilityMode;
+}
+
+function t(ja: string, en: string): string {
+    return isEnglish ? en : ja;
+}
+
 const targetInput = createInput(String(settings.targetCount), "number");
 targetInput.min = "1";
 targetInput.step = "100";
@@ -512,8 +602,6 @@ binCountInput.max = "30";
 const pinRowInput = createInput(String(settings.pinRows), "number");
 pinRowInput.min = "1";
 pinRowInput.max = "30";
-
-const labelInput = createTextarea(settings.labelText);
 
 const backgroundInput = createInput(settings.backgroundImage, "text");
 backgroundInput.placeholder = "例: /background.jpg または https://example.com/image.jpg";
@@ -548,89 +636,108 @@ probabilityModeSelect.style.border = "1px solid #b8c1d1";
 probabilityModeSelect.style.background = "#ffffff";
 probabilityModeSelect.style.fontSize = `${uiFontPx}px`;
 probabilityModeSelect.style.fontWeight = "800";
-probabilityModeSelect.innerHTML = `
-    <option value="normal">通常モード：低確率を真面目に観測</option>
-    <option value="festival">祭りモード：演出を少し観測しやすい</option>
-    <option value="hard">修羅モード：かなり出にくい</option>
-    <option value="hell">地獄モード：奇跡ほぼ拒否</option>
-`;
+setSelectOptions();
 
 binCountInput.addEventListener("blur", () => autoApplyLayoutSetting());
 pinRowInput.addEventListener("blur", () => autoApplyLayoutSetting());
 
-controlArea.appendChild(createField("投下数", targetInput));
-controlArea.appendChild(createField("同時に出す玉数", activeBallInput));
-controlArea.appendChild(createField("下の受け皿数", binCountInput));
-controlArea.appendChild(createField("ピン段数", pinRowInput));
-controlArea.appendChild(createField("背景画像URL", backgroundInput));
-controlArea.appendChild(createField("背景画像を写真から選択", backgroundFileInput));
-controlArea.appendChild(createField("確率モード", probabilityModeSelect));
+const targetField = createField("投下数", targetInput);
+addField(targetField.wrapper, targetField.labelEl, "投下数", "Ball count");
+const activeField = createField("同時に出す玉数", activeBallInput);
+addField(activeField.wrapper, activeField.labelEl, "同時に出す玉数", "Simultaneous balls");
+const binField = createField("下の受け皿数", binCountInput);
+addField(binField.wrapper, binField.labelEl, "下の受け皿数", "Bottom bins");
+const pinField = createField("ピン段数", pinRowInput);
+addField(pinField.wrapper, pinField.labelEl, "ピン段数", "Pin rows");
+const bgField = createField("背景画像URL", backgroundInput);
+addField(bgField.wrapper, bgField.labelEl, "背景画像URL", "Background image URL");
+const bgFileField = createField("背景画像を写真から選択", backgroundFileInput);
+addField(bgFileField.wrapper, bgFileField.labelEl, "背景画像を写真から選択", "Choose background photo");
+const probField = createField("確率モード", probabilityModeSelect);
+addField(probField.wrapper, probField.labelEl, "確率モード", "Probability mode");
 
-const runButton = createButton("実行", () => startExperiment());
-buttonArea.appendChild(runButton);
-buttonArea.appendChild(createButton("この実験について", () => showAboutPopup()));
-buttonArea.appendChild(createButton("ボタン説明", () => showButtonHelpPopup()));
-buttonArea.appendChild(createButton("奇跡図鑑", () => showMiracleBookPopup()));
-buttonArea.appendChild(createButton("最高記録", () => showRecordsPopup()));
+const utilityButtons = createSection("実験メニュー", "Experiment");
+const speedButtons = createSection("投下速度", "Drop speed");
+const displayButtons = createSection("表示・演出", "Display & effects");
+const settingButtons = createSection("反映・出力", "Apply & export");
 
-buttonArea.appendChild(createButton("通常", () => {
+const runButton = setButtonLabel(createButton("実行", () => startExperiment()), "実行", "Run");
+utilityButtons.appendChild(runButton);
+utilityButtons.appendChild(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"));
+utilityButtons.appendChild(setButtonLabel(createButton("ボタン説明", () => showButtonHelpPopup()), "ボタン説明", "Buttons"));
+utilityButtons.appendChild(setButtonLabel(createButton("奇跡図鑑", () => showMiracleBookPopup()), "奇跡図鑑", "Miracle book"));
+utilityButtons.appendChild(setButtonLabel(createButton("最高記録", () => showRecordsPopup()), "最高記録", "Records"));
+
+const languageButton = setButtonLabel(createButton("English", () => {
+    isEnglish = !isEnglish;
+    updateUiLanguage();
+    updateStopButton();
+    updateInfo();
+}), "English", "日本語");
+utilityButtons.appendChild(languageButton);
+
+const fullScreenButton = setButtonLabel(createButton("全画面", () => toggleGameFullscreen()), "全画面", "Fullscreen");
+utilityButtons.appendChild(fullScreenButton);
+
+speedButtons.appendChild(setButtonLabel(createButton("通常", () => {
     engine.timing.timeScale = 1;
     speedLabelText = "通常";
     updateInfo();
-}));
+}), "通常", "Normal"));
 
-buttonArea.appendChild(createButton("高速", () => {
+speedButtons.appendChild(setButtonLabel(createButton("高速", () => {
     engine.timing.timeScale = 2;
     speedLabelText = "高速";
     updateInfo();
-}));
+}), "高速", "Fast"));
 
-buttonArea.appendChild(createButton("超高速", () => {
+speedButtons.appendChild(setButtonLabel(createButton("超高速", () => {
     engine.timing.timeScale = 4;
     speedLabelText = "超高速";
     updateInfo();
-}));
+}), "超高速", "Ultra"));
 
-const stopButton = createButton("ストップ", () => togglePause());
-buttonArea.appendChild(stopButton);
+const stopButton = setButtonLabel(createButton("ストップ", () => togglePause()), "ストップ", "Stop");
+displayButtons.appendChild(stopButton);
 
-buttonArea.appendChild(createButton("リセット", () => {
+displayButtons.appendChild(setButtonLabel(createButton("リセット", () => {
     if (!applySettingsFromInputs(true)) return;
     resetExperiment(false);
-}));
+}), "リセット", "Reset"));
 
-const simpleModeButton = createButton("シンプル: OFF", () => {
+const simpleModeButton = setButtonLabel(createButton("シンプル: OFF", () => {
     settings.simpleMode = !settings.simpleMode;
     updateSimpleModeButton();
     updateInfo();
-});
-buttonArea.appendChild(simpleModeButton);
+}), "シンプル: OFF", "Simple: OFF");
+displayButtons.appendChild(simpleModeButton);
 
-const soundButton = createButton("音: ON", () => toggleSound());
-buttonArea.appendChild(soundButton);
+const soundButton = setButtonLabel(createButton("音: ON", () => toggleSound()), "音: ON", "Sound: ON");
+displayButtons.appendChild(soundButton);
 
-const confettiButton = createButton("紙吹雪: ON", () => {
+const confettiButton = setButtonLabel(createButton("紙吹雪: ON", () => {
     confettiEnabled = !confettiEnabled;
-    confettiButton.textContent = confettiEnabled ? "紙吹雪: ON" : "紙吹雪: OFF";
-});
-buttonArea.appendChild(confettiButton);
+    confettiButton.textContent = confettiEnabled ? t("紙吹雪: ON", "Confetti: ON") : t("紙吹雪: OFF", "Confetti: OFF");
+}), "紙吹雪: ON", "Confetti: ON");
+displayButtons.appendChild(confettiButton);
 
-const pixiButton = createButton("Pixi背景: OFF", () => togglePixiBackground());
-buttonArea.appendChild(pixiButton);
+const pixiButton = setButtonLabel(createButton("Pixi背景: OFF", () => togglePixiBackground()), "Pixi背景: OFF", "Pixi BG: OFF");
+displayButtons.appendChild(pixiButton);
 
-buttonArea.appendChild(createButton("設定反映", () => {
+settingButtons.appendChild(setButtonLabel(createButton("設定反映", () => {
     if (!applySettingsFromInputs(true)) return;
     resetExperiment(false);
-}));
+}), "設定反映", "Apply settings"));
 
-buttonArea.appendChild(createButton("背景だけ反映", () => {
+settingButtons.appendChild(setButtonLabel(createButton("背景だけ反映", () => {
     selectedBackgroundObjectUrl = "";
     settings.backgroundImage = backgroundInput.value.trim();
     applyBackgroundImage();
-}));
+}), "背景だけ反映", "Apply background"));
 
-buttonArea.appendChild(createButton("結果コピー", () => copyResultCsv()));
-buttonArea.appendChild(createButton("CSV保存", () => downloadResultCsv()));
+settingButtons.appendChild(setButtonLabel(createButton("結果コピー", () => copyResultCsv()), "結果コピー", "Copy result"));
+settingButtons.appendChild(setButtonLabel(createButton("CSV保存", () => downloadResultCsv()), "CSV保存", "Save CSV"));
+updateUiLanguage();
 
 const resultOverlay = document.createElement("div");
 resultOverlay.style.position = "fixed";
@@ -846,6 +953,43 @@ function getProbabilityScale(): number {
     if (settings.probabilityMode === "hell") return 0.08;
     return 1;
 }
+
+function updateUiLanguage(): void {
+    appTitle.innerHTML = isEnglish
+        ? `<div style="font-size:${isMobile ? 30 : 26}px;font-weight:900;color:#26351f;letter-spacing:.03em;">Miracle Ball Lab</div><div style="margin-top:3px;font-size:${isMobile ? 16 : 14}px;font-weight:700;color:#5d6d48;">A lab for observing probability and miracles with falling balls</div>`
+        : `<div style="font-size:${isMobile ? 30 : 26}px;font-weight:900;color:#26351f;letter-spacing:.03em;">ミラクルボールラボ</div><div style="margin-top:3px;font-size:${isMobile ? 16 : 14}px;font-weight:700;color:#5d6d48;">ランダムに落ちる玉で、確率と奇跡を観測する実験場</div>`;
+    appHeaderNote.textContent = isEnglish ? "Rare effects are luck. Ultra speed is easy to miss." : "レア演出は運。超高速だと見逃しやすいです。";
+    for (const item of uiFieldRefs) item.labelEl.textContent = isEnglish ? item.en : item.ja;
+    for (const item of bilingualButtons) {
+        if (item.button === simpleModeButton) continue;
+        if (item.button === soundButton) continue;
+        if (item.button === confettiButton) continue;
+        if (item.button === pixiButton) continue;
+        item.button.textContent = isEnglish ? item.en : item.ja;
+    }
+    for (const item of sectionTitles) item.el.textContent = isEnglish ? item.en : item.ja;
+    setSelectOptions();
+    updateSimpleModeButton();
+    updateSoundButton();
+    confettiButton.textContent = confettiEnabled ? t("紙吹雪: ON", "Confetti: ON") : t("紙吹雪: OFF", "Confetti: OFF");
+    pixiButton.textContent = pixiEnabled ? t("Pixi背景: ON", "Pixi BG: ON") : t("Pixi背景: OFF", "Pixi BG: OFF");
+    gameFullscreenButton.title = t("全画面", "Fullscreen");
+}
+
+async function toggleGameFullscreen(): Promise<void> {
+    try {
+        if (document.fullscreenElement === gameArea) {
+            await document.exitFullscreen();
+        } else if (!document.fullscreenElement) {
+            await gameArea.requestFullscreen();
+        }
+    } catch {}
+}
+
+document.addEventListener("fullscreenchange", () => {
+    isFullscreenMode = document.fullscreenElement === gameArea;
+    gameFullscreenButton.textContent = isFullscreenMode ? "🗗" : "⛶";
+});
 
 function getProbabilityModeLabel(): string {
     if (settings.probabilityMode === "festival") return "祭り";
@@ -1085,7 +1229,6 @@ function applySettingsFromInputs(showInvalidPopup = true): boolean {
     activeBallInput.value = String(settings.activeLimit);
     binCountInput.value = String(settings.binCount);
     pinRowInput.value = String(settings.pinRows);
-    labelInput.value = settings.labelText;
     probabilityModeSelect.value = settings.probabilityMode;
     if (!selectedBackgroundObjectUrl) backgroundInput.value = settings.backgroundImage;
     return true;
@@ -1262,13 +1405,13 @@ function resetExperiment(startNow = false): void {
 }
 
 function updateSimpleModeButton(): void {
-    simpleModeButton.textContent = settings.simpleMode ? "シンプル: ON" : "シンプル: OFF";
+    simpleModeButton.textContent = settings.simpleMode ? t("シンプル: ON", "Simple: ON") : t("シンプル: OFF", "Simple: OFF");
     simpleModeButton.style.background = settings.simpleMode ? "linear-gradient(180deg, #222 0%, #444 100%)" : "linear-gradient(180deg, #f3f8e8 0%, #dceec2 100%)";
     simpleModeButton.style.color = settings.simpleMode ? "#ffffff" : "#222222";
 }
 
 function updateStopButton(): void {
-    stopButton.textContent = isPaused ? "再開" : "ストップ";
+    stopButton.textContent = isPaused ? t("再開", "Resume") : t("ストップ", "Stop");
 }
 
 async function startExperiment(): Promise<void> {
@@ -1631,6 +1774,10 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     window.setTimeout(() => { miracleOverlay.style.display = "none"; miracleOverlay.innerHTML = ""; }, 4900);
 }
 
+function updateSoundButton(): void {
+    soundButton.textContent = soundEnabled ? t("音: ON", "Sound: ON") : t("音: OFF", "Sound: OFF");
+}
+
 async function enableSound(showNotice = true): Promise<void> {
     try {
         await loadExternalScript("https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js");
@@ -1639,23 +1786,23 @@ async function enableSound(showNotice = true): Promise<void> {
             await Tone.start();
             toneReady = true;
             soundEnabled = true;
-            soundButton.textContent = "音: ON";
-            if (showNotice) showMilestone("音ON");
+            updateSoundButton();
+            if (showNotice) showMilestone(t("音ON", "Sound ON"));
         }
     } catch {
-        soundButton.textContent = "音: 読込失敗";
+        soundButton.textContent = t("音: 読込失敗", "Sound: Load failed");
     }
 }
 
 async function toggleSound(): Promise<void> {
     if (soundEnabled) {
         soundEnabled = false;
-        soundButton.textContent = "音: OFF";
-        showMilestone("音OFF");
+        updateSoundButton();
+        showMilestone(t("音OFF", "Sound OFF"));
         return;
     }
     soundEnabled = true;
-    soundButton.textContent = "音: ON";
+    updateSoundButton();
     await enableSound(true);
 }
 
@@ -1753,7 +1900,7 @@ async function initPixiBackground(): Promise<void> {
         pixiReady = true;
     } catch {
         pixiEnabled = false;
-        pixiButton.textContent = "Pixi背景: 読込失敗";
+        pixiButton.textContent = t("Pixi背景: 読込失敗", "Pixi BG: Load failed");
     }
 }
 
@@ -1783,29 +1930,28 @@ function updateInfo(): void {
     const topIndex = binCounts.indexOf(maxCount);
     const topText = maxCount > 0 && topIndex >= 0 ? `${labels[topIndex]} (${maxCount.toLocaleString()}回)` : "-";
     recordHero.innerHTML = `
-        <div style="font-size:${isMobile ? 24 : 22}px;">🏆 最高記録</div>
-        <div style="font-size:${isMobile ? 22 : 20}px;">最高レア: <b>${savedRecords.bestRank}</b> ${savedRecords.bestLabel}</div>
-        <div style="font-size:${isMobile ? 18 : 16}px;opacity:.86;">実験 ${savedRecords.totalRuns.toLocaleString()}回 / 最大 ${savedRecords.maxFinishedCount.toLocaleString()}玉</div>
+        <div style="font-size:${isMobile ? 24 : 22}px;">🏆 ${t("最高記録", "Best records")}</div>
+        <div style="font-size:${isMobile ? 22 : 20}px;">${t("最高レア", "Best rarity")}: <b>${savedRecords.bestRank}</b> ${savedRecords.bestLabel}</div>
+        <div style="font-size:${isMobile ? 18 : 16}px;opacity:.86;">${t("実験", "Runs")} ${savedRecords.totalRuns.toLocaleString()}${t("回", "")} / ${t("最大", "Max")} ${savedRecords.maxFinishedCount.toLocaleString()}${t("玉", " balls")}</div>
     `;
 
+    const discoveredKinds = SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length;
     topRow.innerHTML = `
-        <div>デバイス: <b>${isMobile ? "スマホ向け" : "PC向け"}</b></div>
-        <div>ブラウザ: <b>${browserName}</b></div>
-        <div>実行回数: <b>${finishedCount.toLocaleString()}</b> / ${settings.targetCount.toLocaleString()}</div>
-        <div>画面上の玉: <b>${activeDropCount}</b></div>
-        <div>速度: <b>${speedLabelText}</b></div>
-        <div>確率モード: <b>${getProbabilityModeLabel()}</b></div>
-        <div>状態: <b>${!isStarted ? "待機中" : isFinished ? "完了" : isMiraclePaused ? "奇跡で停止中" : isPaused ? "停止中" : targetReachedTime ? "残り玉回収中" : "実行中"}</b></div>
-        <div>経過時間: <b>${formatElapsedTime(elapsedMs)}</b></div>
-        <div>処理速度: <b>${Math.floor(speedPerSecond).toLocaleString()}</b> 回/秒</div>
-        <div>残り時間目安: <b>${eta}</b></div>
-        <div>暫定1位: <b>${topText}</b></div>
-        <div>受け皿: <b>${settings.binCount}</b> + 両端捨て区画</div>
-        <div>ピン段数: <b>${settings.pinRows}</b></div>
-        <div>金:${goldCreated} 虹:${rainbowCreated} 巨:${giantCreated} 図:${shapeCreated}</div>
-        <div>王:${crownCreated} UFO:${silverUfoCreated} 炎:${blueFlameCreated} 7:${luckySevenCreated}</div>
-        <div>星:${starCreated} 桃:${heartCreated} 裂:${timeRiftCreated} 黒:${blackSunCreated} 爆:${labExplosionCreated} 卵:${cosmicEggCreated}</div>
-        <div>捨て区画: <b>${discardedCount.toLocaleString()}</b></div>
+        <div>${t("デバイス", "Device")}: <b>${isMobile ? t("スマホ向け", "Mobile") : t("PC向け", "Desktop")}</b></div>
+        <div>${t("ブラウザ", "Browser")}: <b>${browserName}</b></div>
+        <div>${t("実行回数", "Progress")}: <b>${finishedCount.toLocaleString()}</b> / ${settings.targetCount.toLocaleString()}</div>
+        <div>${t("画面上の玉", "Balls on screen")}: <b>${activeDropCount}</b></div>
+        <div>${t("速度", "Speed")}: <b>${isEnglish ? (speedLabelText === "通常" ? "Normal" : speedLabelText === "高速" ? "Fast" : "Ultra") : speedLabelText}</b></div>
+        <div>${t("確率モード", "Probability mode")}: <b>${isEnglish ? ({normal:"Normal",festival:"Festival",hard:"Hard",hell:"Hell"} as any)[settings.probabilityMode] : getProbabilityModeLabel()}</b></div>
+        <div>${t("状態", "Status")}: <b>${!isStarted ? t("待機中", "Idle") : isFinished ? t("完了", "Finished") : isMiraclePaused ? t("奇跡で停止中", "Paused by miracle") : isPaused ? t("停止中", "Paused") : targetReachedTime ? t("残り玉回収中", "Collecting remaining balls") : t("実行中", "Running")}</b></div>
+        <div>${t("経過時間", "Elapsed")}: <b>${formatElapsedTime(elapsedMs)}</b></div>
+        <div>${t("処理速度", "Throughput")}: <b>${Math.floor(speedPerSecond).toLocaleString()}</b> ${t("回/秒", "/sec")}</div>
+        <div>${t("残り時間目安", "ETA")}: <b>${eta}</b></div>
+        <div>${t("暫定1位", "Current top")}: <b>${topText}</b></div>
+        <div>${t("受け皿", "Bins")}: <b>${settings.binCount}</b> ${t("+ 両端捨て区画", "+ edge discard zones")}</div>
+        <div>${t("ピン段数", "Pin rows")}: <b>${settings.pinRows}</b></div>
+        <div>${t("発見済み種類", "Discovered kinds")}: <b>${discoveredKinds}</b> / ${SPECIAL_EVENT_DEFS.length}</div>
+        <div>${t("捨て区画", "Discarded")}: <b>${discardedCount.toLocaleString()}</b></div>
     `;
     updateRandomGraph();
 }
@@ -1901,7 +2047,7 @@ function showFinalResult(): void {
             <div style="font-size:clamp(22px,4vw,40px);margin-bottom:18px;">${browserName} / 指定${settings.targetCount.toLocaleString()}回 / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime)}</div>
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の「宇宙卵」。出たら奇跡どころか、画面が伝説になります。</div>
-            <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">捨て区画:${discardedCount} / 金:${goldCreated} 虹:${rainbowCreated} 巨:${giantCreated} 図:${shapeCreated} 王:${crownCreated} UFO:${silverUfoCreated} 炎:${blueFlameCreated} 7:${luckySevenCreated} 星:${starCreated} 桃:${heartCreated} 裂:${timeRiftCreated} 黒:${blackSunCreated} 爆:${labExplosionCreated} 卵:${cosmicEggCreated}</div>
+            <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">発見済み種類: ${(SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length).toLocaleString()} / ${SPECIAL_EVENT_DEFS.length}　捨て区画: ${discardedCount.toLocaleString()}</div>
             <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="copy-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">結果コピー</button><button id="download-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">CSV保存</button><button id="bottom-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">閉じる</button></div>
         </div>`;
     resultOverlay.style.display = "flex";
