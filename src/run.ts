@@ -41,6 +41,12 @@ type DropKind =
     | "ancientClock"
     | "mirrorCat"
     | "meteorCrown"
+    | "obsidianKing"
+    | "novaStar"
+    | "diamondSkull"
+    | "sunLion"
+    | "violetComet"
+    | "angelRing"
     | "fragment";
 
 type ProbabilityMode = "normal" | "festival" | "hard" | "hell";
@@ -99,6 +105,7 @@ type Settings = {
     labelText: string;
     backgroundImage: string;
     simpleMode: boolean;
+    cameraShakeEnabled: boolean;
     probabilityMode: ProbabilityMode;
 };
 
@@ -191,6 +198,12 @@ const SPECIAL_EVENT_DEFS: SpecialEventDef[] = [
     { kind: "ancientClock", label: "古代時計", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "時", emoji: "時", fillStyle: "#b58b4a", radiusScale: 1.95, soundMode: "cosmic" },
     { kind: "mirrorCat", label: "鏡ねこ", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "猫", emoji: "猫", fillStyle: "#f5f7ff", radiusScale: 1.95, soundMode: "miracle" },
     { kind: "meteorCrown", label: "隕石クラウン", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "冠", emoji: "冠", fillStyle: "#ff6d3a", radiusScale: 2.05, soundMode: "cosmic" },
+    { kind: "obsidianKing", label: "黒曜王", rank: "EX", rate: 0.0000005, denominator: 2_000_000, symbol: "王", emoji: "王", fillStyle: "#1f1626", radiusScale: 2.18, soundMode: "black" },
+    { kind: "novaStar", label: "新星", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "星", emoji: "星", fillStyle: "#fff066", radiusScale: 1.95, soundMode: "miracle" },
+    { kind: "diamondSkull", label: "ダイヤ髑髏", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "骸", emoji: "骸", fillStyle: "#8df3ff", radiusScale: 2.0, soundMode: "cosmic" },
+    { kind: "sunLion", label: "太陽獅子", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "獅", emoji: "獅", fillStyle: "#ffb12f", radiusScale: 2.02, soundMode: "miracle" },
+    { kind: "violetComet", label: "紫彗星", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "彗", emoji: "彗", fillStyle: "#8d63ff", radiusScale: 1.96, soundMode: "cosmic" },
+    { kind: "angelRing", label: "天使輪", rank: "SSR", rate: 0.00001, denominator: 100_000, symbol: "輪", emoji: "輪", fillStyle: "#fff1a6", radiusScale: 1.88, soundMode: "miracle" },
 
     { kind: "heart", label: "桃色ハート", rank: "UR", rate: HEART_RATE, denominator: 1_000_000, symbol: "愛", emoji: "愛", fillStyle: "#ff69b4", radiusScale: 1.9, soundMode: "miracle" },
     { kind: "luckySeven", label: "ラッキーセブン", rank: "UR", rate: 1 / 777777, denominator: 777_777, symbol: "7", emoji: "7", fillStyle: "#ff2bd6", radiusScale: 1.85, soundMode: "miracle" },
@@ -217,6 +230,7 @@ let settings: Settings = {
     labelText: isMobile ? "１\n２\n３\n４\n５\n６" : "１\n２\n３\n４\n５\n６\n７\n８",
     backgroundImage: "",
     simpleMode: false,
+    cameraShakeEnabled: true,
     probabilityMode: "normal",
 };
 
@@ -315,24 +329,6 @@ let mobileDockSettingsButton: HTMLButtonElement | null = null;
 let mobileSettingsOverlay: HTMLDivElement | null = null;
 let mobileSettingsPanel: HTMLDivElement | null = null;
 
-let isPseudoFullscreen = false;
-
-let mobileDockPauseButton: HTMLButtonElement | null = null;
-
-let mobilePinDragTarget: Matter.Body | null = null;
-let mobilePinDragPointerId: number | null = null;
-let pointerWindLastPoint: { x: number; y: number; time: number } | null = null;
-let oneHandMode = false;
-let recordingMode = false;
-let secretMode = false;
-let exactTenThousandUnlocked = false;
-let harmonyTriggered = false;
-let worldMutationMode: "none" | "reverseGravity" | "magnetRain" | "quantumSplit" | "windTunnel" = "none";
-let worldMutationUntil = 0;
-let hiddenSettingSequence: string[] = [];
-let researchFeed: string[] = [];
-const SECRET_SETTING_SEQUENCE = ["実験メニュー", "投下速度", "表示・演出", "反映・出力"];
-
 const engine = Engine.create();
 engine.gravity.y = 8;
 engine.timing.timeScale = 2;
@@ -386,17 +382,6 @@ globalStyle.textContent = `
   html, body { max-width: 100%; overflow: hidden; }
   body { overscroll-behavior-x: none; }
   #miracle-horizontal-guard { width: 100%; max-width: 100%; overflow-x: hidden; }
-  body.pseudo-fullscreen { background: #0f1524 !important; }
-  body.pseudo-fullscreen #miracle-horizontal-guard {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100dvh;
-    z-index: 9999;
-  }
-  body.one-hand-left .mobile-bottom-dock { grid-template-columns: 1.3fr .9fr .9fr; }
-  body.one-hand-right .mobile-bottom-dock { grid-template-columns: .9fr .9fr 1.3fr; }
-  body.recording-mode #subtitle-overlay { font-size: clamp(26px, 3.8vw, 42px) !important; letter-spacing: .04em; }
 `;
 document.head.appendChild(globalStyle);
 
@@ -440,23 +425,7 @@ canvas.style.backgroundColor = "rgba(245,245,245,0.88)";
 canvas.style.backgroundSize = "cover";
 canvas.style.backgroundPosition = "center";
 canvas.style.backgroundRepeat = "no-repeat";
-canvas.addEventListener("pointerdown", (event) => {
-    if (isMobile) beginMobilePinInteraction(event);
-    pointerWindLastPoint = { x: event.clientX, y: event.clientY, time: Date.now() };
-    activateNearestPin(event);
-});
-canvas.addEventListener("pointermove", (event) => {
-    if (isMobile) updateMobilePinInteraction(event);
-    applyUserWindIntervention(event);
-});
-canvas.addEventListener("pointerup", (event) => {
-    if (isMobile) endMobilePinInteraction(event);
-    pointerWindLastPoint = null;
-});
-canvas.addEventListener("pointercancel", (event) => {
-    if (isMobile) endMobilePinInteraction(event);
-    pointerWindLastPoint = null;
-});
+canvas.addEventListener("pointerdown", (event) => activateNearestPin(event));
 gameArea.appendChild(canvas);
 
 const gameFullscreenButton = document.createElement("button");
@@ -476,7 +445,7 @@ gameFullscreenButton.style.color = "#fff";
 gameFullscreenButton.style.fontSize = isMobile ? "28px" : "24px";
 gameFullscreenButton.style.fontWeight = "900";
 gameFullscreenButton.style.cursor = "pointer";
-gameFullscreenButton.addEventListener("pointerup", (event) => { event.preventDefault(); void toggleGameFullscreen(); });
+gameFullscreenButton.onclick = () => toggleGameFullscreen();
 gameArea.appendChild(gameFullscreenButton);
 
 const info = document.createElement("div");
@@ -596,6 +565,21 @@ function createInput(value: string, type = "text"): HTMLInputElement {
     return input;
 }
 
+function createTextarea(value: string): HTMLTextAreaElement {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.rows = isMobile ? 5 : 4;
+    textarea.style.width = "100%";
+    textarea.style.boxSizing = "border-box";
+    textarea.style.padding = isMobile ? "16px 16px" : "12px 14px";
+    textarea.style.borderRadius = "18px";
+    textarea.style.border = "1px solid #b8c1d1";
+    textarea.style.background = "#ffffff";
+    textarea.style.fontSize = `${uiFontPx}px`;
+    textarea.style.outline = "none";
+    textarea.style.resize = "vertical";
+    return textarea;
+}
 
 function createButton(text: string, onClick: () => void): HTMLButtonElement {
     const button = document.createElement("button");
@@ -636,6 +620,14 @@ function updateTooltipText(): void {
     }
 }
 
+function ensureExternalStyle(href: string): void {
+    const existing = document.querySelector(`link[href="${href}"]`);
+    if (existing) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+}
 
 
 type UiFieldRefs = { wrapper: HTMLDivElement; labelEl: HTMLLabelElement; ja: string; en: string };
@@ -668,8 +660,6 @@ function createSection(titleJa: string, titleEn: string): HTMLDivElement {
     title.style.fontWeight = "900";
     title.style.color = "#334321";
     title.textContent = isEnglish ? titleEn : titleJa;
-    title.style.cursor = "pointer";
-    title.addEventListener("click", () => handleSecretSettingsTap(titleJa));
     section.appendChild(title);
     sectionTitles.push({ el: title, ja: titleJa, en: titleEn });
 
@@ -707,154 +697,6 @@ function setSelectOptions(): void {
 
 function t(ja: string, en: string): string {
     return isEnglish ? en : ja;
-}
-
-function pushResearchLog(text: string): void {
-    researchFeed.unshift(`${new Date().toLocaleTimeString()} ${text}`);
-    if (researchFeed.length > 18) researchFeed.length = 18;
-}
-
-function isDeepNightNow(): boolean {
-    const hour = new Date().getHours();
-    return hour >= 23 || hour <= 4;
-}
-
-function getWeekdayOrbData(): { label: string; color: string; symbol: string } {
-    const day = new Date().getDay();
-    const map = [
-        { label: "日曜の王冠雲", color: "#ffb74d", symbol: "日" },
-        { label: "月曜の青衛星", color: "#7ea7ff", symbol: "月" },
-        { label: "火曜の火花核", color: "#ff7043", symbol: "火" },
-        { label: "水曜の水鏡", color: "#4dd0e1", symbol: "水" },
-        { label: "木曜の樹霊", color: "#66bb6a", symbol: "木" },
-        { label: "金曜の金星片", color: "#ffd54f", symbol: "金" },
-        { label: "土曜の紫彗星", color: "#ba68c8", symbol: "土" },
-    ];
-    return map[day] ?? map[0];
-}
-
-function setPseudoFullscreen(enabled: boolean): void {
-    isPseudoFullscreen = enabled;
-    document.body.classList.toggle("pseudo-fullscreen", enabled);
-}
-
-function handleSecretSettingsTap(key: string): void {
-    hiddenSettingSequence.push(key);
-    if (hiddenSettingSequence.length > SECRET_SETTING_SEQUENCE.length) hiddenSettingSequence.shift();
-    const matched = SECRET_SETTING_SEQUENCE.every((x, i) => hiddenSettingSequence[i] === x);
-    if (!matched && !SECRET_SETTING_SEQUENCE.slice(0, hiddenSettingSequence.length).every((x, i) => hiddenSettingSequence[i] === x)) {
-        hiddenSettingSequence = [key];
-        if (SECRET_SETTING_SEQUENCE[0] !== key) hiddenSettingSequence = [];
-        return;
-    }
-    if (matched) {
-        hiddenSettingSequence = [];
-        secretMode = !secretMode;
-        showMilestone(secretMode ? t("秘密モード 解放", "Secret mode unlocked") : t("秘密モード 解除", "Secret mode off"));
-        setSubtitle(secretMode ? t("設定画面の順番が実験所の鍵だった。", "The settings order was a hidden key.") : t("秘密層が静かに閉じた。", "The hidden layer quietly closed."));
-        pushResearchLog(secretMode ? "秘密モードが解放された" : "秘密モードを解除した");
-        triggerScreenFlash(secretMode ? "cosmic" : "normal");
-        vibrateOnMobile(secretMode ? [60, 30, 100, 40, 140] : [40]);
-    }
-}
-
-function toggleOneHandMode(): void {
-    oneHandMode = !oneHandMode;
-    document.body.classList.remove("one-hand-left", "one-hand-right");
-    if (oneHandMode) document.body.classList.add(appRandom() < 0.5 ? "one-hand-left" : "one-hand-right");
-    showMilestone(oneHandMode ? t("片手モード ON", "One-hand ON") : t("片手モード OFF", "One-hand OFF"));
-}
-
-function toggleRecordingMode(): void {
-    recordingMode = !recordingMode;
-    document.body.classList.toggle("recording-mode", recordingMode);
-    subtitleOverlay.style.bottom = recordingMode ? "126px" : (isMobile ? "122px" : "24px");
-    subtitleOverlay.style.maxWidth = recordingMode ? "92vw" : (isMobile ? "92vw" : "min(1000px, 82vw)");
-    showMilestone(recordingMode ? t("録画向け演出 ON", "Recording mode ON") : t("録画向け演出 OFF", "Recording mode OFF"));
-}
-
-function applyUserWindIntervention(event: PointerEvent): void {
-    if (!pointerWindLastPoint) {
-        pointerWindLastPoint = { x: event.clientX, y: event.clientY, time: Date.now() };
-        return;
-    }
-    const dt = Math.max(1, Date.now() - pointerWindLastPoint.time);
-    const dx = event.clientX - pointerWindLastPoint.x;
-    const dy = event.clientY - pointerWindLastPoint.y;
-    pointerWindLastPoint = { x: event.clientX, y: event.clientY, time: Date.now() };
-    if (Math.abs(dx) + Math.abs(dy) < 14 || isPaused || isMiraclePaused || !isStarted) return;
-    const point = screenToWorld(event);
-    const windPower = clamp(Math.hypot(dx, dy) / dt, 0.1, 2.2) * geometry.scale;
-    for (const body of engine.world.bodies) {
-        const p = (body as any).plugin;
-        if (!p?.isDrop) continue;
-        const dist = Math.hypot(body.position.x - point.x, body.position.y - point.y);
-        if (dist > 130 * geometry.scale) continue;
-        Body.setVelocity(body, {
-            x: body.velocity.x + dx * 0.015 * windPower,
-            y: body.velocity.y + dy * 0.004 * windPower - 0.15 * windPower,
-        });
-    }
-}
-
-function applyWorldMutationForces(): void {
-    if (worldMutationMode === "none") return;
-    const activeDrops = engine.world.bodies.filter((body) => (body as any).plugin?.isDrop);
-    if (worldMutationMode === "reverseGravity") {
-        engine.gravity.y = -0.42;
-        engine.gravity.x = Math.sin(Date.now() / 280) * 0.06;
-    } else if (worldMutationMode === "windTunnel") {
-        for (const body of activeDrops) {
-            Body.setVelocity(body, { x: body.velocity.x + Math.cos(Date.now() / 180) * 0.05, y: body.velocity.y });
-        }
-    } else if (worldMutationMode === "magnetRain") {
-        const targetX = geometry.width / 2 + Math.sin(Date.now() / 420) * 110 * geometry.scale;
-        const targetY = geometry.height * 0.48;
-        for (const body of activeDrops) {
-            const ax = (targetX - body.position.x) * 0.000055;
-            const ay = (targetY - body.position.y) * 0.00003;
-            Body.applyForce(body, body.position, { x: ax, y: ay });
-        }
-    } else if (worldMutationMode === "quantumSplit") {
-        const candidate = activeDrops.find((body) => {
-            const p = (body as any).plugin;
-            return !p?.splitDone && p?.kind && p.kind !== "fragment" && body.circleRadius && body.circleRadius > geometry.ballRadius * 0.72;
-        });
-        if (candidate && appRandom() < 0.02) {
-            const p = (candidate as any).plugin ?? {};
-            p.splitDone = true;
-            const color = candidate.render.fillStyle || randomColor();
-            for (let i = 0; i < 2; i++) {
-                const child = Bodies.circle(candidate.position.x + (i === 0 ? -10 : 10) * geometry.scale, candidate.position.y - 6 * geometry.scale, Math.max(geometry.ballRadius * 0.68, 7 * geometry.scale), {
-                    restitution: 0.84,
-                    friction: 0.01,
-                    frictionAir: 0.002,
-                    density: 0.0009,
-                    render: { fillStyle: typeof color === "string" ? color : randomColor(), strokeStyle: "rgba(255,255,255,0.72)", lineWidth: 2 * geometry.scale },
-                });
-                (child as any).plugin = { isDrop: true, kind: "fragment", lifeFrames: 0, stuckFrames: 0, lastX: child.position.x, lastY: child.position.y, originalRadius: Math.max(geometry.ballRadius * 0.68, 7 * geometry.scale) };
-                Body.setVelocity(child, { x: (i === 0 ? -2.8 : 2.8) * geometry.scale, y: -1.3 * geometry.scale });
-                Composite.add(engine.world, child);
-                activeDropCount++;
-            }
-            addFloatingText(t("量子分裂", "Quantum split"), candidate.position.x, candidate.position.y - 18 * geometry.scale, "#7c5cff");
-            triggerCameraShake(8 * geometry.scale, 180);
-            pushResearchLog("量子分裂玉を観測した");
-        }
-    }
-}
-
-function checkPerfectHarmony(): void {
-    if (harmonyTriggered || finishedCount < settings.binCount || binCounts.some((x) => x === 0)) return;
-    const first = binCounts[0];
-    if (!binCounts.every((x) => x === first)) return;
-    harmonyTriggered = true;
-    showMilestone(t("完全調和", "Perfect harmony"));
-    setSubtitle(t("全区間が等しく揃った。盤面が一瞬だけ沈黙した。", "All bins aligned equally. The board went silent for a moment."));
-    pushResearchLog("完全調和演出が発生した");
-    triggerScreenFlash("cosmic");
-    fireConfetti("cosmic");
-    vibrateOnMobile([40, 30, 60, 30, 80]);
 }
 
 const targetInput = createInput(String(settings.targetCount), "number");
@@ -1010,6 +852,12 @@ const simpleModeButton = setTooltip(setButtonLabel(createButton("シンプル: O
 }), "シンプル: OFF", "Simple: OFF"), "演出を軽くして見やすくします。", "Reduce effects for a lighter view.");
 displayButtons.appendChild(simpleModeButton);
 
+const cameraShakeButton = setTooltip(setButtonLabel(createButton("画面揺れ: ON", () => {
+    settings.cameraShakeEnabled = !settings.cameraShakeEnabled;
+    updateCameraShakeButton();
+}), "画面揺れ: ON", "Shake: ON"), "画面揺れ演出のON/OFFを切り替えます。", "Toggle screen shake effects on or off.");
+displayButtons.appendChild(cameraShakeButton);
+
 const soundButton = setTooltip(setButtonLabel(createButton("音: ON", () => toggleSound()), "音: ON", "Sound: ON"), "効果音のON/OFFを切り替えます。", "Toggle sound effects on or off.");
 displayButtons.appendChild(soundButton);
 
@@ -1025,10 +873,6 @@ const verticalButton = setTooltip(setButtonLabel(createButton("縦動画: OFF", 
 displayButtons.appendChild(verticalButton);
 const obsButton = setTooltip(setButtonLabel(createButton("OBS: OFF", () => toggleObsMode()), "OBS: OFF", "OBS: OFF"), "OBS録画しやすい表示に切り替えます。", "Adjust the view for OBS recording." );
 displayButtons.appendChild(obsButton);
-const recordingModeButton = setTooltip(setButtonLabel(createButton("録画向け演出: OFF", () => toggleRecordingMode()), "録画向け演出: OFF", "Recording FX: OFF"), "字幕と演出を録画向けに強めます。", "Boost captions and effects for recording.");
-displayButtons.appendChild(recordingModeButton);
-const oneHandButton = setTooltip(setButtonLabel(createButton("片手モード: OFF", () => toggleOneHandMode()), "片手モード: OFF", "One-hand: OFF"), "スマホの片手操作向けに下部UIの重心を寄せます。", "Bias the mobile dock for one-hand use.");
-displayButtons.appendChild(oneHandButton);
 
 settingButtons.appendChild(setTooltip(setButtonLabel(createButton("設定反映", () => {
     if (!applySettingsFromInputs(true)) return;
@@ -1069,11 +913,6 @@ resultOverlay.addEventListener("click", (event) => {
 });
 window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && resultOverlay.style.display !== "none") closeFinalResult();
-    if (event.key === "Escape" && isPseudoFullscreen) {
-        isPseudoFullscreen = false;
-        document.body.classList.remove("pseudo-fullscreen");
-        gameFullscreenButton.textContent = "⛶";
-    }
 });
 
 const milestoneOverlay = document.createElement("div");
@@ -1259,6 +1098,9 @@ function escapeCsv(value: string | number): string {
 }
 
 
+function loadExternalScript(_src: string): Promise<void> {
+    return Promise.resolve();
+}
 
 async function ensureAnimeReady(): Promise<boolean> {
     animeReady = true;
@@ -1334,40 +1176,30 @@ function closeMobileSettingsPopup(): void {
 
 function setupMobileLayout(): void {
     info.style.flex = "0 0 auto";
-    info.style.height = "92px";
-    info.style.minHeight = "92px";
-    info.style.padding = "2px 12px calc(env(safe-area-inset-bottom, 0px) + 10px)";
-    info.style.overflow = "visible";
-    info.style.background = "rgba(230, 236, 215, 0.78)";
-    info.style.backdropFilter = "blur(14px)";
+    info.style.height = "102px";
+    info.style.minHeight = "102px";
+    info.style.padding = "10px 12px env(safe-area-inset-bottom, 10px)";
+    info.style.overflow = "hidden";
     info.innerHTML = "";
 
     const dock = document.createElement("div");
-    dock.className = "mobile-bottom-dock";
     dock.style.display = "grid";
-    dock.style.gridTemplateColumns = "1fr 1fr 1fr";
+    dock.style.gridTemplateColumns = "1fr 1fr";
     dock.style.gap = "10px";
     dock.style.height = "100%";
-    dock.style.alignItems = "end";
-    dock.style.paddingTop = "10px";
+    dock.style.alignItems = "center";
     info.appendChild(dock);
 
     mobileDockRunButton = createButton(t("実行", "Run"), () => startExperiment());
     mobileDockRunButton.style.width = "100%";
-    mobileDockRunButton.style.height = "56px";
-    mobileDockRunButton.style.fontSize = "23px";
+    mobileDockRunButton.style.height = "64px";
+    mobileDockRunButton.style.fontSize = "24px";
     dock.appendChild(mobileDockRunButton);
-
-    mobileDockPauseButton = createButton(t("一時停止", "Pause"), () => togglePause());
-    mobileDockPauseButton.style.width = "100%";
-    mobileDockPauseButton.style.height = "56px";
-    mobileDockPauseButton.style.fontSize = "21px";
-    dock.appendChild(mobileDockPauseButton);
 
     mobileDockSettingsButton = createButton(t("設定", "Settings"), () => openMobileSettingsPopup());
     mobileDockSettingsButton.style.width = "100%";
-    mobileDockSettingsButton.style.height = "56px";
-    mobileDockSettingsButton.style.fontSize = "23px";
+    mobileDockSettingsButton.style.height = "64px";
+    mobileDockSettingsButton.style.fontSize = "24px";
     dock.appendChild(mobileDockSettingsButton);
 
     mobileSettingsOverlay = document.createElement("div");
@@ -1385,17 +1217,14 @@ function setupMobileLayout(): void {
     };
 
     mobileSettingsPanel = document.createElement("div");
-    mobileSettingsPanel.style.width = "100vw";
-    mobileSettingsPanel.style.maxWidth = "100vw";
-    mobileSettingsPanel.style.height = "84dvh";
+    mobileSettingsPanel.style.width = "100%";
+    mobileSettingsPanel.style.height = "82dvh";
     mobileSettingsPanel.style.background = "linear-gradient(180deg,#fbfdff 0%,#eff4ff 100%)";
     mobileSettingsPanel.style.borderTopLeftRadius = "28px";
     mobileSettingsPanel.style.borderTopRightRadius = "28px";
     mobileSettingsPanel.style.boxShadow = "0 -12px 40px rgba(0,0,0,.28)";
-    mobileSettingsPanel.style.padding = "14px 12px calc(env(safe-area-inset-bottom, 0px) + 18px) 12px";
-    mobileSettingsPanel.style.overflowX = "hidden";
-    mobileSettingsPanel.style.overflowY = "auto";
-    mobileSettingsPanel.style.boxSizing = "border-box";
+    mobileSettingsPanel.style.padding = "14px 12px 22px 12px";
+    mobileSettingsPanel.style.overflow = "auto";
     mobileSettingsPanel.style.setProperty("-webkit-overflow-scrolling", "touch");
     mobileSettingsOverlay.appendChild(mobileSettingsPanel);
 
@@ -1418,8 +1247,6 @@ function setupMobileLayout(): void {
     inner.style.display = "flex";
     inner.style.flexDirection = "column";
     inner.style.gap = "14px";
-    inner.style.width = "100%";
-    inner.style.maxWidth = "100%";
     mobileSettingsPanel.appendChild(inner);
 
     inner.appendChild(appHeader);
@@ -1440,6 +1267,7 @@ function updateUiLanguage(): void {
     for (const item of uiFieldRefs) item.labelEl.textContent = isEnglish ? item.en : item.ja;
     for (const item of bilingualButtons) {
         if (item.button === simpleModeButton) continue;
+        if (item.button === cameraShakeButton) continue;
         if (item.button === soundButton) continue;
         if (item.button === confettiButton) continue;
         if (item.button === pixiButton) continue;
@@ -1449,60 +1277,30 @@ function updateUiLanguage(): void {
     setSelectOptions();
     updateThemeSelectLabels();
     updateSimpleModeButton();
+    updateCameraShakeButton();
     updateSoundButton();
     confettiButton.textContent = confettiEnabled ? t("紙吹雪: ON", "Confetti: ON") : t("紙吹雪: OFF", "Confetti: OFF");
     pixiButton.textContent = pixiEnabled ? t("Pixi背景: ON", "Pixi BG: ON") : t("Pixi背景: OFF", "Pixi BG: OFF");
     gameFullscreenButton.title = t("全画面", "Fullscreen");
     updateVerticalVideoButton();
     updateObsButton();
-    recordingModeButton.textContent = recordingMode ? t("録画向け演出: ON", "Recording FX: ON") : t("録画向け演出: OFF", "Recording FX: OFF");
-    oneHandButton.textContent = oneHandMode ? t("片手モード: ON", "One-hand: ON") : t("片手モード: OFF", "One-hand: OFF");
     updateTooltipText();
     if (mobileDockRunButton) mobileDockRunButton.textContent = t("実行", "Run");
-    if (mobileDockPauseButton) mobileDockPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
     if (mobileDockSettingsButton) mobileDockSettingsButton.textContent = t("設定", "Settings");
 }
 
 async function toggleGameFullscreen(): Promise<void> {
-    const doc = document as Document & {
-        webkitFullscreenElement?: Element | null;
-        webkitExitFullscreen?: () => Promise<void> | void;
-    };
-    const area = gameArea as HTMLDivElement & {
-        webkitRequestFullscreen?: () => Promise<void> | void;
-    };
-
-    const isNativeFullscreen = !!document.fullscreenElement || !!doc.webkitFullscreenElement;
     try {
-        if (isNativeFullscreen) {
-            if (document.exitFullscreen) {
-                await document.exitFullscreen();
-            } else if (doc.webkitExitFullscreen) {
-                await doc.webkitExitFullscreen();
-            }
-            return;
-        }
-
-        if (gameArea.requestFullscreen) {
+        if (document.fullscreenElement === gameArea) {
+            await document.exitFullscreen();
+        } else if (!document.fullscreenElement) {
             await gameArea.requestFullscreen();
-            return;
         }
-        if (area.webkitRequestFullscreen) {
-            await area.webkitRequestFullscreen();
-            return;
-        }
-    } catch {
-        // fallback below
-    }
-
-    setPseudoFullscreen(!isPseudoFullscreen);
-    isFullscreenMode = isPseudoFullscreen;
-    gameFullscreenButton.textContent = isFullscreenMode ? "🗗" : "⛶";
+    } catch {}
 }
 
 document.addEventListener("fullscreenchange", () => {
-    const doc = document as Document & { webkitFullscreenElement?: Element | null };
-    isFullscreenMode = document.fullscreenElement === gameArea || doc.webkitFullscreenElement === gameArea || isPseudoFullscreen;
+    isFullscreenMode = document.fullscreenElement === gameArea;
     gameFullscreenButton.textContent = isFullscreenMode ? "🗗" : "⛶";
 });
 
@@ -1841,7 +1639,6 @@ function getResearchReportHtml(): string {
         imbalance > 10 ? t("少し偏っています。中央か端が主張気味です。", "Slightly biased. Center or edges are asserting themselves.") :
         t("比較的なだらかです。現実寄りの分布です。", "Relatively smooth. A realistic distribution.");
     const recentMiracles = miracleLogs.slice(0, 5).map((x) => `${x.label} [${x.rank}] ${formatProbability(x.denominator)}`).join("<br>") || t("なし", "None");
-    const recentResearch = researchFeed.slice(0, 4).join("<br>") || t("まだ静かです。", "No notable logs yet.");
     return `
         <div style="display:grid;gap:10px;">
             <div><b>${t("総投下数", "Total count")}:</b> ${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}</div>
@@ -1850,7 +1647,6 @@ function getResearchReportHtml(): string {
             <div><b>${t("偏り診断", "Bias diagnosis")}:</b> ${diagnosis}</div>
             <div><b>${t("発見済み種類", "Discovered kinds")}:</b> ${SPECIAL_EVENT_DEFS.filter((d) => (savedRecords.discovered[d.kind] ?? 0) + (specialCreated[d.kind] ?? 0) > 0).length} / ${SPECIAL_EVENT_DEFS.length}</div>
             <div><b>${t("最近の奇跡", "Recent miracles")}:</b><br>${recentMiracles}</div>
-            <div><b>${t("研究ログ", "Research log")}:</b><br>${recentResearch}</div>
         </div>`;
 }
 
@@ -1912,16 +1708,12 @@ function applyRareBackground(kind: DropKind): void {
 
 function maybeTriggerBoardAnomaly(): void {
     if (settings.simpleMode || targetReachedTime !== null || isPaused || isMiraclePaused || isFinished) return;
-    if (Date.now() < anomalyUntil || Date.now() < worldMutationUntil) return;
-    const anomalyRate = (secretMode ? 0.00009 : 0.00003) * getProbabilityScale();
-    if (appRandom() > anomalyRate) return;
-    const choice = Math.floor(appRandom() * 7);
-    anomalyUntil = Date.now() + 3200;
-    worldMutationUntil = anomalyUntil;
+    if (Date.now() < anomalyUntil) return;
+    if (appRandom() > 0.00003 * getProbabilityScale()) return;
+    const choice = Math.floor(appRandom() * 4);
+    anomalyUntil = Date.now() + 3000;
     anomalyOldGravityX = engine.gravity.x;
     anomalyHidePins = false;
-    worldMutationMode = "none";
-    engine.gravity.y = 1;
     if (choice === 0) {
         engine.gravity.x = appRandom() < 0.5 ? -0.22 : 0.22;
         anomalyLabel = t("異変: 重力が横に傾いた", "Anomaly: gravity tilted sideways");
@@ -1931,40 +1723,24 @@ function maybeTriggerBoardAnomaly(): void {
     } else if (choice === 2) {
         anomalyHidePins = true;
         anomalyLabel = t("異変: ピンが見えにくい", "Anomaly: pins became dim");
-    } else if (choice === 3) {
-        worldMutationMode = "reverseGravity";
-        anomalyLabel = t("世界改変: 上向き重力", "World rewrite: upward gravity");
-    } else if (choice === 4) {
-        worldMutationMode = "magnetRain";
-        anomalyLabel = t("世界改変: 磁場の雨", "World rewrite: magnetic rain");
-    } else if (choice === 5) {
-        worldMutationMode = "quantumSplit";
-        anomalyLabel = t("世界改変: 量子分裂", "World rewrite: quantum split");
     } else {
-        worldMutationMode = "windTunnel";
         triggerCameraShake(14 * geometry.scale, 500);
-        anomalyLabel = t("世界改変: 風洞化", "World rewrite: wind tunnel");
+        anomalyLabel = t("異変: 盤面がざわつく", "Anomaly: board is trembling");
     }
     addFloatingText(anomalyLabel, geometry.width / 2, 80 * geometry.scale, "#ffef78");
     setSubtitle(anomalyLabel);
-    pushResearchLog(anomalyLabel);
 }
-
 
 function updateBoardAnomaly(): void {
     if (anomalyUntil && Date.now() > anomalyUntil) {
         anomalyUntil = 0;
-        worldMutationUntil = 0;
-        worldMutationMode = "none";
         engine.gravity.x = anomalyOldGravityX;
-        engine.gravity.y = 1;
         anomalyHidePins = false;
         if (speedLabelText === "通常") engine.timing.timeScale = 1;
         else if (speedLabelText === "高速") engine.timing.timeScale = 2;
         else engine.timing.timeScale = 4;
     }
 }
-
 
 function vibrateOnMobile(pattern: number | number[]): void {
     if (!isMobile) return;
@@ -2057,7 +1833,6 @@ function showAboutPopup(): void {
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
         <p>5000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。</p>
-        <p><b>秘密の補足:</b> 世界改変イベント、曜日で気分が変わる玉、深夜にしか起きにくい現象、設定画面の順番で反応する隠し層など、まだ説明していない要素が少しだけ混ざっています。全部は明かしません。</p>
         <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
     `);
 }
@@ -2075,9 +1850,7 @@ function showButtonHelpPopup(): void {
         <p><b>設定反映:</b> 投下数、同時に出す玉数、受け皿数、ピン段数などを反映してリセットします。</p>
         <p><b>背景だけ反映:</b> 背景画像だけを差し替えます。</p>
         <p><b>結果コピー / CSV保存:</b> 実験結果をコピー、またはCSVファイルとして保存します。</p>
-        <p><b>ピンをタップ/クリック:</b> 近くのピンを揺らして、詰まり気味の玉を少し動かせます。スマホでは指の流れで風が起きることもあります。</p>
-        <p><b>録画向け演出 / 片手モード:</b> スマホ撮影しやすい見た目と、片手で押しやすい下部UIに切り替えます。</p>
-        <p><b>まだ秘密の要素:</b> 深夜限定、曜日限定、完全調和、裏モードなど、全部は説明しません。偶然見つけてください。</p>
+        <p><b>ピンをタップ/クリック:</b> 近くのピンを揺らして、詰まり気味の玉を少し動かせます。</p>
     `);
 }
 
@@ -2163,7 +1936,7 @@ function calculateGeometry(): Geometry {
     const viewportWidth = Math.max(320, Math.floor(visual?.width ?? window.innerWidth));
     const viewportHeight = Math.max(480, Math.floor(visual?.height ?? window.innerHeight));
     const small = isMobile || viewportWidth < 700;
-    const infoHeight = Math.round(clamp(viewportHeight * (small ? 0.16 : 0.40), small ? 96 : 300, small ? 128 : 500));
+    const infoHeight = Math.round(clamp(viewportHeight * (small ? 0.24 : 0.40), small ? 170 : 300, small ? 270 : 500));
     const width = viewportWidth;
     const height = Math.max(360, viewportHeight - infoHeight);
     const scale = clamp(Math.min(width / BASE_WIDTH, height / BASE_HEIGHT), 0.56, 2.4);
@@ -2178,8 +1951,8 @@ function calculateGeometry(): Geometry {
     const binWidth = (binRight - binLeft) / totalBinCount;
     const groundTop = height - groundHeight;
     const binScale = clamp(binWidth / 90, 0.35, 1.7);
-    const ballRadius = clamp((isMobile ? 15.8 : 14) * scale * binScale, 5, 30);
-    const pinRadius = clamp((isMobile ? 9.8 : 8.6) * scale * binScale, 4, 21);
+    const ballRadius = clamp(14 * scale * binScale, 4, 28);
+    const pinRadius = clamp(8 * scale * binScale, 3, 18);
     const dividerWidth = clamp(10 * scale * binScale, 4, 18);
     const dividerHeight = clamp(92 * scale, 58, 150);
     const dividerY = groundTop - dividerHeight / 2;
@@ -2270,10 +2043,6 @@ function resetExperiment(startNow = false): void {
     floatingTexts = [];
     shakeUntil = 0;
     shakePower = 0;
-    harmonyTriggered = false;
-    exactTenThousandUnlocked = false;
-    worldMutationMode = "none";
-    worldMutationUntil = 0;
 
     goldCreated = 0;
     rainbowCreated = 0;
@@ -2295,7 +2064,6 @@ function resetExperiment(startNow = false): void {
     comboOverlay.style.display = "none";
 
     resultOverlay.style.display = "none";
-    pushResearchLog(startNow ? "新しい実験を開始した" : "盤面を再構成した");
     milestoneOverlay.style.display = "none";
     celebrationOverlay.style.display = "none";
     miracleOverlay.style.display = "none";
@@ -2319,10 +2087,14 @@ function updateSimpleModeButton(): void {
     simpleModeButton.style.color = settings.simpleMode ? "#ffffff" : "#222222";
 }
 
+function updateCameraShakeButton(): void {
+    cameraShakeButton.textContent = settings.cameraShakeEnabled ? t("画面揺れ: ON", "Shake: ON") : t("画面揺れ: OFF", "Shake: OFF");
+    cameraShakeButton.style.background = settings.cameraShakeEnabled ? "linear-gradient(180deg, #f3f8e8 0%, #dceec2 100%)" : "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)";
+    cameraShakeButton.style.color = settings.cameraShakeEnabled ? "#26351f" : "#444444";
+}
+
 function updateStopButton(): void {
-    const label = isPaused ? t("再開", "Resume") : t("ストップ", "Stop");
-    stopButton.textContent = label;
-    if (mobileDockPauseButton) mobileDockPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
+    stopButton.textContent = isPaused ? t("再開", "Resume") : t("ストップ", "Stop");
 }
 
 async function startExperiment(): Promise<void> {
@@ -2395,7 +2167,7 @@ function createPins(): Matter.Body[] {
     }
 
     for (const pin of pins) {
-        (pin as any).plugin = { isPin: true, baseX: pin.position.x, baseY: pin.position.y, wiggleFrames: 0, stretchX: 0, stretchY: 0, pullPower: 0 };
+        (pin as any).plugin = { isPin: true, baseX: pin.position.x, baseY: pin.position.y, wiggleFrames: 0 };
     }
     return pins;
 }
@@ -2407,6 +2179,21 @@ function createDividers(): Matter.Body[] {
         dividers.push(Bodies.rectangle(x, geometry.dividerY, geometry.dividerWidth, geometry.dividerHeight, { isStatic: true, render: { fillStyle: "rgba(196, 101, 101, 0.94)" } }));
     }
     return dividers;
+}
+
+function createDropPlugin(kind: DropKind, x: number, y: number, radius: number, extras: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        isDrop: true,
+        kind,
+        stuckFrames: 0,
+        lastX: x,
+        lastY: y,
+        lifeFrames: 0,
+        bornAt: performance.now(),
+        hardExpireMs: kind === "giant" ? 9000 : kind === "shape" ? 16000 : 15000,
+        originalRadius: radius,
+        ...extras,
+    };
 }
 
 function createRandomShapeBody(x: number, y: number, radius: number, renderOptions: any): Matter.Body {
@@ -2424,7 +2211,7 @@ function createRandomShapeBody(x: number, y: number, radius: number, renderOptio
     else if (choice === 7) { shapeName = "短い棒"; body = Bodies.rectangle(x, y, radius * 2.5, radius * 0.9, { ...commonOptions, chamfer: { radius: radius * 0.2 } }); }
     else { shapeName = "多角形"; body = Bodies.polygon(x, y, 7, radius * 1.45, commonOptions); }
 
-    (body as any).plugin = { isDrop: true, kind: "shape", shapeName, stuckFrames: 0, lastX: x, lastY: y, lifeFrames: 0, originalRadius: radius };
+    (body as any).plugin = createDropPlugin("shape", x, y, radius, { shapeName });
     return body;
 }
 
@@ -2435,13 +2222,13 @@ function createHeartBody(x: number, y: number, radius: number, renderOptions: an
     const bottom = Bodies.polygon(x, y + radius * 0.25, 3, radius * 1.25, options);
     Body.rotate(bottom, Math.PI);
     const heart = Body.create({ parts: [left, right, bottom], restitution: 0.96, friction: 0.001, frictionStatic: 0, frictionAir: 0.002, density: 0.0012, render: renderOptions });
-    (heart as any).plugin = { isDrop: true, kind: "heart", symbol: "♥", shapeName: "桃色ハート", stuckFrames: 0, lastX: x, lastY: y, lifeFrames: 0, originalRadius: radius };
+    (heart as any).plugin = createDropPlugin("heart", x, y, radius, { symbol: "♥", shapeName: "桃色ハート" });
     return heart;
 }
 
 function createSymbolBody(x: number, y: number, radius: number, kind: DropKind, fillStyle: string, symbol: string, label: string): Matter.Body {
     const body = Bodies.circle(x, y, radius, { restitution: 0.98, friction: 0.001, frictionStatic: 0, frictionAir: 0.002, density: 0.0013, render: { fillStyle, strokeStyle: "#ffffff", lineWidth: 4 * geometry.scale } as any });
-    (body as any).plugin = { isDrop: true, kind, symbol, shapeName: label, stuckFrames: 0, lastX: x, lastY: y, lifeFrames: 0, originalRadius: radius };
+    (body as any).plugin = createDropPlugin(kind, x, y, radius, { symbol, shapeName: label });
     return body;
 }
 
@@ -2487,9 +2274,6 @@ function createDrop(): Matter.Body {
     let isHeart = false;
     let symbol = "";
     let label = "";
-    let deepNightBlessing = false;
-    let weekdayBlessing = false;
-    const weekdayOrb = getWeekdayOrbData();
 
     if (giantStock > 0) {
         giantStock--;
@@ -2523,19 +2307,6 @@ function createDrop(): Matter.Body {
             }
         }
     }
-    if (kind === "normal" && isDeepNightNow() && appRandom() < 0.0012 * getProbabilityScale()) {
-        deepNightBlessing = true;
-        fillStyle = "#2a1757";
-        symbol = "夜";
-        label = "深夜観測体";
-    }
-    if (kind === "normal" && appRandom() < 0.0015 * getProbabilityScale()) {
-        weekdayBlessing = true;
-        fillStyle = weekdayOrb.color;
-        symbol = weekdayOrb.symbol;
-        label = weekdayOrb.label;
-    }
-
     const renderOptions: any = { fillStyle, strokeStyle: "rgba(255,255,255,0.85)", lineWidth: kind === "normal" ? 1 * geometry.scale : 3 * geometry.scale };
     if (kind === "gold") { renderOptions.strokeStyle = "#fff4a8"; renderOptions.lineWidth = 3 * geometry.scale; }
     if (kind === "rainbow") { renderOptions.strokeStyle = "#ffffff"; renderOptions.lineWidth = 3 * geometry.scale; }
@@ -2551,14 +2322,12 @@ function createDrop(): Matter.Body {
     else if (isShape) body = createRandomShapeBody(x, startY, radius, renderOptions);
     else {
         body = Bodies.circle(x, startY, radius, { restitution, friction: 0.01, frictionAir: 0.002, density, render: renderOptions });
-        (body as any).plugin = { isDrop: true, kind, stuckFrames: 0, lastX: x, lastY: startY, lifeFrames: 0, originalRadius: radius, deepNightBlessing, weekdayBlessing, labelOverride: label, symbolOverride: symbol };
+        (body as any).plugin = createDropPlugin(kind, x, startY, radius);
     }
 
     Body.setVelocity(body, { x: (appRandom() - 0.5) * 2 * geometry.scale, y: 0 });
     Body.setAngularVelocity(body, (appRandom() - 0.5) * 0.22);
 
-    if (deepNightBlessing) { addFloatingText("深夜観測体", x, 82 * geometry.scale, "#b48cff"); pushResearchLog("深夜限定の玉が出現した"); }
-    if (weekdayBlessing) { addFloatingText(label, x, 82 * geometry.scale, fillStyle); pushResearchLog(`${label} を観測した`); }
     if (kind === "gold") addFloatingText("金玉投入", x, 80 * geometry.scale, "#d89b00");
     if (kind === "rainbow") { addFloatingText("虹玉投入", x, 80 * geometry.scale, "#b44cff"); triggerCameraShake(5 * geometry.scale, 180); }
     if (kind === "giant") { addFloatingText("巨大玉投入", x, 90 * geometry.scale, "#111111"); triggerCameraShake(10 * geometry.scale, 260); }
@@ -2579,123 +2348,45 @@ function screenToWorld(event: PointerEvent): { x: number; y: number } {
     return { x: ((event.clientX - rect.left) / rect.width) * geometry.width, y: ((event.clientY - rect.top) / rect.height) * geometry.height };
 }
 
-function findNearestPin(point: { x: number; y: number }): { pin: Matter.Body | null; distance: number } {
+function activateNearestPin(event: PointerEvent): void {
+    const point = screenToWorld(event);
     let nearest: Matter.Body | null = null;
     let nearestDistance = Infinity;
     for (const body of engine.world.bodies) {
         const plugin = (body as any).plugin;
         if (!plugin?.isPin) continue;
         const distance = Math.hypot(body.position.x - point.x, body.position.y - point.y);
-        if (distance < nearestDistance) {
-            nearest = body;
-            nearestDistance = distance;
-        }
+        if (distance < nearestDistance) { nearest = body; nearestDistance = distance; }
     }
-    return { pin: nearest, distance: nearestDistance };
-}
-
-function beginMobilePinInteraction(event: PointerEvent): void {
-    const point = screenToWorld(event);
-    const { pin, distance } = findNearestPin(point);
-    const tapRadius = Math.max(40 * geometry.scale, geometry.pinRadius * 5.4);
-    if (!pin || distance > tapRadius) return;
-    mobilePinDragTarget = pin;
-    mobilePinDragPointerId = event.pointerId;
-    canvas.setPointerCapture?.(event.pointerId);
-    const plugin = (pin as any).plugin;
-    plugin.dragging = true;
-    plugin.wiggleFrames = Math.max(plugin.wiggleFrames ?? 0, 70);
-}
-
-function updateMobilePinInteraction(event: PointerEvent): void {
-    if (!mobilePinDragTarget || mobilePinDragPointerId !== event.pointerId) return;
-    const point = screenToWorld(event);
-    const plugin = (mobilePinDragTarget as any).plugin;
-    const dx = clamp(point.x - plugin.baseX, -26 * geometry.scale, 26 * geometry.scale);
-    const dy = clamp(point.y - plugin.baseY, -18 * geometry.scale, 18 * geometry.scale);
-    plugin.stretchX = dx;
-    plugin.stretchY = dy;
-    plugin.pullPower = Math.max(Math.abs(dx), Math.abs(dy));
-    Body.setPosition(mobilePinDragTarget, { x: plugin.baseX + dx, y: plugin.baseY + dy * 0.55 });
-}
-
-function endMobilePinInteraction(event: PointerEvent): void {
-    if (!mobilePinDragTarget || mobilePinDragPointerId !== event.pointerId) return;
-    const plugin = (mobilePinDragTarget as any).plugin;
-    plugin.dragging = false;
-    plugin.wiggleFrames = Math.max(86, Math.round(52 + (plugin.pullPower ?? 0) * 1.2));
-    for (const body of engine.world.bodies) {
-        const p = (body as any).plugin;
-        if (!p?.isDrop) continue;
-        const distance = Math.hypot(body.position.x - mobilePinDragTarget.position.x, body.position.y - mobilePinDragTarget.position.y);
-        if (distance < Math.max(72 * geometry.scale, geometry.pinRadius * 8)) {
-            Body.setVelocity(body, {
-                x: (body.position.x - mobilePinDragTarget.position.x) * 0.11 + (appRandom() - 0.5) * 10 * geometry.scale,
-                y: -6.2 * geometry.scale
-            });
-        }
-    }
-    mobilePinDragTarget = null;
-    mobilePinDragPointerId = null;
-    canvas.releasePointerCapture?.(event.pointerId);
-}
-
-function activateNearestPin(event: PointerEvent): void {
-    const point = screenToWorld(event);
-    const { pin: nearest, distance: nearestDistance } = findNearestPin(point);
-    const tapRadius = Math.max(40 * geometry.scale, geometry.pinRadius * 5.2);
+    const tapRadius = Math.max(34 * geometry.scale, geometry.pinRadius * 4.5);
     if (!nearest || nearestDistance > tapRadius) return;
 
     const plugin = (nearest as any).plugin;
-    plugin.wiggleFrames = Math.max(plugin.wiggleFrames ?? 0, 80);
-    plugin.pullPower = Math.max(plugin.pullPower ?? 0, 18 * geometry.scale);
+    plugin.wiggleFrames = 46;
 
     for (const body of engine.world.bodies) {
         const p = (body as any).plugin;
         if (!p?.isDrop) continue;
         const distance = Math.hypot(body.position.x - nearest.position.x, body.position.y - nearest.position.y);
-        if (distance < tapRadius * 3.8) {
-            Body.setVelocity(body, { x: (body.position.x - nearest.position.x) * 0.1 + (appRandom() - 0.5) * 9 * geometry.scale, y: -6.5 * geometry.scale });
-            Body.setAngularVelocity(body, (appRandom() - 0.5) * 0.7);
+        if (distance < tapRadius * 3) {
+            Body.setVelocity(body, { x: (body.position.x - nearest.position.x) * 0.08 + (appRandom() - 0.5) * 8 * geometry.scale, y: -5 * geometry.scale });
+            Body.setAngularVelocity(body, (appRandom() - 0.5) * 0.5);
         }
     }
 
     addFloatingText("ピン揺れ", nearest.position.x, nearest.position.y - 20 * geometry.scale, "#00aaff");
-    triggerCameraShake(4 * geometry.scale, 130);
+    triggerCameraShake(3 * geometry.scale, 100);
 }
 
 function updatePinWiggles(): void {
     for (const body of engine.world.bodies) {
         const plugin = (body as any).plugin;
-        if (!plugin?.isPin) continue;
-        if (plugin.dragging) continue;
-
-        const wiggleFrames = plugin.wiggleFrames ?? 0;
-        let stretchX = plugin.stretchX ?? 0;
-        let stretchY = plugin.stretchY ?? 0;
-
-        if (wiggleFrames > 0) {
-            const t = wiggleFrames;
-            const pull = Math.max(plugin.pullPower ?? 0, 12 * geometry.scale);
-            const power = (t / Math.max(46, wiggleFrames)) * pull * 0.9;
-            stretchX += Math.sin(t * 0.72) * power;
-            stretchY += Math.cos(t * 0.58) * power * 0.22;
-            plugin.wiggleFrames--;
-        }
-
-        stretchX *= 0.84;
-        stretchY *= 0.80;
-        plugin.pullPower = (plugin.pullPower ?? 0) * 0.9;
-        plugin.stretchX = stretchX;
-        plugin.stretchY = stretchY;
-
-        if (Math.abs(stretchX) < 0.08 && Math.abs(stretchY) < 0.08 && (plugin.wiggleFrames ?? 0) <= 0) {
-            plugin.stretchX = 0;
-            plugin.stretchY = 0;
-            Body.setPosition(body, { x: plugin.baseX, y: plugin.baseY });
-        } else {
-            Body.setPosition(body, { x: plugin.baseX + stretchX, y: plugin.baseY + stretchY });
-        }
+        if (!plugin?.isPin || !plugin.wiggleFrames) continue;
+        const t = plugin.wiggleFrames;
+        const power = (t / 46) * 10 * geometry.scale;
+        Body.setPosition(body, { x: plugin.baseX + Math.sin(t * 0.85) * power, y: plugin.baseY + Math.cos(t * 0.7) * power * 0.25 });
+        plugin.wiggleFrames--;
+        if (plugin.wiggleFrames <= 0) { Body.setPosition(body, { x: plugin.baseX, y: plugin.baseY }); plugin.wiggleFrames = 0; }
     }
 }
 
@@ -2706,12 +2397,13 @@ function addFloatingText(text: string, x: number, y: number, color: string): voi
 
 function triggerCameraShake(power: number, durationMs: number): void {
     if (settings.simpleMode) return;
+    if (!settings.cameraShakeEnabled) return;
     shakePower = Math.max(shakePower, power);
     shakeUntil = Math.max(shakeUntil, Date.now() + durationMs);
 }
 
 function updateCameraShake(): void {
-    if (settings.simpleMode) { canvas.style.transform = "translate(0,0)"; return; }
+    if (settings.simpleMode || !settings.cameraShakeEnabled) { canvas.style.transform = "translate(0,0)"; shakePower = 0; return; }
     const now = Date.now();
     if (now < shakeUntil) {
         const ratio = (shakeUntil - now) / 180;
@@ -2906,9 +2598,6 @@ async function playLocalRareAudio(flavor: RareSoundFlavor): Promise<boolean> {
 }
 
 function playSpecialSound(kind: DropKind): void {
-    if (kind === "cosmicEgg" || kind === "labExplosion") vibrateOnMobile([40, 20, 60, 20, 120]);
-    else if (kind === "blackSun" || kind === "timeRift" || kind === "heart") vibrateOnMobile([28, 18, 50]);
-    else if (kind !== "normal") vibrateOnMobile([14, 12, 22]);
     if (!soundEnabled || !toneReady || settings.simpleMode) return;
     try {
         const flavor = getRareSoundFlavor(kind);
@@ -3150,7 +2839,6 @@ function showFinalResult(): void {
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の「宇宙卵」。出たら奇跡どころか、画面が伝説になります。</div>
             <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">発見済み種類: ${(SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length).toLocaleString()} / ${SPECIAL_EVENT_DEFS.length}　捨て区画: ${discardedCount.toLocaleString()}</div>
             <div style="margin-top:18px;font-size:clamp(16px,2vw,26px);opacity:.95;">${getResearchReportHtml()}</div>
-            <div style="margin-top:16px;font-size:clamp(15px,2vw,24px);opacity:.92;">${secretMode ? t("秘密層はまだ稼働中です。", "The hidden layer is still active.") : t("まだ隠し要素が眠っています。", "Some hidden features are still asleep.")}</div>
             <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="copy-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">結果コピー</button><button id="download-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">CSV保存</button><button id="bottom-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">閉じる</button></div>
         </div>`;
     resultOverlay.style.display = "flex";
@@ -3484,7 +3172,6 @@ Events.on(engine, "afterUpdate", () => {
     updatePinWiggles();
     updateBoardAnomaly();
     maybeTriggerBoardAnomaly();
-    applyWorldMutationForces();
     gameArea.style.filter = anomalyUntil ? (anomalyHidePins ? "brightness(.84) contrast(1.1)" : "brightness(.95)") : "";
     if (!isStarted || isFinished || isMiraclePaused) return;
 
@@ -3499,6 +3186,18 @@ Events.on(engine, "afterUpdate", () => {
         if (!plugin?.isDrop) continue;
 
         plugin.lifeFrames = (plugin.lifeFrames ?? 0) + 1;
+
+        const nowMs = performance.now();
+        const hardExpired = typeof plugin.bornAt === "number" && typeof plugin.hardExpireMs === "number" && nowMs - plugin.bornAt >= plugin.hardExpireMs;
+        if (hardExpired) {
+            explodeStuckDrop(body);
+            finishedCount++;
+            discardedCount++;
+            if (targetReachedTime === null && finishedCount >= settings.targetCount) targetReachedTime = Date.now();
+            activeDropCount--;
+            removeTargets.push(body);
+            continue;
+        }
 
         // 指定回数に到達した後も、画面に残っている玉は最後に強制回収してカウントする
         if (targetReachedTime !== null && Date.now() - targetReachedTime > FINAL_SWEEP_DELAY_MS) {
@@ -3547,22 +3246,12 @@ Events.on(engine, "afterUpdate", () => {
             if (kind !== "normal") playSpecialSound(kind);
             const binIndex = getBinIndex(body.position.x);
             finishedCount++;
-            if (!exactTenThousandUnlocked && finishedCount === 10000) {
-                exactTenThousandUnlocked = true;
-                secretMode = true;
-                showMilestone(t("10000到達 裏モード解放", "10,000 reached: hidden mode"));
-                pushResearchLog("10000回ぴったり到達で裏モードが解放された");
-                triggerScreenFlash("cosmic");
-            }
             if (targetReachedTime === null && finishedCount >= settings.targetCount) targetReachedTime = Date.now();
 
             if (binIndex >= 0) {
                 binCounts[binIndex]++;
                 if (!settings.simpleMode) hitFlash[binIndex] = 18;
                 triggerCameraShake(3 * geometry.scale, 100);
-                const pluginLabel = plugin.labelOverride as string | undefined;
-                if (plugin.deepNightBlessing) { addFloatingText(`深夜 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 88 * geometry.scale, "#b48cff"); triggerScreenFlash("cosmic"); vibrateOnMobile([18, 18, 36]); }
-                if (plugin.weekdayBlessing) { addFloatingText(`${pluginLabel ?? "曜日玉"} → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 88 * geometry.scale, plugin.renderColor ?? "#ffffff"); vibrateOnMobile([12, 16, 12]); }
                 if (kind === "gold") { goldHits[binIndex]++; addFloatingText(`金 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 60 * geometry.scale, "#d89b00"); triggerCameraShake(7 * geometry.scale, 180); }
                 if (kind === "rainbow") { rainbowHits[binIndex]++; addFloatingText(`虹 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 60 * geometry.scale, "#b44cff"); triggerCameraShake(11 * geometry.scale, 240); }
                 if (kind === "giant") { giantHits[binIndex]++; addFloatingText(`巨大 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 70 * geometry.scale, "#111111"); triggerCameraShake(15 * geometry.scale, 300); }
@@ -3572,21 +3261,13 @@ Events.on(engine, "afterUpdate", () => {
                 if (kind === "heart") { heartHits[binIndex]++; addFloatingText(`桃色ハート → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ff69b4"); triggerCameraShake(22 * geometry.scale, 480); fireConfetti("miracle"); }
                 if (kind === "blackSun") { blackSunHits[binIndex]++; addFloatingText(`黒い太陽 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ff0044"); triggerCameraShake(26 * geometry.scale, 600); fireConfetti("black"); }
                 if (kind === "cosmicEgg") { cosmicEggHits[binIndex]++; addFloatingText(`宇宙卵 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 90 * geometry.scale, "#00e5ff"); triggerCameraShake(38 * geometry.scale, 1200); fireConfetti("cosmic"); }
-                if (kind === "silverUfo" || kind === "blueFlame" || kind === "luckySeven" || kind === "timeRift" || kind === "labExplosion") {
-                    const def = findSpecialDef(kind);
-                    addFloatingText(`${def?.label ?? "奇跡"} → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 90 * geometry.scale, def?.fillStyle ?? "#ffffff");
-                    triggerScreenFlash(def?.soundMode ?? "miracle");
-                    triggerCameraShake(def?.rank === "GOD" ? 40 * geometry.scale : 24 * geometry.scale, def?.rank === "GOD" ? 1100 : 540);
-                    fireConfetti(def?.soundMode ?? "miracle");
+                const def = findSpecialDef(kind);
+                if (def && !["heart", "blackSun", "cosmicEgg"].includes(kind)) {
+                    addFloatingText(`${def.label} → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 90 * geometry.scale, def.fillStyle);
+                    triggerScreenFlash(def.soundMode ?? "miracle");
+                    triggerCameraShake(def.rank === "GOD" ? 40 * geometry.scale : def.rank === "EX" ? 30 * geometry.scale : 24 * geometry.scale, def.rank === "GOD" ? 1100 : 540);
+                    fireConfetti(def.soundMode ?? "miracle");
                 }
-                if (soundEnabled && toneReady && !settings.simpleMode && kind === "normal") {
-                    const synth = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.002, decay: 0.06, sustain: 0.05, release: 0.15 } }).toDestination();
-                    const notes = ["C4", "D4", "E4", "G4", "A4", "C5", "D5", "E5"];
-                    synth.triggerAttackRelease(notes[Math.min(binIndex, notes.length - 1)], "16n");
-                    window.setTimeout(() => synth.dispose(), 260);
-                }
-                if (kind !== "normal") pushResearchLog(`${pluginLabel ?? findSpecialDef(kind)?.label ?? kind} が ${labels[binIndex]} に着地`);
-                checkPerfectHarmony();
 
                 while (finishedCount >= nextMilestone && nextMilestone <= settings.targetCount) {
                     showMilestone(`${nextMilestone.toLocaleString()}回 達成！`);
