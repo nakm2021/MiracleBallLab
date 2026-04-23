@@ -50,6 +50,30 @@ type SpecialEventDef = {
     soundMode: "miracle" | "black" | "cosmic";
 };
 
+type MiracleLogEntry = {
+    label: string;
+    rank: string;
+    denominator: number;
+    finishedAt: number;
+    finishedCount: number;
+    mode: ProbabilityMode;
+    speedLabel: string;
+    combo: number;
+};
+
+type MiracleClip = {
+    id: string;
+    label: string;
+    rank: string;
+    denominator: number;
+    finishedCount: number;
+    createdAt: number;
+    subtitle: string;
+    frames: string[];
+};
+
+type ThemeMode = "lab" | "space" | "sunset" | "retro" | "midnight";
+
 type SavedRecords = {
     totalRuns: number;
     maxFinishedCount: number;
@@ -235,6 +259,24 @@ let shakePower = 0;
 let speedLabelText = "高速";
 let isEnglish = false;
 let isFullscreenMode = false;
+let isVerticalVideoMode = false;
+let isObsMode = false;
+let currentTheme: ThemeMode = "lab";
+let miracleLogs: MiracleLogEntry[] = [];
+let miracleClips: MiracleClip[] = [];
+let replayFrameBuffer: string[] = [];
+let replayCaptureTick = 0;
+let currentSubtitleText = "";
+let subtitleTimer: number | undefined;
+let comboTimer: number | undefined;
+let miracleCombo = 0;
+let lastMiracleAt = 0;
+let activeRareBackgroundKind: DropKind | null = null;
+let rareBackgroundTimer: number | undefined;
+let anomalyUntil = 0;
+let anomalyLabel = "";
+let anomalyOldGravityX = 0;
+let anomalyHidePins = false;
 
 let soundEnabled = true;
 let toneReady = false;
@@ -638,6 +680,27 @@ probabilityModeSelect.style.fontSize = `${uiFontPx}px`;
 probabilityModeSelect.style.fontWeight = "800";
 setSelectOptions();
 
+const themeSelect = document.createElement("select");
+themeSelect.style.width = "100%";
+themeSelect.style.boxSizing = "border-box";
+themeSelect.style.padding = isMobile ? "16px 16px" : "12px 14px";
+themeSelect.style.borderRadius = "18px";
+themeSelect.style.border = "1px solid #b8c1d1";
+themeSelect.style.background = "#ffffff";
+themeSelect.style.fontSize = `${uiFontPx}px`;
+themeSelect.style.fontWeight = "800";
+themeSelect.innerHTML = `
+<option value="lab">研究所</option>
+<option value="space">宇宙</option>
+<option value="sunset">夕焼け</option>
+<option value="retro">レトロ</option>
+<option value="midnight">深夜</option>`;
+themeSelect.value = currentTheme;
+themeSelect.onchange = () => {
+    currentTheme = (themeSelect.value as ThemeMode) || "lab";
+    applyTheme();
+};
+
 binCountInput.addEventListener("blur", () => autoApplyLayoutSetting());
 pinRowInput.addEventListener("blur", () => autoApplyLayoutSetting());
 
@@ -655,6 +718,8 @@ const bgFileField = createField("背景画像を写真から選択", backgroundF
 addField(bgFileField.wrapper, bgFileField.labelEl, "背景画像を写真から選択", "Choose background photo");
 const probField = createField("確率モード", probabilityModeSelect);
 addField(probField.wrapper, probField.labelEl, "確率モード", "Probability mode");
+const themeField = createField("テーマ切替", themeSelect);
+addField(themeField.wrapper, themeField.labelEl, "テーマ切替", "Theme");
 
 const utilityButtons = createSection("実験メニュー", "Experiment");
 const speedButtons = createSection("投下速度", "Drop speed");
@@ -667,6 +732,10 @@ utilityButtons.appendChild(setButtonLabel(createButton("この実験について
 utilityButtons.appendChild(setButtonLabel(createButton("ボタン説明", () => showButtonHelpPopup()), "ボタン説明", "Buttons"));
 utilityButtons.appendChild(setButtonLabel(createButton("奇跡図鑑", () => showMiracleBookPopup()), "奇跡図鑑", "Miracle book"));
 utilityButtons.appendChild(setButtonLabel(createButton("最高記録", () => showRecordsPopup()), "最高記録", "Records"));
+utilityButtons.appendChild(setButtonLabel(createButton("奇跡ログ", () => showMiracleLogPopup()), "奇跡ログ", "Miracle log"));
+utilityButtons.appendChild(setButtonLabel(createButton("奇跡ランキング", () => showMiracleRankingPopup()), "奇跡ランキング", "Ranking"));
+utilityButtons.appendChild(setButtonLabel(createButton("研究レポート", () => showResearchReportPopup()), "研究レポート", "Report"));
+utilityButtons.appendChild(setButtonLabel(createButton("リプレイ", () => showReplayPopup()), "リプレイ", "Replay"));
 
 const languageButton = setButtonLabel(createButton("English", () => {
     isEnglish = !isEnglish;
@@ -723,6 +792,10 @@ displayButtons.appendChild(confettiButton);
 
 const pixiButton = setButtonLabel(createButton("Pixi背景: OFF", () => togglePixiBackground()), "Pixi背景: OFF", "Pixi BG: OFF");
 displayButtons.appendChild(pixiButton);
+const verticalButton = setButtonLabel(createButton("縦動画: OFF", () => toggleVerticalVideoMode()), "縦動画: OFF", "Vertical: OFF");
+displayButtons.appendChild(verticalButton);
+const obsButton = setButtonLabel(createButton("OBS: OFF", () => toggleObsMode()), "OBS: OFF", "OBS: OFF");
+displayButtons.appendChild(obsButton);
 
 settingButtons.appendChild(setButtonLabel(createButton("設定反映", () => {
     if (!applySettingsFromInputs(true)) return;
@@ -841,6 +914,40 @@ helpOverlay.style.boxSizing = "border-box";
 helpOverlay.style.overflow = "hidden";
 helpOverlay.style.touchAction = "pan-y";
 document.body.appendChild(helpOverlay);
+
+const subtitleOverlay = document.createElement("div");
+subtitleOverlay.style.position = "fixed";
+subtitleOverlay.style.left = "50%";
+subtitleOverlay.style.bottom = isMobile ? "104px" : "28px";
+subtitleOverlay.style.transform = "translateX(-50%)";
+subtitleOverlay.style.maxWidth = "min(92vw, 960px)";
+subtitleOverlay.style.padding = isMobile ? "12px 18px" : "10px 18px";
+subtitleOverlay.style.borderRadius = "18px";
+subtitleOverlay.style.background = "rgba(0,0,0,.62)";
+subtitleOverlay.style.color = "#fff";
+subtitleOverlay.style.fontSize = isMobile ? "24px" : "18px";
+subtitleOverlay.style.fontWeight = "900";
+subtitleOverlay.style.lineHeight = "1.5";
+subtitleOverlay.style.textAlign = "center";
+subtitleOverlay.style.zIndex = "121";
+subtitleOverlay.style.display = "none";
+subtitleOverlay.style.pointerEvents = "none";
+document.body.appendChild(subtitleOverlay);
+
+const comboOverlay = document.createElement("div");
+comboOverlay.style.position = "fixed";
+comboOverlay.style.right = isMobile ? "10px" : "20px";
+comboOverlay.style.top = isMobile ? "72px" : "24px";
+comboOverlay.style.padding = isMobile ? "10px 14px" : "8px 12px";
+comboOverlay.style.borderRadius = "999px";
+comboOverlay.style.background = "rgba(255,224,120,.92)";
+comboOverlay.style.color = "#2b2100";
+comboOverlay.style.fontSize = isMobile ? "22px" : "18px";
+comboOverlay.style.fontWeight = "900";
+comboOverlay.style.zIndex = "122";
+comboOverlay.style.display = "none";
+comboOverlay.style.boxShadow = "0 8px 20px rgba(0,0,0,.22)";
+document.body.appendChild(comboOverlay);
 
 helpOverlay.addEventListener("click", (event) => {
     if (event.target === helpOverlay) closeHelpPopup();
@@ -969,11 +1076,14 @@ function updateUiLanguage(): void {
     }
     for (const item of sectionTitles) item.el.textContent = isEnglish ? item.en : item.ja;
     setSelectOptions();
+    updateThemeSelectLabels();
     updateSimpleModeButton();
     updateSoundButton();
     confettiButton.textContent = confettiEnabled ? t("紙吹雪: ON", "Confetti: ON") : t("紙吹雪: OFF", "Confetti: OFF");
     pixiButton.textContent = pixiEnabled ? t("Pixi背景: ON", "Pixi BG: ON") : t("Pixi背景: OFF", "Pixi BG: OFF");
     gameFullscreenButton.title = t("全画面", "Fullscreen");
+    updateVerticalVideoButton();
+    updateObsButton();
 }
 
 async function toggleGameFullscreen(): Promise<void> {
@@ -1075,6 +1185,291 @@ function getProbabilityDangerText(denominator: number): string {
     return "確率のヤバさ：まあまあ珍しい。小さめの奇跡です。";
 }
 
+
+function getThemeOptions(): Array<{ value: ThemeMode; ja: string; en: string }> {
+    return [
+        { value: "lab", ja: "研究所", en: "Lab" },
+        { value: "space", ja: "宇宙", en: "Space" },
+        { value: "sunset", ja: "夕焼け", en: "Sunset" },
+        { value: "retro", ja: "レトロ", en: "Retro" },
+        { value: "midnight", ja: "深夜", en: "Midnight" },
+    ];
+}
+
+function updateThemeSelectLabels(): void {
+    themeSelect.innerHTML = getThemeOptions().map((x) => `<option value="${x.value}">${isEnglish ? x.en : x.ja}</option>`).join("");
+    themeSelect.value = currentTheme;
+}
+
+function applyTheme(): void {
+    const themeMap: Record<ThemeMode, { body: string; panel: string; game: string }> = {
+        lab: { body: "linear-gradient(180deg,#11131a 0%,#1b202b 100%)", panel: "linear-gradient(180deg, rgba(246,250,236,.96) 0%, rgba(227,240,204,.88) 100%)", game: "radial-gradient(circle at 50% 30%, rgba(30,36,52,.92), rgba(9,11,18,.98))" },
+        space: { body: "linear-gradient(180deg,#050814 0%,#0b1230 100%)", panel: "linear-gradient(180deg, rgba(232,241,255,.92) 0%, rgba(210,223,255,.84) 100%)", game: "radial-gradient(circle at 50% 20%, rgba(30,40,90,.92), rgba(3,6,18,.98))" },
+        sunset: { body: "linear-gradient(180deg,#2b1020 0%,#6d2d3d 46%,#f07f43 100%)", panel: "linear-gradient(180deg, rgba(255,245,232,.94) 0%, rgba(255,220,198,.88) 100%)", game: "radial-gradient(circle at 50% 18%, rgba(255,154,96,.50), rgba(45,11,28,.96))" },
+        retro: { body: "linear-gradient(180deg,#14313a 0%,#08161c 100%)", panel: "linear-gradient(180deg, rgba(234,255,241,.94) 0%, rgba(202,241,219,.88) 100%)", game: "radial-gradient(circle at 50% 18%, rgba(74,220,198,.24), rgba(9,18,18,.98))" },
+        midnight: { body: "linear-gradient(180deg,#060606 0%,#13131f 100%)", panel: "linear-gradient(180deg, rgba(245,244,255,.94) 0%, rgba(220,219,245,.88) 100%)", game: "radial-gradient(circle at 50% 18%, rgba(98,79,255,.22), rgba(3,3,8,.98))" },
+    };
+    const theme = themeMap[currentTheme];
+    document.body.style.background = theme.body;
+    info.style.background = theme.panel;
+    if (!activeRareBackgroundKind) gameArea.style.background = theme.game;
+}
+
+function getSilhouetteHint(def: SpecialEventDef): string {
+    const hints: Record<string, string> = {
+        crown: "頭上に乗るもの",
+        shootingStar: "空を横切るもの",
+        heart: "やわらかい奇跡",
+        blackSun: "黒くて終末っぽい",
+        timeRift: "空間が裂ける",
+        silverUfo: "空から来る円盤",
+        blueFlame: "冷たい色の火",
+        luckySeven: "縁起のいい数字",
+        labExplosion: "研究所が危ない",
+        cosmicEgg: "宇宙っぽい殻",
+    };
+    return hints[def.kind] ?? "まだ形がはっきりしない";
+}
+
+function addMiracleLog(def: SpecialEventDef): void {
+    miracleLogs.unshift({
+        label: def.label,
+        rank: def.rank,
+        denominator: def.denominator,
+        finishedAt: Date.now(),
+        finishedCount,
+        mode: settings.probabilityMode,
+        speedLabel: speedLabelText,
+        combo: miracleCombo,
+    });
+    miracleLogs = miracleLogs.slice(0, 80);
+}
+
+function setSubtitle(text: string): void {
+    currentSubtitleText = text;
+    subtitleOverlay.textContent = text;
+    subtitleOverlay.style.display = "block";
+    if (subtitleTimer !== undefined) window.clearTimeout(subtitleTimer);
+    subtitleTimer = window.setTimeout(() => {
+        subtitleOverlay.style.display = "none";
+    }, 4200);
+}
+
+function updateMiracleCombo(): void {
+    const now = Date.now();
+    miracleCombo = now - lastMiracleAt <= 12000 ? miracleCombo + 1 : 1;
+    lastMiracleAt = now;
+    if (miracleCombo >= 2) {
+        comboOverlay.textContent = `${t("奇跡コンボ", "Miracle combo")} x${miracleCombo}`;
+        comboOverlay.style.display = "block";
+        if (comboTimer !== undefined) window.clearTimeout(comboTimer);
+        comboTimer = window.setTimeout(() => { comboOverlay.style.display = "none"; }, 4200);
+    } else {
+        comboOverlay.style.display = "none";
+    }
+}
+
+function saveMiracleClip(def: SpecialEventDef, subtitle: string): void {
+    const frames = replayFrameBuffer.slice(-18);
+    miracleClips.unshift({
+        id: `${Date.now()}-${Math.floor(appRandom() * 100000)}`,
+        label: def.label,
+        rank: def.rank,
+        denominator: def.denominator,
+        finishedCount,
+        createdAt: Date.now(),
+        subtitle,
+        frames,
+    });
+    miracleClips = miracleClips.slice(0, 24);
+}
+
+function replayClipById(id: string): void {
+    const clip = miracleClips.find((x) => x.id === id);
+    if (!clip || clip.frames.length === 0) {
+        showPopup(t("リプレイ", "Replay"), `<p>${t("再生できるクリップがありません。", "No replay clip is available.")}</p>`);
+        return;
+    }
+    const body = `
+        <div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="font-weight:900;font-size:${isMobile ? "24px" : "20px"};">${clip.label} [${clip.rank}] ${formatProbability(clip.denominator)}</div>
+            <img id="replay-image" src="${clip.frames[0]}" style="width:100%;border-radius:20px;border:1px solid rgba(70,80,110,.16);background:#111;object-fit:contain;" />
+            <div style="opacity:.8;">${clip.subtitle}</div>
+        </div>`;
+    showPopup(`${t("リプレイ", "Replay")}: ${clip.label}`, body);
+    const img = document.getElementById("replay-image") as HTMLImageElement | null;
+    if (!img) return;
+    let index = 0;
+    const timer = window.setInterval(() => {
+        if (helpOverlay.style.display === "none") {
+            window.clearInterval(timer);
+            return;
+        }
+        index = (index + 1) % clip.frames.length;
+        img.src = clip.frames[index];
+    }, 140);
+}
+
+function showReplayPopup(): void {
+    if (miracleClips.length === 0) {
+        showPopup(t("リプレイ", "Replay"), `<p>${t("まだ奇跡クリップがありません。", "No miracle clips yet.")}</p>`);
+        return;
+    }
+    const rows = miracleClips.map((clip, i) => `
+        <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;">
+            <div>
+                <div style="font-weight:900;">${i + 1}. ${clip.label} [${clip.rank}]</div>
+                <div style="opacity:.76;">${formatProbability(clip.denominator)} / ${clip.finishedCount.toLocaleString()}投目 / ${new Date(clip.createdAt).toLocaleTimeString()}</div>
+            </div>
+            <button data-replay-id="${clip.id}" style="font-size:${isMobile ? "18px" : "16px"};padding:10px 16px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);font-weight:900;cursor:pointer;">${t("再生", "Play")}</button>
+        </div>
+    `).join("");
+    showPopup(t("奇跡クリップ保存", "Miracle clips"), rows);
+    helpOverlay.querySelectorAll("[data-replay-id]").forEach((el) => {
+        (el as HTMLButtonElement).onclick = () => replayClipById((el as HTMLButtonElement).dataset.replayId || "");
+    });
+}
+
+function showMiracleLogPopup(): void {
+    if (miracleLogs.length === 0) {
+        showPopup(t("奇跡発生ログ", "Miracle log"), `<p>${t("まだ奇跡は発生していません。", "No miracles yet.")}</p>`);
+        return;
+    }
+    const rows = miracleLogs.map((log, i) => `
+        <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+            <div style="font-weight:900;">${i + 1}. ${log.label} [${log.rank}] ${formatProbability(log.denominator)}</div>
+            <div style="opacity:.78;">${t("投下位置", "Count")}: ${log.finishedCount.toLocaleString()} / ${t("モード", "Mode")}: ${log.mode} / ${t("速度", "Speed")}: ${isEnglish ? log.speedLabel : log.speedLabel} / combo x${log.combo}</div>
+            <div style="opacity:.62;">${new Date(log.finishedAt).toLocaleString()}</div>
+        </div>`).join("");
+    showPopup(t("奇跡発生ログ", "Miracle log"), rows);
+}
+
+function showMiracleRankingPopup(): void {
+    const rows = SPECIAL_EVENT_DEFS.slice().sort((a,b) => b.denominator - a.denominator || (savedRecords.discovered[b.kind] ?? 0) - (savedRecords.discovered[a.kind] ?? 0))
+        .map((def, i) => {
+            const total = (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0);
+            return `<div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;">
+                <div style="font-weight:900;">#${i+1}</div>
+                <div><b>${def.label}</b><br><span style="opacity:.74;">[${def.rank}] ${formatProbability(def.denominator)}</span></div>
+                <div style="font-weight:900;">${total}${t("回", "x")}</div>
+            </div>`;
+        }).join("");
+    showPopup(t("奇跡ランキング", "Miracle ranking"), rows);
+}
+
+function getResearchReportHtml(): string {
+    const sum = binCounts.reduce((a,b) => a+b, 0) || 1;
+    const maxCount = Math.max(...binCounts, 0);
+    const minCount = Math.min(...binCounts);
+    const topIndex = binCounts.indexOf(maxCount);
+    const imbalance = ((maxCount - minCount) / sum) * 100;
+    const diagnosis = imbalance > 18 ? t("かなり偏っています。盤面が機嫌を出しています。", "Very biased. The board is showing mood.") :
+        imbalance > 10 ? t("少し偏っています。中央か端が主張気味です。", "Slightly biased. Center or edges are asserting themselves.") :
+        t("比較的なだらかです。現実寄りの分布です。", "Relatively smooth. A realistic distribution.");
+    const recentMiracles = miracleLogs.slice(0, 5).map((x) => `${x.label} [${x.rank}] ${formatProbability(x.denominator)}`).join("<br>") || t("なし", "None");
+    return `
+        <div style="display:grid;gap:10px;">
+            <div><b>${t("総投下数", "Total count")}:</b> ${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}</div>
+            <div><b>${t("捨て区間", "Discarded")}:</b> ${discardedCount.toLocaleString()}</div>
+            <div><b>${t("最頻受け皿", "Top bin")}:</b> ${topIndex >= 0 ? labels[topIndex] : "-" } (${maxCount.toLocaleString()})</div>
+            <div><b>${t("偏り診断", "Bias diagnosis")}:</b> ${diagnosis}</div>
+            <div><b>${t("発見済み種類", "Discovered kinds")}:</b> ${SPECIAL_EVENT_DEFS.filter((d) => (savedRecords.discovered[d.kind] ?? 0) + (specialCreated[d.kind] ?? 0) > 0).length} / ${SPECIAL_EVENT_DEFS.length}</div>
+            <div><b>${t("最近の奇跡", "Recent miracles")}:</b><br>${recentMiracles}</div>
+        </div>`;
+}
+
+function showResearchReportPopup(): void {
+    showPopup(t("研究レポート", "Research report"), getResearchReportHtml());
+}
+
+function updateVerticalVideoButton(): void {
+    verticalButton.textContent = isVerticalVideoMode ? t("縦動画: ON", "Vertical: ON") : t("縦動画: OFF", "Vertical: OFF");
+}
+
+function updateObsButton(): void {
+    obsButton.textContent = isObsMode ? "OBS: ON" : "OBS: OFF";
+}
+
+function toggleVerticalVideoMode(): void {
+    isVerticalVideoMode = !isVerticalVideoMode;
+    if (isVerticalVideoMode) {
+        gameArea.style.aspectRatio = "9 / 16";
+        gameArea.style.height = isMobile ? "74dvh" : "88dvh";
+        gameArea.style.maxWidth = isMobile ? "100%" : "500px";
+    } else {
+        gameArea.style.aspectRatio = "";
+        gameArea.style.height = "";
+        gameArea.style.maxWidth = "";
+    }
+    updateVerticalVideoButton();
+    scheduleResize();
+}
+
+function toggleObsMode(): void {
+    isObsMode = !isObsMode;
+    controlArea.style.display = isObsMode ? "none" : "grid";
+    buttonArea.style.display = isObsMode ? "none" : "grid";
+    randomGraphArea.style.display = isObsMode ? "none" : "block";
+    info.style.padding = isObsMode ? "8px" : "";
+    updateObsButton();
+    scheduleResize();
+}
+
+function applyRareBackground(kind: DropKind): void {
+    activeRareBackgroundKind = kind;
+    const map: Record<string, string> = {
+        crown: "radial-gradient(circle at 50% 18%, rgba(255,220,80,.45), rgba(10,10,12,.96))",
+        silverUfo: "radial-gradient(circle at 50% 18%, rgba(120,220,255,.30), rgba(4,8,16,.98))",
+        blackSun: "radial-gradient(circle at 50% 18%, rgba(255,0,68,.22), rgba(0,0,0,.99))",
+        timeRift: "radial-gradient(circle at 50% 18%, rgba(98,42,255,.38), rgba(3,4,12,.99))",
+        heart: "radial-gradient(circle at 50% 18%, rgba(255,105,180,.28), rgba(18,8,16,.98))",
+        labExplosion: "radial-gradient(circle at 50% 18%, rgba(255,120,48,.36), rgba(20,8,6,.98))",
+        cosmicEgg: "radial-gradient(circle at 50% 18%, rgba(0,229,255,.28), rgba(28,0,56,.98))",
+    };
+    gameArea.style.background = map[kind] || map.crown;
+    if (rareBackgroundTimer !== undefined) window.clearTimeout(rareBackgroundTimer);
+    rareBackgroundTimer = window.setTimeout(() => {
+        activeRareBackgroundKind = null;
+        applyTheme();
+    }, 3600);
+}
+
+function maybeTriggerBoardAnomaly(): void {
+    if (settings.simpleMode || targetReachedTime !== null || isPaused || isMiraclePaused || isFinished) return;
+    if (Date.now() < anomalyUntil) return;
+    if (appRandom() > 0.00003 * getProbabilityScale()) return;
+    const choice = Math.floor(appRandom() * 4);
+    anomalyUntil = Date.now() + 3000;
+    anomalyOldGravityX = engine.gravity.x;
+    anomalyHidePins = false;
+    if (choice === 0) {
+        engine.gravity.x = appRandom() < 0.5 ? -0.22 : 0.22;
+        anomalyLabel = t("異変: 重力が横に傾いた", "Anomaly: gravity tilted sideways");
+    } else if (choice === 1) {
+        engine.timing.timeScale = Math.max(0.5, engine.timing.timeScale * 0.7);
+        anomalyLabel = t("異変: 時間が少し粘る", "Anomaly: time became sticky");
+    } else if (choice === 2) {
+        anomalyHidePins = true;
+        anomalyLabel = t("異変: ピンが見えにくい", "Anomaly: pins became dim");
+    } else {
+        triggerCameraShake(14 * geometry.scale, 500);
+        anomalyLabel = t("異変: 盤面がざわつく", "Anomaly: board is trembling");
+    }
+    addFloatingText(anomalyLabel, geometry.width / 2, 80 * geometry.scale, "#ffef78");
+    setSubtitle(anomalyLabel);
+}
+
+function updateBoardAnomaly(): void {
+    if (anomalyUntil && Date.now() > anomalyUntil) {
+        anomalyUntil = 0;
+        engine.gravity.x = anomalyOldGravityX;
+        anomalyHidePins = false;
+        if (speedLabelText === "通常") engine.timing.timeScale = 1;
+        else if (speedLabelText === "高速") engine.timing.timeScale = 2;
+        else engine.timing.timeScale = 4;
+    }
+}
+
 function triggerScreenFlash(mode: "normal" | "miracle" | "black" | "cosmic" = "miracle"): void {
     if (settings.simpleMode) return;
     const color = mode === "black" ? "rgba(255,0,68,.62)" : mode === "cosmic" ? "rgba(100,70,255,.68)" : mode === "normal" ? "rgba(255,255,255,.45)" : "rgba(255,236,120,.72)";
@@ -1117,22 +1512,22 @@ function showMiracleBookPopup(): void {
         const count = savedRecords.discovered[def.kind] ?? 0;
         const nowCount = specialCreated[def.kind] ?? 0;
         const found = count > 0 || nowCount > 0;
-        const name = found ? `${def.symbol} ${def.label}` : "？？？";
+        const name = found ? `${def.symbol} ${def.label}` : `◼︎◼︎◼︎ (${getSilhouetteHint(def)})`;
         if (isMobile) {
             return `<div style="padding:14px 0;border-bottom:1px solid rgba(80,90,120,.16);">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
                     <div style="font-weight:900;font-size:24px;color:${found ? "#243" : "#999"};">${def.rank}</div>
-                    <div style="font-weight:900;font-size:18px;white-space:nowrap;">発見 ${count + nowCount}回</div>
+                    <div style="font-weight:900;font-size:18px;white-space:nowrap;">${t("発見", "Found")} ${count + nowCount}${t("回", "x")}</div>
                 </div>
                 <div style="margin-top:6px;font-size:21px;font-weight:900;line-height:1.35;word-break:keep-all;overflow-wrap:break-word;">${name}</div>
-                <div style="margin-top:8px;font-size:16px;line-height:1.55;opacity:.76;word-break:normal;overflow-wrap:break-word;">確率 ${formatProbability(def.denominator)}</div>
+                <div style="margin-top:8px;font-size:16px;line-height:1.55;opacity:.76;word-break:normal;overflow-wrap:break-word;">${t("確率", "Odds")} ${formatProbability(def.denominator)}</div>
                 <div style="margin-top:4px;font-size:16px;line-height:1.55;opacity:.76;word-break:normal;overflow-wrap:break-word;">${getProbabilityDangerText(def.denominator)}</div>
             </div>`;
         }
         return `<div style="display:grid;grid-template-columns:86px minmax(0,1fr) 140px;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
             <div style="font-weight:900;font-size:24px;color:${found ? "#243" : "#999"};">${def.rank}</div>
-            <div style="min-width:0;"><b>${name}</b><br><span style="opacity:.72;">確率 ${formatProbability(def.denominator)} / ${getProbabilityDangerText(def.denominator)}</span></div>
-            <div style="text-align:right;font-weight:900;">発見 ${count + nowCount}回</div>
+            <div style="min-width:0;"><b>${name}</b><br><span style="opacity:.72;">${t("確率", "Odds")} ${formatProbability(def.denominator)} / ${getProbabilityDangerText(def.denominator)}</span></div>
+            <div style="text-align:right;font-weight:900;">${t("発見", "Found")} ${count + nowCount}${t("回", "x")}</div>
         </div>`;
     }).join("");
     showPopup("奇跡図鑑", `
@@ -1385,6 +1780,9 @@ function resetExperiment(startNow = false): void {
     timeRiftCreated = 0;
     labExplosionCreated = 0;
     specialCreated = {};
+    currentSubtitleText = "";
+    subtitleOverlay.style.display = "none";
+    comboOverlay.style.display = "none";
 
     resultOverlay.style.display = "none";
     milestoneOverlay.style.display = "none";
@@ -1757,6 +2155,14 @@ function getMiracleIconHtml(kind: DropKind, fallbackSymbol: string): string {
 function showMiracle(kind: DropKind, symbol: string, probabilityText: string, feelingText: string): void {
     pauseForMiracle();
     const def = findSpecialDef(kind);
+    if (def) {
+        updateMiracleCombo();
+        addMiracleLog(def);
+        const subtitle = `${def.label} ${t("発生", "appeared")} / [${def.rank}] ${formatProbability(def.denominator)}`;
+        setSubtitle(subtitle);
+        saveMiracleClip(def, subtitle);
+        applyRareBackground(kind);
+    }
     triggerScreenFlash(def?.soundMode ?? "miracle");
     triggerCameraShake(def?.rank === "GOD" ? 46 * geometry.scale : def?.rank === "EX" ? 34 * geometry.scale : 24 * geometry.scale, def?.rank === "GOD" ? 1200 : 760);
     if (settings.simpleMode) return;
@@ -1767,6 +2173,7 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
             <div style="font-size:clamp(36px,8vw,90px);font-weight:900;margin-top:12px;text-shadow:0 8px 30px rgba(0,0,0,.6);">${def?.label ?? "奇跡"} 発生</div>
             <div style="font-size:clamp(22px,4vw,44px);font-weight:900;margin-top:12px;">${probabilityText}</div>
             <div style="font-size:clamp(18px,3vw,32px);margin-top:12px;opacity:.94;line-height:1.5;">${feelingText}</div>
+            ${miracleCombo >= 2 ? `<div style="margin-top:10px;font-size:clamp(20px,4vw,40px);font-weight:900;color:#ffe560;">${t("奇跡コンボ", "Miracle combo")} x${miracleCombo}</div>` : ""}
         </div>`;
     miracleOverlay.style.display = "flex";
     fireConfetti(kind === "blackSun" ? "black" : kind === "cosmicEgg" ? "cosmic" : "miracle");
@@ -1951,6 +2358,9 @@ function updateInfo(): void {
         <div>${t("受け皿", "Bins")}: <b>${settings.binCount}</b> ${t("+ 両端捨て区画", "+ edge discard zones")}</div>
         <div>${t("ピン段数", "Pin rows")}: <b>${settings.pinRows}</b></div>
         <div>${t("発見済み種類", "Discovered kinds")}: <b>${discoveredKinds}</b> / ${SPECIAL_EVENT_DEFS.length}</div>
+        <div>${t("奇跡ログ件数", "Miracle logs")}: <b>${miracleLogs.length}</b></div>
+        <div>${t("縦動画", "Vertical")}: <b>${isVerticalVideoMode ? "ON" : "OFF"}</b></div>
+        <div>${t("OBSモード", "OBS mode")}: <b>${isObsMode ? "ON" : "OFF"}</b></div>
         <div>${t("捨て区画", "Discarded")}: <b>${discardedCount.toLocaleString()}</b></div>
     `;
     updateRandomGraph();
@@ -2048,6 +2458,7 @@ function showFinalResult(): void {
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の「宇宙卵」。出たら奇跡どころか、画面が伝説になります。</div>
             <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">発見済み種類: ${(SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length).toLocaleString()} / ${SPECIAL_EVENT_DEFS.length}　捨て区画: ${discardedCount.toLocaleString()}</div>
+            <div style="margin-top:18px;font-size:clamp(16px,2vw,26px);opacity:.95;">${getResearchReportHtml()}</div>
             <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="copy-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">結果コピー</button><button id="download-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">CSV保存</button><button id="bottom-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">閉じる</button></div>
         </div>`;
     resultOverlay.style.display = "flex";
@@ -2360,6 +2771,15 @@ Events.on(render, "afterRender", () => {
         item.life--;
         if (item.life <= 0) floatingTexts.splice(i, 1);
     }
+    if (isStarted && !isPaused && !isMiraclePaused) {
+        replayCaptureTick++;
+        if (replayCaptureTick % 5 === 0) {
+            try {
+                replayFrameBuffer.push(canvas.toDataURL("image/jpeg", 0.42));
+                if (replayFrameBuffer.length > 24) replayFrameBuffer.shift();
+            } catch {}
+        }
+    }
     context.restore();
 });
 
@@ -2370,6 +2790,9 @@ Events.on(render, "afterRender", () => {
 Events.on(engine, "afterUpdate", () => {
     updateCameraShake();
     updatePinWiggles();
+    updateBoardAnomaly();
+    maybeTriggerBoardAnomaly();
+    gameArea.style.filter = anomalyUntil ? (anomalyHidePins ? "brightness(.84) contrast(1.1)" : "brightness(.95)") : "";
     if (!isStarted || isFinished || isMiraclePaused) return;
 
     const removeTargets: Matter.Body[] = [];
@@ -2499,6 +2922,7 @@ Events.on(engine, "afterUpdate", () => {
 // ======================================================
 
 geometry = calculateGeometry();
+applyTheme();
 resetExperiment(false);
 Render.run(render);
 
