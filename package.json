@@ -12,9 +12,18 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "matter-js": "^0.20.0"
+    "animejs": "^3.2.2",
+    "canvas-confetti": "^1.9.3",
+    "gif.js": "^0.2.0",
+    "matter-js": "^0.20.0",
+    "pixi.js": "^8.6.6",
+    "tippy.js": "^6.3.7",
+    "tone": "^14.7.77"
   },
   "devDependencies": {
+    "@types/animejs": "^3.1.13",
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/gif.js": "^0.2.5",
     "@types/matter-js": "^0.20.2",
     "typescript": "^6.0.3",
     "vite": "^8.0.9"

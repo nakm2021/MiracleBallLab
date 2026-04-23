@@ -1,4 +1,12 @@
 import Matter, { Events } from "matter-js";
+import anime from "animejs";
+import tippy from "tippy.js";
+import "tippy.js/dist/tippy.css";
+import GIF from "gif.js";
+import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
+import * as Tone from "tone";
+import confetti from "canvas-confetti";
+import { Application, Graphics } from "pixi.js";
 
 const Engine = Matter.Engine;
 const Render = Matter.Render;
@@ -137,8 +145,8 @@ type FloatingText = {
 const BASE_WIDTH = 800;
 const BASE_HEIGHT = 600;
 
-const MILESTONE_INTERVAL = 3000;
-const GIANT_EVENT_INTERVAL = 3000;
+const MILESTONE_INTERVAL = 5000;
+const GIANT_EVENT_INTERVAL = 5000;
 const FINAL_SWEEP_DELAY_MS = 3000;
 
 const GOLD_RATE = 0.002;           // 1/500
@@ -151,6 +159,20 @@ const BLACK_SUN_RATE = 0.0000001;  // 1/10,000,000
 const COSMIC_EGG_RATE = 0.000000000001; // 1/1,000,000,000,000
 
 const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v2";
+
+
+const LOCAL_RARE_AUDIO_FILES = [
+    "/audio/rare-01.mp3",
+    "/audio/rare-02.mp3",
+    "/audio/rare-03.mp3",
+    "/audio/rare-04.mp3",
+];
+const LOCAL_GOD_AUDIO_FILES = [
+    "/audio/god-01.mp3",
+    "/audio/god-02.mp3",
+    "/audio/god-03.mp3",
+];
+type RareSoundFlavor = "normal" | "ur" | "ex" | "god";
 
 const SPECIAL_EVENT_DEFS: SpecialEventDef[] = [
     { kind: "cosmicEgg", label: "宇宙卵", rank: "GOD", rate: COSMIC_EGG_RATE, denominator: 1_000_000_000_000, symbol: "卵", emoji: "卵", fillStyle: "#240038", radiusScale: 2.7, soundMode: "cosmic" },
@@ -283,8 +305,15 @@ let toneReady = false;
 let confettiEnabled = true;
 let pixiEnabled = false;
 let pixiReady = false;
-let pixiApp: any = null;
-let pixiParticles: any[] = [];
+let pixiApp: Application | null = null;
+let pixiParticles: Graphics[] = [];
+let animeReady = false;
+let tippyReady = false;
+let gifReady = false;
+let mobileDockRunButton: HTMLButtonElement | null = null;
+let mobileDockSettingsButton: HTMLButtonElement | null = null;
+let mobileSettingsOverlay: HTMLDivElement | null = null;
+let mobileSettingsPanel: HTMLDivElement | null = null;
 
 const engine = Engine.create();
 engine.gravity.y = 8;
@@ -560,11 +589,38 @@ function createButton(text: string, onClick: () => void): HTMLButtonElement {
     return button;
 }
 
+function setTooltip(target: HTMLElement, ja: string, en: string): HTMLElement {
+    tooltipRefs.push({ el: target, ja, en });
+    target.setAttribute("data-tippy-content", isEnglish ? en : ja);
+    target.setAttribute("aria-label", isEnglish ? en : ja);
+    return target;
+}
+
+function updateTooltipText(): void {
+    for (const item of tooltipRefs) {
+        const content = isEnglish ? item.en : item.ja;
+        item.el.setAttribute("data-tippy-content", content);
+        item.el.setAttribute("aria-label", content);
+        const tip = (item.el as any)._tippy;
+        if (tip?.setContent) tip.setContent(content);
+    }
+}
+
+function ensureExternalStyle(href: string): void {
+    const existing = document.querySelector(`link[href="${href}"]`);
+    if (existing) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+}
+
 
 type UiFieldRefs = { wrapper: HTMLDivElement; labelEl: HTMLLabelElement; ja: string; en: string };
 const uiFieldRefs: UiFieldRefs[] = [];
 const bilingualButtons: Array<{ button: HTMLButtonElement; ja: string; en: string }> = [];
 const sectionTitles: Array<{ el: HTMLDivElement; ja: string; en: string }> = [];
+const tooltipRefs: Array<{ el: HTMLElement; ja: string; en: string }> = [];
 
 function setButtonLabel(button: HTMLButtonElement, ja: string, en: string): HTMLButtonElement {
     bilingualButtons.push({ button, ja, en });
@@ -726,91 +782,94 @@ const speedButtons = createSection("投下速度", "Drop speed");
 const displayButtons = createSection("表示・演出", "Display & effects");
 const settingButtons = createSection("反映・出力", "Apply & export");
 
-const runButton = setButtonLabel(createButton("実行", () => startExperiment()), "実行", "Run");
+const runButton = setTooltip(setButtonLabel(createButton("実行", () => startExperiment()), "実行", "Run"), "設定どおりに落下実験を開始します。", "Start the drop experiment with current settings.");
 utilityButtons.appendChild(runButton);
-utilityButtons.appendChild(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"));
-utilityButtons.appendChild(setButtonLabel(createButton("ボタン説明", () => showButtonHelpPopup()), "ボタン説明", "Buttons"));
-utilityButtons.appendChild(setButtonLabel(createButton("奇跡図鑑", () => showMiracleBookPopup()), "奇跡図鑑", "Miracle book"));
-utilityButtons.appendChild(setButtonLabel(createButton("最高記録", () => showRecordsPopup()), "最高記録", "Records"));
-utilityButtons.appendChild(setButtonLabel(createButton("奇跡ログ", () => showMiracleLogPopup()), "奇跡ログ", "Miracle log"));
-utilityButtons.appendChild(setButtonLabel(createButton("奇跡ランキング", () => showMiracleRankingPopup()), "奇跡ランキング", "Ranking"));
-utilityButtons.appendChild(setButtonLabel(createButton("研究レポート", () => showResearchReportPopup()), "研究レポート", "Report"));
-utilityButtons.appendChild(setButtonLabel(createButton("リプレイ", () => showReplayPopup()), "リプレイ", "Replay"));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"), "このプログラムが何をするか説明します。", "Explain what this program does."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("ボタン説明", () => showButtonHelpPopup()), "ボタン説明", "Buttons"), "各ボタンの役割を一覧表示します。", "Show a list of what each button does."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡図鑑", () => showMiracleBookPopup()), "奇跡図鑑", "Miracle book"), "レア玉の一覧と発見回数を見ます。", "View rare drops and discovery counts."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("最高記録", () => showRecordsPopup()), "最高記録", "Records"), "最高記録や通算記録を表示します。", "Show best and lifetime records."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡ログ", () => showMiracleLogPopup()), "奇跡ログ", "Miracle log"), "発生した奇跡の履歴を見ます。", "Show the history of miracles."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡ランキング", () => showMiracleRankingPopup()), "奇跡ランキング", "Ranking"), "レア度順に奇跡を並べます。", "Rank miracles by rarity."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("研究レポート", () => showResearchReportPopup()), "研究レポート", "Report"), "現在の実験状況をまとめます。", "Summarize the current experiment."));
+const replayButton = setTooltip(setButtonLabel(createButton("リプレイ", () => showReplayPopup()), "リプレイ", "Replay"), "奇跡クリップを再生・GIF保存します。", "Play or export miracle clips as GIF.");
+utilityButtons.appendChild(replayButton);
 
-const languageButton = setButtonLabel(createButton("English", () => {
+const languageButton = setTooltip(setButtonLabel(createButton("English", () => {
     isEnglish = !isEnglish;
     updateUiLanguage();
     updateStopButton();
     updateInfo();
-}), "English", "日本語");
+}), "English", "日本語"), "表示言語を切り替えます。", "Switch the display language.");
 utilityButtons.appendChild(languageButton);
 
-const fullScreenButton = setButtonLabel(createButton("全画面", () => toggleGameFullscreen()), "全画面", "Fullscreen");
+const fullScreenButton = setTooltip(setButtonLabel(createButton("全画面", () => toggleGameFullscreen()), "全画面", "Fullscreen"), "実験画面だけを大きく表示します。", "Expand only the game screen." );
 utilityButtons.appendChild(fullScreenButton);
 
-speedButtons.appendChild(setButtonLabel(createButton("通常", () => {
+speedButtons.appendChild(setTooltip(setButtonLabel(createButton("通常", () => {
     engine.timing.timeScale = 1;
     speedLabelText = "通常";
     updateInfo();
-}), "通常", "Normal"));
+}), "通常", "Normal"), "標準速度で観測します。", "Observe at standard speed."));
 
-speedButtons.appendChild(setButtonLabel(createButton("高速", () => {
+speedButtons.appendChild(setTooltip(setButtonLabel(createButton("高速", () => {
     engine.timing.timeScale = 2;
     speedLabelText = "高速";
     updateInfo();
-}), "高速", "Fast"));
+}), "高速", "Fast"), "やや速めに流します。", "Run the simulation faster."));
 
-speedButtons.appendChild(setButtonLabel(createButton("超高速", () => {
+speedButtons.appendChild(setTooltip(setButtonLabel(createButton("超高速", () => {
     engine.timing.timeScale = 4;
     speedLabelText = "超高速";
     updateInfo();
-}), "超高速", "Ultra"));
+}), "超高速", "Ultra"), "かなり速いので演出を見逃しやすいです。", "Very fast and easier to miss effects."));
 
-const stopButton = setButtonLabel(createButton("ストップ", () => togglePause()), "ストップ", "Stop");
+const stopButton = setTooltip(setButtonLabel(createButton("ストップ", () => togglePause()), "ストップ", "Stop"), "実験を一時停止・再開します。", "Pause or resume the experiment.");
 displayButtons.appendChild(stopButton);
 
-displayButtons.appendChild(setButtonLabel(createButton("リセット", () => {
+displayButtons.appendChild(setTooltip(setButtonLabel(createButton("リセット", () => {
     if (!applySettingsFromInputs(true)) return;
     resetExperiment(false);
-}), "リセット", "Reset"));
+}), "リセット", "Reset"), "盤面を作り直して最初からにします。", "Rebuild the board and start fresh."));
 
-const simpleModeButton = setButtonLabel(createButton("シンプル: OFF", () => {
+const simpleModeButton = setTooltip(setButtonLabel(createButton("シンプル: OFF", () => {
     settings.simpleMode = !settings.simpleMode;
     updateSimpleModeButton();
     updateInfo();
-}), "シンプル: OFF", "Simple: OFF");
+}), "シンプル: OFF", "Simple: OFF"), "演出を軽くして見やすくします。", "Reduce effects for a lighter view.");
 displayButtons.appendChild(simpleModeButton);
 
-const soundButton = setButtonLabel(createButton("音: ON", () => toggleSound()), "音: ON", "Sound: ON");
+const soundButton = setTooltip(setButtonLabel(createButton("音: ON", () => toggleSound()), "音: ON", "Sound: ON"), "効果音のON/OFFを切り替えます。", "Toggle sound effects on or off.");
 displayButtons.appendChild(soundButton);
 
-const confettiButton = setButtonLabel(createButton("紙吹雪: ON", () => {
+const confettiButton = setTooltip(setButtonLabel(createButton("紙吹雪: ON", () => {
     confettiEnabled = !confettiEnabled;
     confettiButton.textContent = confettiEnabled ? t("紙吹雪: ON", "Confetti: ON") : t("紙吹雪: OFF", "Confetti: OFF");
-}), "紙吹雪: ON", "Confetti: ON");
+}), "紙吹雪: ON", "Confetti: ON"), "紙吹雪演出のON/OFFです。", "Toggle confetti effects." );
 displayButtons.appendChild(confettiButton);
 
-const pixiButton = setButtonLabel(createButton("Pixi背景: OFF", () => togglePixiBackground()), "Pixi背景: OFF", "Pixi BG: OFF");
+const pixiButton = setTooltip(setButtonLabel(createButton("Pixi背景: OFF", () => togglePixiBackground()), "Pixi背景: OFF", "Pixi BG: OFF"), "Pixi.jsの背景演出を切り替えます。", "Toggle the Pixi.js background effects.");
 displayButtons.appendChild(pixiButton);
-const verticalButton = setButtonLabel(createButton("縦動画: OFF", () => toggleVerticalVideoMode()), "縦動画: OFF", "Vertical: OFF");
+const verticalButton = setTooltip(setButtonLabel(createButton("縦動画: OFF", () => toggleVerticalVideoMode()), "縦動画: OFF", "Vertical: OFF"), "縦長動画向けの表示に寄せます。", "Adapt the view for vertical video." );
 displayButtons.appendChild(verticalButton);
-const obsButton = setButtonLabel(createButton("OBS: OFF", () => toggleObsMode()), "OBS: OFF", "OBS: OFF");
+const obsButton = setTooltip(setButtonLabel(createButton("OBS: OFF", () => toggleObsMode()), "OBS: OFF", "OBS: OFF"), "OBS録画しやすい表示に切り替えます。", "Adjust the view for OBS recording." );
 displayButtons.appendChild(obsButton);
 
-settingButtons.appendChild(setButtonLabel(createButton("設定反映", () => {
+settingButtons.appendChild(setTooltip(setButtonLabel(createButton("設定反映", () => {
     if (!applySettingsFromInputs(true)) return;
     resetExperiment(false);
-}), "設定反映", "Apply settings"));
+}), "設定反映", "Apply settings"), "入力した設定を盤面へ反映します。", "Apply the input settings to the board."));
 
-settingButtons.appendChild(setButtonLabel(createButton("背景だけ反映", () => {
+settingButtons.appendChild(setTooltip(setButtonLabel(createButton("背景だけ反映", () => {
     selectedBackgroundObjectUrl = "";
     settings.backgroundImage = backgroundInput.value.trim();
     applyBackgroundImage();
-}), "背景だけ反映", "Apply background"));
+}), "背景だけ反映", "Apply background"), "背景画像だけ更新します。", "Update only the background image."));
 
-settingButtons.appendChild(setButtonLabel(createButton("結果コピー", () => copyResultCsv()), "結果コピー", "Copy result"));
-settingButtons.appendChild(setButtonLabel(createButton("CSV保存", () => downloadResultCsv()), "CSV保存", "Save CSV"));
+settingButtons.appendChild(setTooltip(setButtonLabel(createButton("結果コピー", () => copyResultCsv()), "結果コピー", "Copy result"), "結果をCSV形式でコピーします。", "Copy the result as CSV."));
+settingButtons.appendChild(setTooltip(setButtonLabel(createButton("CSV保存", () => downloadResultCsv()), "CSV保存", "Save CSV"), "結果CSVを保存します。", "Save the result as CSV."));
 updateUiLanguage();
+void ensureTippyReady();
+if (isMobile) setupMobileLayout();
 
 const resultOverlay = document.createElement("div");
 resultOverlay.style.position = "fixed";
@@ -954,6 +1013,7 @@ helpOverlay.addEventListener("click", (event) => {
 });
 window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && helpOverlay.style.display !== "none") closeHelpPopup();
+    if (event.key === "Escape" && mobileSettingsOverlay && mobileSettingsOverlay.style.display !== "none") closeMobileSettingsPopup();
 });
 
 // ======================================================
@@ -1017,20 +1077,42 @@ function escapeCsv(value: string | number): string {
     return text;
 }
 
-function loadExternalScript(src: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const existing = document.querySelector(`script[src="${src}"]`);
-        if (existing) {
-            resolve();
-            return;
-        }
-        const script = document.createElement("script");
-        script.src = src;
-        script.async = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`failed to load ${src}`));
-        document.head.appendChild(script);
-    });
+
+function loadExternalScript(_src: string): Promise<void> {
+    return Promise.resolve();
+}
+
+async function ensureAnimeReady(): Promise<boolean> {
+    animeReady = true;
+    return true;
+}
+
+async function ensureTippyReady(): Promise<boolean> {
+    tippyReady = true;
+    initButtonTooltips();
+    return true;
+}
+
+async function ensureGifReady(): Promise<boolean> {
+    gifReady = true;
+    return true;
+}
+
+function initButtonTooltips(): void {
+    updateTooltipText();
+    for (const item of tooltipRefs) {
+        if ((item.el as any)._tippy) continue;
+        tippy(item.el, {
+            content: item.el.getAttribute("data-tippy-content") || "",
+            placement: isMobile ? "top" : "bottom",
+            animation: "shift-away",
+            theme: "light-border",
+            maxWidth: isMobile ? 260 : 320,
+            delay: isMobile ? [0, 0] : [140, 0],
+            touch: ["hold", 350],
+            interactive: false,
+        });
+    }
 }
 
 function loadSavedRecords(): SavedRecords {
@@ -1061,6 +1143,102 @@ function getProbabilityScale(): number {
     return 1;
 }
 
+
+function openMobileSettingsPopup(): void {
+    if (!mobileSettingsOverlay) return;
+    mobileSettingsOverlay.style.display = "flex";
+}
+
+function closeMobileSettingsPopup(): void {
+    if (!mobileSettingsOverlay) return;
+    mobileSettingsOverlay.style.display = "none";
+}
+
+function setupMobileLayout(): void {
+    info.style.flex = "0 0 auto";
+    info.style.height = "102px";
+    info.style.minHeight = "102px";
+    info.style.padding = "10px 12px env(safe-area-inset-bottom, 10px)";
+    info.style.overflow = "hidden";
+    info.innerHTML = "";
+
+    const dock = document.createElement("div");
+    dock.style.display = "grid";
+    dock.style.gridTemplateColumns = "1fr 1fr";
+    dock.style.gap = "10px";
+    dock.style.height = "100%";
+    dock.style.alignItems = "center";
+    info.appendChild(dock);
+
+    mobileDockRunButton = createButton(t("実行", "Run"), () => startExperiment());
+    mobileDockRunButton.style.width = "100%";
+    mobileDockRunButton.style.height = "64px";
+    mobileDockRunButton.style.fontSize = "24px";
+    dock.appendChild(mobileDockRunButton);
+
+    mobileDockSettingsButton = createButton(t("設定", "Settings"), () => openMobileSettingsPopup());
+    mobileDockSettingsButton.style.width = "100%";
+    mobileDockSettingsButton.style.height = "64px";
+    mobileDockSettingsButton.style.fontSize = "24px";
+    dock.appendChild(mobileDockSettingsButton);
+
+    mobileSettingsOverlay = document.createElement("div");
+    mobileSettingsOverlay.style.position = "fixed";
+    mobileSettingsOverlay.style.inset = "0";
+    mobileSettingsOverlay.style.display = "none";
+    mobileSettingsOverlay.style.alignItems = "flex-end";
+    mobileSettingsOverlay.style.justifyContent = "center";
+    mobileSettingsOverlay.style.background = "rgba(5,8,18,.62)";
+    mobileSettingsOverlay.style.zIndex = "140";
+    mobileSettingsOverlay.style.padding = "0";
+    document.body.appendChild(mobileSettingsOverlay);
+    mobileSettingsOverlay.onclick = (event) => {
+        if (event.target === mobileSettingsOverlay) closeMobileSettingsPopup();
+    };
+
+    mobileSettingsPanel = document.createElement("div");
+    mobileSettingsPanel.style.width = "100%";
+    mobileSettingsPanel.style.height = "82dvh";
+    mobileSettingsPanel.style.background = "linear-gradient(180deg,#fbfdff 0%,#eff4ff 100%)";
+    mobileSettingsPanel.style.borderTopLeftRadius = "28px";
+    mobileSettingsPanel.style.borderTopRightRadius = "28px";
+    mobileSettingsPanel.style.boxShadow = "0 -12px 40px rgba(0,0,0,.28)";
+    mobileSettingsPanel.style.padding = "14px 12px 22px 12px";
+    mobileSettingsPanel.style.overflow = "auto";
+    mobileSettingsPanel.style.setProperty("-webkit-overflow-scrolling", "touch");
+    mobileSettingsOverlay.appendChild(mobileSettingsPanel);
+
+    const closeRow = document.createElement("div");
+    closeRow.style.display = "flex";
+    closeRow.style.justifyContent = "space-between";
+    closeRow.style.alignItems = "center";
+    closeRow.style.marginBottom = "10px";
+    closeRow.innerHTML = `<div style="font-size:22px;font-weight:900;color:#243018;">${t("設定", "Settings")}</div>`;
+    const closeButton = createButton("×", () => closeMobileSettingsPopup());
+    closeButton.style.flex = "0 0 56px";
+    closeButton.style.width = "56px";
+    closeButton.style.height = "56px";
+    closeButton.style.padding = "0";
+    closeButton.style.fontSize = "30px";
+    closeRow.appendChild(closeButton);
+    mobileSettingsPanel.appendChild(closeRow);
+
+    const inner = document.createElement("div");
+    inner.style.display = "flex";
+    inner.style.flexDirection = "column";
+    inner.style.gap = "14px";
+    mobileSettingsPanel.appendChild(inner);
+
+    inner.appendChild(appHeader);
+    inner.appendChild(recordHero);
+    inner.appendChild(topRow);
+    inner.appendChild(controlArea);
+    inner.appendChild(buttonArea);
+    inner.appendChild(randomGraphArea);
+
+    gameArea.style.flex = "1 1 auto";
+}
+
 function updateUiLanguage(): void {
     appTitle.innerHTML = isEnglish
         ? `<div style="font-size:${isMobile ? 30 : 26}px;font-weight:900;color:#26351f;letter-spacing:.03em;">Miracle Ball Lab</div><div style="margin-top:3px;font-size:${isMobile ? 16 : 14}px;font-weight:700;color:#5d6d48;">A lab for observing probability and miracles with falling balls</div>`
@@ -1084,6 +1262,9 @@ function updateUiLanguage(): void {
     gameFullscreenButton.title = t("全画面", "Fullscreen");
     updateVerticalVideoButton();
     updateObsButton();
+    updateTooltipText();
+    if (mobileDockRunButton) mobileDockRunButton.textContent = t("実行", "Run");
+    if (mobileDockSettingsButton) mobileDockSettingsButton.textContent = t("設定", "Settings");
 }
 
 async function toggleGameFullscreen(): Promise<void> {
@@ -1295,8 +1476,13 @@ function replayClipById(id: string): void {
             <div style="font-weight:900;font-size:${isMobile ? "24px" : "20px"};">${clip.label} [${clip.rank}] ${formatProbability(clip.denominator)}</div>
             <img id="replay-image" src="${clip.frames[0]}" style="width:100%;border-radius:20px;border:1px solid rgba(70,80,110,.16);background:#111;object-fit:contain;" />
             <div style="opacity:.8;">${clip.subtitle}</div>
+            <div style="display:flex;justify-content:center;">
+                <button id="replay-gif-save-button" style="font-size:${isMobile ? "18px" : "16px"};padding:10px 18px;border-radius:999px;border:1px solid rgba(100,90,180,.28);background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);font-weight:900;cursor:pointer;">${t("GIF保存", "Save GIF")}</button>
+            </div>
         </div>`;
     showPopup(`${t("リプレイ", "Replay")}: ${clip.label}`, body);
+    const gifButton = document.getElementById("replay-gif-save-button") as HTMLButtonElement | null;
+    if (gifButton) gifButton.onclick = () => { void exportClipAsGif(id); };
     const img = document.getElementById("replay-image") as HTMLImageElement | null;
     if (!img) return;
     let index = 0;
@@ -1310,6 +1496,64 @@ function replayClipById(id: string): void {
     }, 140);
 }
 
+async function exportClipAsGif(id: string): Promise<void> {
+    const clip = miracleClips.find((x) => x.id === id);
+    if (!clip || clip.frames.length === 0) {
+        showPopup(t("GIF保存", "Save GIF"), `<p>${t("保存できるフレームがありません。", "No frames available to export.")}</p>`);
+        return;
+    }
+    const ok = await ensureGifReady();
+    if (!ok) {
+        showPopup(t("GIF保存", "Save GIF"), `<p>${t("gif.js の読み込みに失敗しました。", "Failed to load gif.js.")}</p>`);
+        return;
+    }
+
+    const previous = helpOverlay.style.display !== "none" ? helpOverlay.innerHTML : "";
+    showPopup(t("GIF保存中", "Rendering GIF"), `<p>${t("GIFを書き出しています。少しお待ちください。", "Rendering the GIF. Please wait a moment.")}</p><div id="gif-progress" style="margin-top:12px;font-weight:900;">0%</div>`);
+
+    try {
+        const images = await Promise.all(clip.frames.map((src) => new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error("frame load failed"));
+            img.src = src;
+        })));
+        const width = images[0]?.naturalWidth || geometry.width;
+        const height = images[0]?.naturalHeight || geometry.height;
+        const gif = new (GIF as any)({
+            workers: 2,
+            quality: 10,
+            width,
+            height,
+            workerScript: gifWorkerUrl,
+            background: "#0b0d14",
+        });
+        for (const image of images) {
+            gif.addFrame(image, { delay: 140 });
+        }
+        gif.on("progress", (value: number) => {
+            const progress = document.getElementById("gif-progress");
+            if (progress) progress.textContent = `${Math.round(value * 100)}%`;
+        });
+        gif.on("finished", (blob: Blob) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            const safeLabel = clip.label.replace(/[\/:*?"<>|]/g, "_");
+            a.href = url;
+            a.download = `${safeLabel}_${clip.rank}_${clip.finishedCount}.gif`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+            showPopup(t("GIF保存完了", "GIF saved"), `<p>${t("GIFを保存しました。", "The GIF has been saved.")}</p>`);
+        });
+        gif.render();
+    } catch {
+        if (previous) helpOverlay.innerHTML = previous;
+        showPopup(t("GIF保存", "Save GIF"), `<p>${t("GIF保存に失敗しました。もう一度お試しください。", "GIF export failed. Please try again.")}</p>`);
+    }
+}
+
 function showReplayPopup(): void {
     if (miracleClips.length === 0) {
         showPopup(t("リプレイ", "Replay"), `<p>${t("まだ奇跡クリップがありません。", "No miracle clips yet.")}</p>`);
@@ -1321,12 +1565,18 @@ function showReplayPopup(): void {
                 <div style="font-weight:900;">${i + 1}. ${clip.label} [${clip.rank}]</div>
                 <div style="opacity:.76;">${formatProbability(clip.denominator)} / ${clip.finishedCount.toLocaleString()}投目 / ${new Date(clip.createdAt).toLocaleTimeString()}</div>
             </div>
-            <button data-replay-id="${clip.id}" style="font-size:${isMobile ? "18px" : "16px"};padding:10px 16px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);font-weight:900;cursor:pointer;">${t("再生", "Play")}</button>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;">
+                <button data-replay-id="${clip.id}" style="font-size:${isMobile ? "18px" : "16px"};padding:10px 16px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);font-weight:900;cursor:pointer;">${t("再生", "Play")}</button>
+                <button data-gif-id="${clip.id}" style="font-size:${isMobile ? "18px" : "16px"};padding:10px 16px;border-radius:999px;border:1px solid rgba(100,90,180,.28);background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);font-weight:900;cursor:pointer;">${t("GIF保存", "Save GIF")}</button>
+            </div>
         </div>
     `).join("");
     showPopup(t("奇跡クリップ保存", "Miracle clips"), rows);
     helpOverlay.querySelectorAll("[data-replay-id]").forEach((el) => {
         (el as HTMLButtonElement).onclick = () => replayClipById((el as HTMLButtonElement).dataset.replayId || "");
+    });
+    helpOverlay.querySelectorAll("[data-gif-id]").forEach((el) => {
+        (el as HTMLButtonElement).onclick = () => { void exportClipAsGif((el as HTMLButtonElement).dataset.gifId || ""); };
     });
 }
 
@@ -1470,6 +1720,13 @@ function updateBoardAnomaly(): void {
     }
 }
 
+function vibrateOnMobile(pattern: number | number[]): void {
+    if (!isMobile) return;
+    try {
+        navigator.vibrate?.(pattern);
+    } catch {}
+}
+
 function triggerScreenFlash(mode: "normal" | "miracle" | "black" | "cosmic" = "miracle"): void {
     if (settings.simpleMode) return;
     const color = mode === "black" ? "rgba(255,0,68,.62)" : mode === "cosmic" ? "rgba(100,70,255,.68)" : mode === "normal" ? "rgba(255,255,255,.45)" : "rgba(255,236,120,.72)";
@@ -1552,7 +1809,7 @@ function showAboutPopup(): void {
         <p><b>ミラクルボールラボ</b>は、玉を上から落として、ピンに当たりながらどの受け皿に入るかを観測するランダム実験です。</p>
         <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王、銀のUFO、青い炎、流れ星、ラッキーセブン、桃色ハート、時空の裂け目、黒い太陽、研究所爆発、宇宙卵などのレア玉がまれに出ます。特に宇宙卵は<b>1兆分の1</b>の超レア演出です。</p>
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
-        <p>3000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
+        <p>5000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。</p>
         <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
     `);
@@ -1565,7 +1822,7 @@ function showButtonHelpPopup(): void {
         <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。奇跡演出中は自動停止して約5秒後に再開します。</p>
         <p><b>リセット:</b> 設定を読み直して、実験を最初から待機状態に戻します。</p>
         <p><b>シンプル:</b> 演出を減らして軽くします。重い場合や大量回数を試す場合に便利です。</p>
-        <p><b>音:</b> Tone.jsを読み込んで、レア玉が入ったときなどに音を鳴らします。ブラウザ仕様上、最初にボタン操作が必要です。</p>
+        <p><b>音:</b> npm 依存の Tone.js を使って、レア玉や激レア演出で音を鳴らします。ブラウザ仕様上、最初にボタン操作が必要です。</p>
         <p><b>紙吹雪:</b> 達成時やレア演出時の紙吹雪をON/OFFします。</p>
         <p><b>Pixi背景:</b> Pixi.jsを使った背景演出をON/OFFします。見た目は楽しいですが、PCやスマホによっては重くなります。</p>
         <p><b>設定反映:</b> 投下数、同時に出す玉数、受け皿数、ピン段数などを反映してリセットします。</p>
@@ -1814,6 +2071,9 @@ function updateStopButton(): void {
 
 async function startExperiment(): Promise<void> {
     if (!applySettingsFromInputs(true)) return;
+    void ensureAnimeReady();
+    void ensureTippyReady();
+    void ensureGifReady();
     // ブラウザの仕様上、音声開始はユーザー操作後が安全なので、実行ボタン押下時に準備する
     if (soundEnabled && !toneReady) await enableSound(false);
     engine.timing.timeScale = speedLabelText === "超高速" ? 4 : speedLabelText === "高速" ? 2 : 1;
@@ -2126,6 +2386,7 @@ function pickCelebrationEffect(): { name: string; icon: string } {
 
 function showFullScreenCelebration(count: number): void {
     if (settings.simpleMode) return;
+    vibrateOnMobile([35, 20, 35]);
     fireConfetti("normal");
     const effect = pickCelebrationEffect();
     celebrationOverlay.innerHTML = `
@@ -2152,6 +2413,42 @@ function getMiracleIconHtml(kind: DropKind, fallbackSymbol: string): string {
     return `<div style="${common}">${label}</div>`;
 }
 
+async function playAnimeMiracleEffect(def?: SpecialEventDef): Promise<void> {
+    if (settings.simpleMode) return;
+    const ok = await ensureAnimeReady();
+    if (!ok) return;
+    const overlayCard = miracleOverlay.firstElementChild as HTMLElement | null;
+    if (!overlayCard) return;
+    const strength = def?.rank === "GOD" ? 1.35 : def?.rank === "EX" ? 1.18 : 1;
+    anime.remove([overlayCard, canvas, gameArea]);
+    anime({
+        targets: gameArea,
+        scale: [1, 1.018 * strength, 1],
+        duration: 1100,
+        easing: "easeOutQuad",
+    });
+    anime.timeline({ easing: "easeOutExpo" })
+        .add({
+            targets: overlayCard,
+            scale: [0.72, 1.06, 1],
+            opacity: [0, 1],
+            rotate: [-2.2 * strength, 0],
+            duration: 700,
+        }, 0)
+        .add({
+            targets: overlayCard,
+            translateY: [0, -12 * strength, 0],
+            duration: 1800,
+            easing: "easeInOutSine",
+        }, 140)
+        .add({
+            targets: canvas,
+            scale: [1, 1.028 * strength, 1],
+            duration: 900,
+            easing: "easeOutBack",
+        }, 0);
+}
+
 function showMiracle(kind: DropKind, symbol: string, probabilityText: string, feelingText: string): void {
     pauseForMiracle();
     const def = findSpecialDef(kind);
@@ -2164,6 +2461,7 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
         applyRareBackground(kind);
     }
     triggerScreenFlash(def?.soundMode ?? "miracle");
+    vibrateOnMobile(def?.rank === "GOD" ? [90, 50, 160, 60, 220] : def?.rank === "EX" ? [70, 40, 120, 40, 140] : [55, 28, 80]);
     triggerCameraShake(def?.rank === "GOD" ? 46 * geometry.scale : def?.rank === "EX" ? 34 * geometry.scale : 24 * geometry.scale, def?.rank === "GOD" ? 1200 : 760);
     if (settings.simpleMode) return;
     miracleOverlay.innerHTML = `
@@ -2176,6 +2474,7 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
             ${miracleCombo >= 2 ? `<div style="margin-top:10px;font-size:clamp(20px,4vw,40px);font-weight:900;color:#ffe560;">${t("奇跡コンボ", "Miracle combo")} x${miracleCombo}</div>` : ""}
         </div>`;
     miracleOverlay.style.display = "flex";
+    void playAnimeMiracleEffect(def);
     fireConfetti(kind === "blackSun" ? "black" : kind === "cosmicEgg" ? "cosmic" : "miracle");
     playSpecialSound(kind);
     window.setTimeout(() => { miracleOverlay.style.display = "none"; miracleOverlay.innerHTML = ""; }, 4900);
@@ -2185,17 +2484,14 @@ function updateSoundButton(): void {
     soundButton.textContent = soundEnabled ? t("音: ON", "Sound: ON") : t("音: OFF", "Sound: OFF");
 }
 
+
 async function enableSound(showNotice = true): Promise<void> {
     try {
-        await loadExternalScript("https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js");
-        const Tone = (window as any).Tone;
-        if (Tone) {
-            await Tone.start();
-            toneReady = true;
-            soundEnabled = true;
-            updateSoundButton();
-            if (showNotice) showMilestone(t("音ON", "Sound ON"));
-        }
+        await Tone.start();
+        toneReady = true;
+        soundEnabled = true;
+        updateSoundButton();
+        if (showNotice) showMilestone(t("音ON", "Sound ON"));
     } catch {
         soundButton.textContent = t("音: 読込失敗", "Sound: Load failed");
     }
@@ -2213,42 +2509,83 @@ async function toggleSound(): Promise<void> {
     await enableSound(true);
 }
 
+function getRareSoundFlavor(kind: DropKind): RareSoundFlavor {
+    const def = findSpecialDef(kind);
+    if (def?.rank === "GOD") return "god";
+    if (def?.rank === "EX") return "ex";
+    if (def?.rank === "UR") return "ur";
+    return "normal";
+}
+
+function createRareSequence(flavor: RareSoundFlavor): Array<{ note: string; duration: string; at: number }> {
+    const roll = Math.random();
+    if (flavor === "god") {
+        const patterns = [
+            [{ note: "C4", duration: "8n", at: 0 }, { note: "G4", duration: "8n", at: 0.10 }, { note: "C5", duration: "8n", at: 0.22 }, { note: "E5", duration: "4n", at: 0.36 }, { note: "G5", duration: "2n", at: 0.60 }],
+            [{ note: "A3", duration: "8n", at: 0 }, { note: "E4", duration: "8n", at: 0.10 }, { note: "A4", duration: "8n", at: 0.22 }, { note: "C5", duration: "8n", at: 0.34 }, { note: "E5", duration: "2n", at: 0.52 }],
+        ];
+        return patterns[Math.floor(Math.random() * patterns.length)];
+    }
+    if (flavor === "ex") {
+        if (roll < 0.5) return [{ note: "D4", duration: "16n", at: 0 }, { note: "A4", duration: "16n", at: 0.08 }, { note: "D5", duration: "8n", at: 0.16 }, { note: "F5", duration: "8n", at: 0.28 }];
+        return [{ note: "G3", duration: "16n", at: 0 }, { note: "B3", duration: "16n", at: 0.08 }, { note: "D4", duration: "8n", at: 0.16 }, { note: "G4", duration: "4n", at: 0.28 }];
+    }
+    if (flavor === "ur") {
+        if (roll < 0.34) return [{ note: "C5", duration: "16n", at: 0 }, { note: "E5", duration: "16n", at: 0.07 }, { note: "G5", duration: "8n", at: 0.14 }];
+        if (roll < 0.67) return [{ note: "F4", duration: "16n", at: 0 }, { note: "A4", duration: "16n", at: 0.07 }, { note: "C5", duration: "8n", at: 0.14 }];
+        return [{ note: "G4", duration: "16n", at: 0 }, { note: "B4", duration: "16n", at: 0.07 }, { note: "D5", duration: "8n", at: 0.14 }];
+    }
+    return [{ note: "G5", duration: "8n", at: 0 }];
+}
+
+async function playLocalRareAudio(flavor: RareSoundFlavor): Promise<boolean> {
+    const candidates = flavor === "god" ? LOCAL_GOD_AUDIO_FILES : LOCAL_RARE_AUDIO_FILES;
+    if (!candidates.length) return false;
+    const src = candidates[Math.floor(Math.random() * candidates.length)];
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.volume = flavor === "god" ? 0.95 : 0.85;
+    try {
+        await audio.play();
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 function playSpecialSound(kind: DropKind): void {
     if (!soundEnabled || !toneReady || settings.simpleMode) return;
-    const Tone = (window as any).Tone;
-    if (!Tone) return;
     try {
-        const synth = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.005, decay: 0.12, sustain: 0.1, release: 0.3 } }).toDestination();
+        const flavor = getRareSoundFlavor(kind);
+        void playLocalRareAudio(flavor);
+        const synth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: flavor === "god" ? "square8" : flavor === "ex" ? "sawtooth" : "triangle" },
+            envelope: { attack: 0.005, decay: 0.14, sustain: 0.18, release: 0.35 },
+        }).toDestination();
         const now = Tone.now();
-        if (kind === "gold") synth.triggerAttackRelease("G5", "8n", now);
-        else if (kind === "rainbow") { synth.triggerAttackRelease("C5", "16n", now); synth.triggerAttackRelease("E5", "16n", now + 0.08); synth.triggerAttackRelease("G5", "16n", now + 0.16); }
-        else if (kind === "giant") synth.triggerAttackRelease("C2", "8n", now);
-        else if (kind === "shape") synth.triggerAttackRelease("A4", "16n", now);
-        else if (kind === "crown") synth.triggerAttackRelease("C6", "8n", now);
-        else if (kind === "shootingStar") { synth.triggerAttackRelease("A5", "16n", now); synth.triggerAttackRelease("E6", "16n", now + 0.12); }
-        else if (kind === "heart") synth.triggerAttackRelease("F5", "4n", now);
-        else if (kind === "blackSun") synth.triggerAttackRelease("C1", "2n", now);
-        else if (kind === "cosmicEgg" || kind === "labExplosion") { synth.triggerAttackRelease("C1", "2n", now); synth.triggerAttackRelease("G1", "2n", now + 0.18); synth.triggerAttackRelease("C3", "4n", now + 0.38); }
-        else if (kind === "timeRift") { synth.triggerAttackRelease("D2", "4n", now); synth.triggerAttackRelease("A4", "16n", now + 0.15); }
-        else if (kind === "silverUfo" || kind === "blueFlame" || kind === "luckySeven") synth.triggerAttackRelease("B5", "8n", now);
-        window.setTimeout(() => synth.dispose(), 900);
+        const sequence = createRareSequence(flavor);
+        for (const step of sequence) synth.triggerAttackRelease(step.note, step.duration, now + step.at);
+        if (kind === "giant") synth.triggerAttackRelease("C2", "8n", now);
+        if (kind === "blackSun" || kind === "cosmicEgg" || kind === "labExplosion") {
+            const noise = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.01, decay: 0.28, sustain: 0 } }).toDestination();
+            noise.volume.value = -12;
+            noise.triggerAttackRelease("8n", now + 0.02);
+            window.setTimeout(() => noise.dispose(), 700);
+        }
+        window.setTimeout(() => synth.dispose(), 1800);
     } catch {
         // 音は補助機能なので失敗しても止めない
     }
 }
 
 async function ensureConfetti(): Promise<boolean> {
-    try {
-        if (!(window as any).confetti) await loadExternalScript("https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js");
-        return !!(window as any).confetti;
-    } catch { return false; }
+    return true;
 }
 
 async function fireConfetti(mode: "normal" | "miracle" | "black" | "cosmic" = "normal"): Promise<void> {
     if (settings.simpleMode || !confettiEnabled) return;
     const ok = await ensureConfetti();
     if (!ok) return;
-    const confetti = (window as any).confetti;
     const colors = mode === "cosmic" ? ["#240038", "#7c3cff", "#ffffff", "#00e5ff", "#ffd700"] : mode === "black" ? ["#000000", "#ff0044", "#ffffff"] : mode === "miracle" ? ["#ffd700", "#ff69b4", "#78e7ff", "#ffffff"] : undefined;
     const mainCount = mode === "cosmic" ? 420 : mode === "normal" ? 90 : 220;
     const sideCount = mode === "cosmic" ? 220 : mode === "normal" ? 50 : 120;
@@ -2259,49 +2596,47 @@ async function fireConfetti(mode: "normal" | "miracle" | "black" | "cosmic" = "n
 
 async function togglePixiBackground(): Promise<void> {
     pixiEnabled = !pixiEnabled;
-    pixiButton.textContent = pixiEnabled ? "Pixi背景: ON" : "Pixi背景: OFF";
+    pixiButton.textContent = pixiEnabled ? t("Pixi背景: ON", "Pixi BG: ON") : t("Pixi背景: OFF", "Pixi BG: OFF");
     if (pixiEnabled) {
         await initPixiBackground();
-        if (pixiApp) pixiApp.view.style.display = "block";
-    } else if (pixiApp) pixiApp.view.style.display = "none";
+        if (pixiApp) (pixiApp.canvas as HTMLCanvasElement).style.display = "block";
+    } else if (pixiApp) (pixiApp.canvas as HTMLCanvasElement).style.display = "none";
 }
 
 async function initPixiBackground(): Promise<void> {
     if (pixiReady) return;
     try {
-        await loadExternalScript("https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js");
-        const PIXI = (window as any).PIXI;
-        if (!PIXI) return;
-        pixiApp = new PIXI.Application();
+        pixiApp = new Application();
         await pixiApp.init({ resizeTo: gameArea, backgroundAlpha: 0, antialias: true });
-        pixiApp.view.style.position = "absolute";
-        pixiApp.view.style.inset = "0";
-        pixiApp.view.style.width = "100%";
-        pixiApp.view.style.height = "100%";
-        pixiApp.view.style.pointerEvents = "none";
-        pixiLayer.appendChild(pixiApp.view);
+        const pixiCanvas = pixiApp.canvas as HTMLCanvasElement;
+        pixiCanvas.style.position = "absolute";
+        pixiCanvas.style.inset = "0";
+        pixiCanvas.style.width = "100%";
+        pixiCanvas.style.height = "100%";
+        pixiCanvas.style.pointerEvents = "none";
+        pixiLayer.appendChild(pixiCanvas);
         pixiParticles = [];
-        for (let i = 0; i < 80; i++) {
-            const g = new PIXI.Graphics();
-            const size = 1 + Math.random() * 3;
-            g.beginFill(0xffffff, 0.35 + Math.random() * 0.45);
-            g.circle(0, 0, size);
-            g.endFill();
+        for (let i = 0; i < 26; i++) {
+            const g = new Graphics();
+            const hue = i % 2 === 0 ? 0xffe060 : 0x9dd6ff;
+            g.circle(0, 0, 5 + Math.random() * 9).fill({ color: hue, alpha: 0.20 + Math.random() * 0.22 });
             g.x = Math.random() * gameArea.clientWidth;
             g.y = Math.random() * gameArea.clientHeight;
-            (g as any).vx = -0.3 + Math.random() * 0.6;
-            (g as any).vy = 0.2 + Math.random() * 0.9;
+            (g as any).vx = -0.2 + Math.random() * 0.4;
+            (g as any).vy = 0.3 + Math.random() * 1.0;
+            (g as any).drift = Math.random() * Math.PI * 2;
             pixiApp.stage.addChild(g);
             pixiParticles.push(g);
         }
         pixiApp.ticker.add(() => {
             if (!pixiEnabled) return;
             for (const p of pixiParticles) {
-                p.x += (p as any).vx;
+                (p as any).drift += 0.02;
+                p.x += (p as any).vx + Math.sin((p as any).drift) * 0.3;
                 p.y += (p as any).vy;
-                if (p.y > gameArea.clientHeight + 10) p.y = -10;
-                if (p.x < -10) p.x = gameArea.clientWidth + 10;
-                if (p.x > gameArea.clientWidth + 10) p.x = -10;
+                if (p.y > gameArea.clientHeight + 20) { p.y = -20; p.x = Math.random() * gameArea.clientWidth; }
+                if (p.x < -20) p.x = gameArea.clientWidth + 20;
+                if (p.x > gameArea.clientWidth + 20) p.x = -20;
             }
         });
         pixiReady = true;
@@ -2310,6 +2645,7 @@ async function initPixiBackground(): Promise<void> {
         pixiButton.textContent = t("Pixi背景: 読込失敗", "Pixi BG: Load failed");
     }
 }
+
 
 // ======================================================
 // Count / display / CSV
@@ -2925,6 +3261,9 @@ geometry = calculateGeometry();
 applyTheme();
 resetExperiment(false);
 Render.run(render);
+void ensureAnimeReady();
+void ensureGifReady();
+void ensureTippyReady();
 
 let resizeTimer: number | undefined;
 function scheduleResize(): void {
