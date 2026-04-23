@@ -311,9 +311,21 @@ let animeReady = false;
 let tippyReady = false;
 let gifReady = false;
 let mobileDockRunButton: HTMLButtonElement | null = null;
+let mobileDockPauseButton: HTMLButtonElement | null = null;
 let mobileDockSettingsButton: HTMLButtonElement | null = null;
 let mobileSettingsOverlay: HTMLDivElement | null = null;
 let mobileSettingsPanel: HTMLDivElement | null = null;
+let pseudoFullscreenActive = false;
+let activePinStretch:
+    | {
+        pin: Matter.Body;
+        pointerId: number;
+        startX: number;
+        startY: number;
+        currentX: number;
+        currentY: number;
+    }
+    | null = null;
 
 const engine = Engine.create();
 engine.gravity.y = 8;
@@ -411,7 +423,10 @@ canvas.style.backgroundColor = "rgba(245,245,245,0.88)";
 canvas.style.backgroundSize = "cover";
 canvas.style.backgroundPosition = "center";
 canvas.style.backgroundRepeat = "no-repeat";
-canvas.addEventListener("pointerdown", (event) => activateNearestPin(event));
+canvas.addEventListener("pointerdown", (event) => onCanvasPointerDown(event));
+canvas.addEventListener("pointermove", (event) => onCanvasPointerMove(event));
+canvas.addEventListener("pointerup", (event) => onCanvasPointerUp(event));
+canvas.addEventListener("pointercancel", (event) => onCanvasPointerUp(event));
 gameArea.appendChild(canvas);
 
 const gameFullscreenButton = document.createElement("button");
@@ -1156,29 +1171,35 @@ function closeMobileSettingsPopup(): void {
 
 function setupMobileLayout(): void {
     info.style.flex = "0 0 auto";
-    info.style.height = "102px";
-    info.style.minHeight = "102px";
-    info.style.padding = "10px 12px env(safe-area-inset-bottom, 10px)";
+    info.style.height = "132px";
+    info.style.minHeight = "132px";
+    info.style.padding = "22px 12px calc(env(safe-area-inset-bottom, 10px) + 14px)";
     info.style.overflow = "hidden";
     info.innerHTML = "";
 
     const dock = document.createElement("div");
     dock.style.display = "grid";
-    dock.style.gridTemplateColumns = "1fr 1fr";
+    dock.style.gridTemplateColumns = "1.15fr 1fr 1fr";
     dock.style.gap = "10px";
     dock.style.height = "100%";
-    dock.style.alignItems = "center";
+    dock.style.alignItems = "end";
     info.appendChild(dock);
 
     mobileDockRunButton = createButton(t("実行", "Run"), () => startExperiment());
     mobileDockRunButton.style.width = "100%";
-    mobileDockRunButton.style.height = "64px";
+    mobileDockRunButton.style.height = "68px";
     mobileDockRunButton.style.fontSize = "24px";
     dock.appendChild(mobileDockRunButton);
 
+    mobileDockPauseButton = createButton(t("一時停止", "Pause"), () => togglePause());
+    mobileDockPauseButton.style.width = "100%";
+    mobileDockPauseButton.style.height = "68px";
+    mobileDockPauseButton.style.fontSize = "22px";
+    dock.appendChild(mobileDockPauseButton);
+
     mobileDockSettingsButton = createButton(t("設定", "Settings"), () => openMobileSettingsPopup());
     mobileDockSettingsButton.style.width = "100%";
-    mobileDockSettingsButton.style.height = "64px";
+    mobileDockSettingsButton.style.height = "68px";
     mobileDockSettingsButton.style.fontSize = "24px";
     dock.appendChild(mobileDockSettingsButton);
 
@@ -1190,21 +1211,24 @@ function setupMobileLayout(): void {
     mobileSettingsOverlay.style.justifyContent = "center";
     mobileSettingsOverlay.style.background = "rgba(5,8,18,.62)";
     mobileSettingsOverlay.style.zIndex = "140";
-    mobileSettingsOverlay.style.padding = "0";
+    mobileSettingsOverlay.style.padding = "12px max(10px, env(safe-area-inset-right, 10px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(10px, env(safe-area-inset-left, 10px))";
+    mobileSettingsOverlay.style.boxSizing = "border-box";
     document.body.appendChild(mobileSettingsOverlay);
     mobileSettingsOverlay.onclick = (event) => {
         if (event.target === mobileSettingsOverlay) closeMobileSettingsPopup();
     };
 
     mobileSettingsPanel = document.createElement("div");
-    mobileSettingsPanel.style.width = "100%";
-    mobileSettingsPanel.style.height = "82dvh";
+    mobileSettingsPanel.style.width = "min(100%, 560px)";
+    mobileSettingsPanel.style.maxWidth = "560px";
+    mobileSettingsPanel.style.maxHeight = "82dvh";
+    mobileSettingsPanel.style.height = "auto";
     mobileSettingsPanel.style.background = "linear-gradient(180deg,#fbfdff 0%,#eff4ff 100%)";
-    mobileSettingsPanel.style.borderTopLeftRadius = "28px";
-    mobileSettingsPanel.style.borderTopRightRadius = "28px";
+    mobileSettingsPanel.style.borderRadius = "28px";
     mobileSettingsPanel.style.boxShadow = "0 -12px 40px rgba(0,0,0,.28)";
     mobileSettingsPanel.style.padding = "14px 12px 22px 12px";
     mobileSettingsPanel.style.overflow = "auto";
+    mobileSettingsPanel.style.boxSizing = "border-box";
     mobileSettingsPanel.style.setProperty("-webkit-overflow-scrolling", "touch");
     mobileSettingsOverlay.appendChild(mobileSettingsPanel);
 
@@ -1239,6 +1263,7 @@ function setupMobileLayout(): void {
     gameArea.style.flex = "1 1 auto";
 }
 
+
 function updateUiLanguage(): void {
     appTitle.innerHTML = isEnglish
         ? `<div style="font-size:${isMobile ? 30 : 26}px;font-weight:900;color:#26351f;letter-spacing:.03em;">Miracle Ball Lab</div><div style="margin-top:3px;font-size:${isMobile ? 16 : 14}px;font-weight:700;color:#5d6d48;">A lab for observing probability and miracles with falling balls</div>`
@@ -1264,21 +1289,78 @@ function updateUiLanguage(): void {
     updateObsButton();
     updateTooltipText();
     if (mobileDockRunButton) mobileDockRunButton.textContent = t("実行", "Run");
+    if (mobileDockPauseButton) mobileDockPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
     if (mobileDockSettingsButton) mobileDockSettingsButton.textContent = t("設定", "Settings");
+}
+
+function applyPseudoFullscreen(enabled: boolean): void {
+    pseudoFullscreenActive = enabled;
+    if (enabled) {
+        gameArea.style.position = "fixed";
+        gameArea.style.inset = "0";
+        gameArea.style.zIndex = "160";
+        gameArea.style.borderRadius = "0";
+        gameArea.style.padding = "0";
+        canvas.style.borderRadius = "0";
+        info.style.display = "none";
+        document.body.style.overflow = "hidden";
+    } else {
+        gameArea.style.position = "relative";
+        gameArea.style.inset = "";
+        gameArea.style.zIndex = "";
+        gameArea.style.borderRadius = "";
+        gameArea.style.padding = "";
+        canvas.style.borderRadius = isMobile ? "24px" : "26px";
+        info.style.display = "";
+        document.body.style.overflow = "hidden";
+    }
+    isFullscreenMode = enabled || document.fullscreenElement === gameArea;
+    gameFullscreenButton.textContent = isFullscreenMode ? "🗗" : "⛶";
+    resizeScene();
 }
 
 async function toggleGameFullscreen(): Promise<void> {
     try {
-        if (document.fullscreenElement === gameArea) {
-            await document.exitFullscreen();
-        } else if (!document.fullscreenElement) {
-            await gameArea.requestFullscreen();
+        const anyArea = gameArea as HTMLElement & {
+            webkitRequestFullscreen?: () => Promise<void> | void;
+            webkitEnterFullscreen?: () => void;
+        };
+        const anyDocument = document as Document & {
+            webkitExitFullscreen?: () => Promise<void> | void;
+            webkitFullscreenElement?: Element | null;
+        };
+        const activeFullscreen = document.fullscreenElement === gameArea || anyDocument.webkitFullscreenElement === gameArea || pseudoFullscreenActive;
+        if (activeFullscreen) {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+            } else if (anyDocument.webkitFullscreenElement && anyDocument.webkitExitFullscreen) {
+                await anyDocument.webkitExitFullscreen();
+            } else {
+                applyPseudoFullscreen(false);
+            }
+            return;
         }
-    } catch {}
+        if (gameArea.requestFullscreen) {
+            await gameArea.requestFullscreen();
+        } else if (anyArea.webkitRequestFullscreen) {
+            await anyArea.webkitRequestFullscreen();
+        } else {
+            applyPseudoFullscreen(true);
+        }
+    } catch {
+        applyPseudoFullscreen(!pseudoFullscreenActive);
+    }
 }
 
 document.addEventListener("fullscreenchange", () => {
-    isFullscreenMode = document.fullscreenElement === gameArea;
+    isFullscreenMode = document.fullscreenElement === gameArea || pseudoFullscreenActive;
+    if (!document.fullscreenElement && pseudoFullscreenActive) applyPseudoFullscreen(false);
+    gameFullscreenButton.textContent = isFullscreenMode ? "🗗" : "⛶";
+});
+
+document.addEventListener("webkitfullscreenchange", () => {
+    const anyDocument = document as Document & { webkitFullscreenElement?: Element | null };
+    isFullscreenMode = anyDocument.webkitFullscreenElement === gameArea || pseudoFullscreenActive;
     gameFullscreenButton.textContent = isFullscreenMode ? "🗗" : "⛶";
 });
 
@@ -1929,8 +2011,8 @@ function calculateGeometry(): Geometry {
     const binWidth = (binRight - binLeft) / totalBinCount;
     const groundTop = height - groundHeight;
     const binScale = clamp(binWidth / 90, 0.35, 1.7);
-    const ballRadius = clamp(14 * scale * binScale, 4, 28);
-    const pinRadius = clamp(8 * scale * binScale, 3, 18);
+    const ballRadius = clamp(16.5 * scale * binScale, 5, 32);
+    const pinRadius = clamp(10.5 * scale * binScale, 4, 22);
     const dividerWidth = clamp(10 * scale * binScale, 4, 18);
     const dividerHeight = clamp(92 * scale, 58, 150);
     const dividerY = groundTop - dividerHeight / 2;
@@ -2067,6 +2149,7 @@ function updateSimpleModeButton(): void {
 
 function updateStopButton(): void {
     stopButton.textContent = isPaused ? t("再開", "Resume") : t("ストップ", "Stop");
+    if (mobileDockPauseButton) mobileDockPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
 }
 
 async function startExperiment(): Promise<void> {
@@ -2139,7 +2222,7 @@ function createPins(): Matter.Body[] {
     }
 
     for (const pin of pins) {
-        (pin as any).plugin = { isPin: true, baseX: pin.position.x, baseY: pin.position.y, wiggleFrames: 0 };
+        (pin as any).plugin = { isPin: true, baseX: pin.position.x, baseY: pin.position.y, wiggleFrames: 0, wigglePower: 1, dragDX: 0, dragDY: 0, releaseDX: 0, releaseDY: 0, dragStretch: 0 };
     }
     return pins;
 }
@@ -2305,45 +2388,143 @@ function screenToWorld(event: PointerEvent): { x: number; y: number } {
     return { x: ((event.clientX - rect.left) / rect.width) * geometry.width, y: ((event.clientY - rect.top) / rect.height) * geometry.height };
 }
 
-function activateNearestPin(event: PointerEvent): void {
-    const point = screenToWorld(event);
+function findNearestPinWorld(point: { x: number; y: number }, radiusMultiplier = 1): { pin: Matter.Body | null; distance: number; tapRadius: number } {
     let nearest: Matter.Body | null = null;
     let nearestDistance = Infinity;
     for (const body of engine.world.bodies) {
         const plugin = (body as any).plugin;
         if (!plugin?.isPin) continue;
         const distance = Math.hypot(body.position.x - point.x, body.position.y - point.y);
-        if (distance < nearestDistance) { nearest = body; nearestDistance = distance; }
+        if (distance < nearestDistance) {
+            nearest = body;
+            nearestDistance = distance;
+        }
     }
-    const tapRadius = Math.max(34 * geometry.scale, geometry.pinRadius * 4.5);
-    if (!nearest || nearestDistance > tapRadius) return;
+    const tapRadius = Math.max(40 * geometry.scale, geometry.pinRadius * 5.5) * radiusMultiplier;
+    return { pin: nearest, distance: nearestDistance, tapRadius };
+}
 
-    const plugin = (nearest as any).plugin;
-    plugin.wiggleFrames = 46;
-
+function kickNearbyDrops(pin: Matter.Body, powerScale: number, tapRadius: number): void {
     for (const body of engine.world.bodies) {
         const p = (body as any).plugin;
         if (!p?.isDrop) continue;
-        const distance = Math.hypot(body.position.x - nearest.position.x, body.position.y - nearest.position.y);
-        if (distance < tapRadius * 3) {
-            Body.setVelocity(body, { x: (body.position.x - nearest.position.x) * 0.08 + (appRandom() - 0.5) * 8 * geometry.scale, y: -5 * geometry.scale });
-            Body.setAngularVelocity(body, (appRandom() - 0.5) * 0.5);
+        const distance = Math.hypot(body.position.x - pin.position.x, body.position.y - pin.position.y);
+        if (distance < tapRadius * 3.6) {
+            Body.setVelocity(body, {
+                x: (body.position.x - pin.position.x) * 0.12 * powerScale + (appRandom() - 0.5) * 12 * geometry.scale * powerScale,
+                y: -7.5 * geometry.scale * powerScale,
+            });
+            Body.setAngularVelocity(body, (appRandom() - 0.5) * 0.9 * powerScale);
         }
     }
+}
+
+function activateNearestPin(event: PointerEvent): void {
+    const point = screenToWorld(event);
+    const { pin: nearest, distance: nearestDistance, tapRadius } = findNearestPinWorld(point, isMobile ? 1.15 : 1);
+    if (!nearest || nearestDistance > tapRadius) return;
+
+    const plugin = (nearest as any).plugin;
+    plugin.wiggleFrames = isMobile ? 80 : 56;
+    plugin.wigglePower = isMobile ? 1.7 : 1.15;
+
+    kickNearbyDrops(nearest, isMobile ? 1.55 : 1, tapRadius);
 
     addFloatingText("ピン揺れ", nearest.position.x, nearest.position.y - 20 * geometry.scale, "#00aaff");
-    triggerCameraShake(3 * geometry.scale, 100);
+    triggerCameraShake((isMobile ? 5 : 3) * geometry.scale, isMobile ? 140 : 100);
+}
+
+function onCanvasPointerDown(event: PointerEvent): void {
+    activateNearestPin(event);
+    if (!isMobile) return;
+    const point = screenToWorld(event);
+    const { pin, distance, tapRadius } = findNearestPinWorld(point, 1.2);
+    if (!pin || distance > tapRadius) return;
+    activePinStretch = {
+        pin,
+        pointerId: event.pointerId,
+        startX: point.x,
+        startY: point.y,
+        currentX: point.x,
+        currentY: point.y,
+    };
+    const plugin = (pin as any).plugin;
+    plugin.dragStretch = 0.35;
+    plugin.dragDX = 0;
+    plugin.dragDY = 0;
+    try { canvas.setPointerCapture(event.pointerId); } catch {}
+}
+
+function onCanvasPointerMove(event: PointerEvent): void {
+    if (!activePinStretch || activePinStretch.pointerId !== event.pointerId) return;
+    const point = screenToWorld(event);
+    activePinStretch.currentX = point.x;
+    activePinStretch.currentY = point.y;
+    const plugin = (activePinStretch.pin as any).plugin;
+    const rawDx = point.x - activePinStretch.startX;
+    const rawDy = point.y - activePinStretch.startY;
+    const maxStretch = Math.max(24 * geometry.scale, geometry.pinRadius * 4.6);
+    const length = Math.hypot(rawDx, rawDy) || 1;
+    const scale = Math.min(1, maxStretch / length);
+    plugin.dragDX = rawDx * scale;
+    plugin.dragDY = rawDy * scale;
+    plugin.dragStretch = Math.min(1, length / maxStretch);
+    plugin.wiggleFrames = Math.max(plugin.wiggleFrames || 0, 8);
+}
+
+function onCanvasPointerUp(event: PointerEvent): void {
+    if (!activePinStretch || activePinStretch.pointerId !== event.pointerId) return;
+    const pin = activePinStretch.pin;
+    const plugin = (pin as any).plugin;
+    const stretch = Math.hypot(plugin.dragDX || 0, plugin.dragDY || 0);
+    const tapRadius = Math.max(40 * geometry.scale, geometry.pinRadius * 5.5);
+    if (stretch > geometry.pinRadius * 0.8) {
+        plugin.wiggleFrames = 90;
+        plugin.wigglePower = 1.9;
+        kickNearbyDrops(pin, 1.85, tapRadius);
+        addFloatingText("ビヨーン", pin.position.x, pin.position.y - 24 * geometry.scale, "#5d72ff");
+        triggerCameraShake(6 * geometry.scale, 150);
+    }
+    plugin.releaseDX = plugin.dragDX || 0;
+    plugin.releaseDY = plugin.dragDY || 0;
+    plugin.dragDX = 0;
+    plugin.dragDY = 0;
+    plugin.dragStretch = 0;
+    activePinStretch = null;
+    try { canvas.releasePointerCapture(event.pointerId); } catch {}
 }
 
 function updatePinWiggles(): void {
     for (const body of engine.world.bodies) {
         const plugin = (body as any).plugin;
-        if (!plugin?.isPin || !plugin.wiggleFrames) continue;
-        const t = plugin.wiggleFrames;
-        const power = (t / 46) * 10 * geometry.scale;
-        Body.setPosition(body, { x: plugin.baseX + Math.sin(t * 0.85) * power, y: plugin.baseY + Math.cos(t * 0.7) * power * 0.25 });
-        plugin.wiggleFrames--;
-        if (plugin.wiggleFrames <= 0) { Body.setPosition(body, { x: plugin.baseX, y: plugin.baseY }); plugin.wiggleFrames = 0; }
+        if (!plugin?.isPin) continue;
+        const dragDX = plugin.dragDX || 0;
+        const dragDY = plugin.dragDY || 0;
+        const releaseDX = plugin.releaseDX || 0;
+        const releaseDY = plugin.releaseDY || 0;
+        if (Math.abs(releaseDX) > 0.1 || Math.abs(releaseDY) > 0.1) {
+            plugin.releaseDX *= 0.82;
+            plugin.releaseDY *= 0.82;
+        } else {
+            plugin.releaseDX = 0;
+            plugin.releaseDY = 0;
+        }
+        if (!plugin.wiggleFrames && !dragDX && !dragDY && !plugin.releaseDX && !plugin.releaseDY) continue;
+        const totalFrames = isMobile ? 80 : 56;
+        const t = plugin.wiggleFrames || 0;
+        const wigglePowerBase = (plugin.wigglePower || 1) * (isMobile ? 14 : 10) * geometry.scale;
+        const envelope = t > 0 ? t / totalFrames : 0;
+        const wiggleX = Math.sin(t * 0.78) * wigglePowerBase * envelope;
+        const wiggleY = Math.cos(t * 0.64) * wigglePowerBase * envelope * 0.38;
+        const x = plugin.baseX + dragDX + plugin.releaseDX + wiggleX;
+        const y = plugin.baseY + dragDY * 0.42 + plugin.releaseDY * 0.35 + wiggleY;
+        Body.setPosition(body, { x, y });
+        if (plugin.wiggleFrames > 0) plugin.wiggleFrames--;
+        if (plugin.wiggleFrames <= 0 && !dragDX && !dragDY && !plugin.releaseDX && !plugin.releaseDY) {
+            Body.setPosition(body, { x: plugin.baseX, y: plugin.baseY });
+            plugin.wiggleFrames = 0;
+            plugin.wigglePower = 1;
+        }
     }
 }
 
