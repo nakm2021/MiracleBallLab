@@ -102,6 +102,27 @@ type SavedRecords = {
     bestRank: string;
     bestLabel: string;
     discovered: Record<string, number>;
+    discoveredFirstAt: Record<string, number>;
+    bestScore: number;
+    totalScore: number;
+    missionCompleted: Record<string, number>;
+};
+
+type MissionDef = {
+    id: string;
+    title: string;
+    description: string;
+    rewardScore: number;
+    oncePerRun: boolean;
+    evaluate: () => boolean;
+};
+
+type SkillKind = "shockwave" | "magnet" | "timeStop";
+
+type SkillState = {
+    shockwave: number;
+    magnet: number;
+    timeStop: number;
 };
 
 type Settings = {
@@ -162,6 +183,9 @@ const BASE_HEIGHT = 600;
 const MILESTONE_INTERVAL = 5000;
 const GIANT_EVENT_INTERVAL = 5000;
 const FINAL_SWEEP_DELAY_MS = 3000;
+const SCORE_STORAGE_BONUS_INTERVAL = 5000;
+const MAGNET_DURATION_MS = 5000;
+const TIME_STOP_DURATION_MS = 2200;
 
 const GOLD_RATE = 0.002;           // 1/500
 const RAINBOW_RATE = 0.0005;       // 1/2,000
@@ -172,7 +196,7 @@ const HEART_RATE = 0.000001;       // 1/1,000,000
 const BLACK_SUN_RATE = 0.0000001;  // 1/10,000,000
 const COSMIC_EGG_RATE = 0.000000000001; // 1/1,000,000,000,000
 
-const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v2";
+const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v3";
 
 
 const LOCAL_RARE_AUDIO_FILES = [
@@ -289,6 +313,13 @@ let labExplosionCreated = 0;
 
 let specialCreated: Record<string, number> = {};
 let savedRecords: SavedRecords = loadSavedRecords();
+let missionDefs: MissionDef[] = [];
+let missionProgress: Record<string, boolean> = {};
+let runScore = 0;
+let bestComboThisRun = 0;
+let skillState: SkillState = { shockwave: 2, magnet: 2, timeStop: 1 };
+let magnetUntil = 0;
+let lastSkillUsedAt = 0;
 
 let goldHits: number[] = [];
 let rainbowHits: number[] = [];
@@ -344,6 +375,9 @@ let mobileDockPauseButton: HTMLButtonElement | null = null;
 let mobileDockSettingsButton: HTMLButtonElement | null = null;
 let mobileSettingsOverlay: HTMLDivElement | null = null;
 let mobileSettingsPanel: HTMLDivElement | null = null;
+let missionButton: HTMLButtonElement | null = null;
+let shareButton: HTMLButtonElement | null = null;
+let skillButtons: Partial<Record<SkillKind, HTMLButtonElement>> = {};
 
 const engine = Engine.create();
 engine.gravity.y = 8;
@@ -619,7 +653,7 @@ function createButton(text: string, onClick: () => void): HTMLButtonElement {
     return button;
 }
 
-function setTooltip(target: HTMLElement, ja: string, en: string): HTMLElement {
+function setTooltip<T extends HTMLElement>(target: T, ja: string, en: string): T {
     tooltipRefs.push({ el: target, ja, en });
     target.setAttribute("data-tippy-content", isEnglish ? en : ja);
     target.setAttribute("aria-label", isEnglish ? en : ja);
@@ -817,12 +851,16 @@ utilityButtons.appendChild(runButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"), "このプログラムが何をするか説明します。", "Explain what this program does."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("ボタン説明", () => showButtonHelpPopup()), "ボタン説明", "Buttons"), "各ボタンの役割を一覧表示します。", "Show a list of what each button does."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡図鑑", () => showMiracleBookPopup()), "奇跡図鑑", "Miracle book"), "レア玉の一覧と発見回数を見ます。", "View rare drops and discovery counts."));
+missionButton = setTooltip(setButtonLabel(createButton("ミッション", () => showMissionPopup()), "ミッション", "Missions"), "達成条件と報酬スコアを確認します。", "Check missions and score rewards.");
+utilityButtons.appendChild(missionButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("最高記録", () => showRecordsPopup()), "最高記録", "Records"), "最高記録や通算記録を表示します。", "Show best and lifetime records."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡ログ", () => showMiracleLogPopup()), "奇跡ログ", "Miracle log"), "発生した奇跡の履歴を見ます。", "Show the history of miracles."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡ランキング", () => showMiracleRankingPopup()), "奇跡ランキング", "Ranking"), "レア度順に奇跡を並べます。", "Rank miracles by rarity."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("研究レポート", () => showResearchReportPopup()), "研究レポート", "Report"), "現在の実験状況をまとめます。", "Summarize the current experiment."));
 const replayButton = setTooltip(setButtonLabel(createButton("リプレイ", () => showReplayPopup()), "リプレイ", "Replay"), "奇跡クリップを再生・GIF保存します。", "Play or export miracle clips as GIF.");
 utilityButtons.appendChild(replayButton);
+shareButton = setTooltip(setButtonLabel(createButton("録画・SNS", () => showSharePopup()), "録画・SNS", "Share"), "投稿文コピーやSNSカード保存を行います。", "Copy a share caption or save a social card.");
+utilityButtons.appendChild(shareButton);
 
 const languageButton = setTooltip(setButtonLabel(createButton("English", () => {
     isEnglish = !isEnglish;
@@ -855,6 +893,15 @@ speedButtons.appendChild(setTooltip(setButtonLabel(createButton("超高速", () 
 
 const stopButton = setTooltip(setButtonLabel(createButton("ストップ", () => togglePause()), "ストップ", "Stop"), "実験を一時停止・再開します。", "Pause or resume the experiment.");
 displayButtons.appendChild(stopButton);
+const shockwaveButton = setTooltip(setButtonLabel(createButton("衝撃波 ×2", () => useSkill("shockwave")), "衝撃波 ×2", "Shockwave ×2"), "画面中央から玉を散らすスキルです。", "Scatter balls from the center.");
+const magnetButton = setTooltip(setButtonLabel(createButton("磁石 ×2", () => useSkill("magnet")), "磁石 ×2", "Magnet ×2"), "一定時間、上位の受け皿へ吸い寄せます。", "Pull balls toward the current top bin for a while.");
+const timeStopButton = setTooltip(setButtonLabel(createButton("時止め ×1", () => useSkill("timeStop")), "時止め ×1", "Time stop ×1"), "短時間だけ時間を止めて盤面を立て直します。", "Temporarily stop time to regain control.");
+skillButtons.shockwave = shockwaveButton;
+skillButtons.magnet = magnetButton;
+skillButtons.timeStop = timeStopButton;
+displayButtons.appendChild(shockwaveButton);
+displayButtons.appendChild(magnetButton);
+displayButtons.appendChild(timeStopButton);
 
 displayButtons.appendChild(setTooltip(setButtonLabel(createButton("リセット", () => {
     if (!applySettingsFromInputs(true)) return;
@@ -929,6 +976,9 @@ resultOverlay.addEventListener("click", (event) => {
 });
 window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && resultOverlay.style.display !== "none") closeFinalResult();
+    if (event.key === "1") useSkill("shockwave");
+    if (event.key === "2") useSkill("magnet");
+    if (event.key === "3") useSkill("timeStop");
 });
 
 const milestoneOverlay = document.createElement("div");
@@ -1155,13 +1205,36 @@ function loadSavedRecords(): SavedRecords {
     try {
         const raw = localStorage.getItem(RECORD_STORAGE_KEY);
         if (raw) {
-            const data = JSON.parse(raw) as SavedRecords;
-            return { totalRuns: data.totalRuns ?? 0, maxFinishedCount: data.maxFinishedCount ?? 0, maxTargetCount: data.maxTargetCount ?? 0, bestRank: data.bestRank ?? "-", bestLabel: data.bestLabel ?? "-", discovered: data.discovered ?? {} };
+            const data = JSON.parse(raw) as Partial<SavedRecords>;
+            return {
+                totalRuns: data.totalRuns ?? 0,
+                maxFinishedCount: data.maxFinishedCount ?? 0,
+                maxTargetCount: data.maxTargetCount ?? 0,
+                bestRank: data.bestRank ?? "-",
+                bestLabel: data.bestLabel ?? "-",
+                discovered: data.discovered ?? {},
+                discoveredFirstAt: data.discoveredFirstAt ?? {},
+                bestScore: data.bestScore ?? 0,
+                totalScore: data.totalScore ?? 0,
+                missionCompleted: data.missionCompleted ?? {},
+            };
         }
-    } catch {
+    }
+    catch {
         // 保存データが壊れていてもゲームは止めない
     }
-    return { totalRuns: 0, maxFinishedCount: 0, maxTargetCount: 0, bestRank: "-", bestLabel: "-", discovered: {} };
+    return {
+        totalRuns: 0,
+        maxFinishedCount: 0,
+        maxTargetCount: 0,
+        bestRank: "-",
+        bestLabel: "-",
+        discovered: {},
+        discoveredFirstAt: {},
+        bestScore: 0,
+        totalScore: 0,
+        missionCompleted: {},
+    };
 }
 
 function saveRecords(): void {
@@ -1301,6 +1374,7 @@ function updateUiLanguage(): void {
     updateSimpleModeButton();
     updateCameraShakeButton();
     updateSoundButton();
+    updateSkillButtons();
     confettiButton.textContent = confettiEnabled ? t("紙吹雪: ON", "Confetti: ON") : t("紙吹雪: OFF", "Confetti: OFF");
     pixiButton.textContent = pixiEnabled ? t("Pixi背景: ON", "Pixi BG: ON") : t("Pixi背景: OFF", "Pixi BG: OFF");
     gameFullscreenButton.title = t("全画面", "Fullscreen");
@@ -1383,12 +1457,293 @@ function getRankScore(rank: string): number {
     return order.indexOf(rank);
 }
 
+function getRankBaseScore(rank: string): number {
+    if (rank === "GOD") return 250000;
+    if (rank === "EX") return 120000;
+    if (rank === "UR") return 60000;
+    if (rank === "SSR") return 18000;
+    if (rank === "SR") return 6000;
+    if (rank === "R") return 1800;
+    return 100;
+}
+
+function formatDateTime(ts: number | undefined): string {
+    if (!ts) return "-";
+    try {
+        return new Date(ts).toLocaleString("ja-JP");
+    } catch {
+        return "-";
+    }
+}
+
+function getDiscoveredCount(): number {
+    return SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length;
+}
+
+function addScore(amount: number, reason: string, x = geometry.width / 2, y = Math.max(80 * geometry.scale, geometry.height * 0.18)): void {
+    runScore += Math.max(0, Math.floor(amount));
+    if (!settings.simpleMode && amount > 0) addFloatingText(`+${Math.floor(amount).toLocaleString()} ${reason}`, x, y, "#14532d");
+}
+
+function buildMissionDefs(): MissionDef[] {
+    return [
+        {
+            id: "first_sr",
+            title: "はじめての大当たり",
+            description: "SR以上を1回観測する",
+            rewardScore: 8000,
+            oncePerRun: true,
+            evaluate: () => SPECIAL_EVENT_DEFS.some((def) => getRankScore(def.rank) >= getRankScore("SR") && (specialCreated[def.kind] ?? 0) > 0),
+        },
+        {
+            id: "combo3",
+            title: "奇跡コンボ",
+            description: "奇跡コンボを3まで伸ばす",
+            rewardScore: 12000,
+            oncePerRun: true,
+            evaluate: () => bestComboThisRun >= 3,
+        },
+        {
+            id: "center_focus",
+            title: "中央研究成功",
+            description: "中央の受け皿に25%以上集める",
+            rewardScore: 10000,
+            oncePerRun: true,
+            evaluate: () => {
+                if (finishedCount < 100) return false;
+                const centerIndex = Math.floor(settings.binCount / 2);
+                const centerCount = binCounts[centerIndex] ?? 0;
+                return finishedCount > 0 && centerCount / finishedCount >= 0.25;
+            },
+        },
+        {
+            id: "discard_master",
+            title: "捨て区間回避",
+            description: "捨て区間率を5%以下に抑える（300球以上）",
+            rewardScore: 15000,
+            oncePerRun: true,
+            evaluate: () => finishedCount >= 300 && finishedCount > 0 && discardedCount / finishedCount <= 0.05,
+        },
+        {
+            id: "big_run",
+            title: "長時間実験",
+            description: "5,000球以上処理する",
+            rewardScore: 18000,
+            oncePerRun: true,
+            evaluate: () => finishedCount >= 5000,
+        },
+    ];
+}
+
+function checkMissionProgress(): void {
+    for (const mission of missionDefs) {
+        if (missionProgress[mission.id]) continue;
+        if (!mission.evaluate()) continue;
+        missionProgress[mission.id] = true;
+        savedRecords.missionCompleted[mission.id] = (savedRecords.missionCompleted[mission.id] ?? 0) + 1;
+        addScore(mission.rewardScore, `MISSION ${mission.title}`);
+        showMilestone(`MISSION CLEAR: ${mission.title}`);
+        saveRecords();
+    }
+}
+
+function updateSkillButtons(): void {
+    const mapping: Record<SkillKind, string> = {
+        shockwave: `衝撃波 ×${skillState.shockwave}`,
+        magnet: `磁石 ×${skillState.magnet}`,
+        timeStop: `時止め ×${skillState.timeStop}`,
+    };
+    const enMapping: Record<SkillKind, string> = {
+        shockwave: `Shockwave ×${skillState.shockwave}`,
+        magnet: `Magnet ×${skillState.magnet}`,
+        timeStop: `Time stop ×${skillState.timeStop}`,
+    };
+    for (const key of Object.keys(skillButtons) as SkillKind[]) {
+        const button = skillButtons[key];
+        if (!button) continue;
+        button.textContent = isEnglish ? enMapping[key] : mapping[key];
+        button.style.opacity = (skillState[key] ?? 0) > 0 ? "1" : ".45";
+    }
+}
+
+function applyMagnetSkill(): void {
+    magnetUntil = Date.now() + MAGNET_DURATION_MS;
+    addFloatingText("磁力場 発生", geometry.width / 2, 90 * geometry.scale, "#0f766e");
+    triggerCameraShake(6 * geometry.scale, 180);
+}
+
+function applyShockwaveSkill(): void {
+    const originX = geometry.width / 2;
+    const originY = geometry.height * 0.28;
+    for (const body of engine.world.bodies) {
+        const plugin = (body as any).plugin;
+        if (!plugin?.isDrop) continue;
+        const dx = body.position.x - originX;
+        const dy = body.position.y - originY;
+        const len = Math.max(16, Math.hypot(dx, dy));
+        Body.setVelocity(body, { x: body.velocity.x + (dx / len) * 8 * geometry.scale, y: body.velocity.y + (dy / len) * 6 * geometry.scale - 2 * geometry.scale });
+    }
+    addFloatingText("衝撃波", originX, originY, "#2563eb");
+    triggerCameraShake(10 * geometry.scale, 260);
+}
+
+function applyTimeStopSkill(): void {
+    if (!isStarted || isFinished || isPaused || isMiraclePaused) return;
+    isPaused = true;
+    Runner.stop(runner);
+    updateStopButton();
+    updateInfo();
+    addFloatingText("時間停止", geometry.width / 2, geometry.height * 0.22, "#7c3aed");
+    window.setTimeout(() => {
+        if (isFinished || isMiraclePaused) return;
+        isPaused = false;
+        Runner.run(runner, engine);
+        updateStopButton();
+        updateInfo();
+    }, TIME_STOP_DURATION_MS);
+}
+
+function useSkill(kind: SkillKind): void {
+    if (!isStarted || isFinished || isMiraclePaused) return;
+    if ((skillState[kind] ?? 0) <= 0) return;
+    skillState[kind]--;
+    lastSkillUsedAt = Date.now();
+    if (kind === "shockwave") applyShockwaveSkill();
+    else if (kind === "magnet") applyMagnetSkill();
+    else applyTimeStopSkill();
+    addScore(2500, `SKILL ${kind.toUpperCase()}`, geometry.width / 2, geometry.height * 0.16);
+    updateSkillButtons();
+    updateInfo();
+}
+
+async function shareToSns(): Promise<void> {
+    const discovered = getDiscoveredCount();
+    const clipCount = miracleClips.length;
+    const shareText = `ミラクルボールラボ
+スコア: ${runScore.toLocaleString()}
+処理数: ${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}
+最高レア: ${savedRecords.bestRank} ${savedRecords.bestLabel}
+発見済み: ${discovered}/${SPECIAL_EVENT_DEFS.length}
+奇跡クリップ: ${clipCount}件
+#MiracleBallLabo #ミラクルボールラボ`;
+    try {
+        await navigator.clipboard.writeText(shareText);
+        showMilestone("SNS投稿文をコピーしました");
+    } catch {
+        showPopup("SNSシェア", `<pre style="white-space:pre-wrap;font-family:inherit;">${shareText}</pre>`);
+        return;
+    }
+    if (navigator.share) {
+        try {
+            await navigator.share({ text: shareText, title: "MiracleBallLabo" });
+        } catch {
+            // 共有ダイアログのキャンセルは無視
+        }
+    }
+}
+
+function saveShareCard(): void {
+    const width = 1080;
+    const height = 1920;
+    const shareCanvas = document.createElement("canvas");
+    shareCanvas.width = width;
+    shareCanvas.height = height;
+    const ctx = shareCanvas.getContext("2d");
+    if (!ctx) return;
+
+    const bg = ctx.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, "#0f172a");
+    bg.addColorStop(1, "#1e293b");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = "rgba(255,255,255,.08)";
+    ctx.fillRect(60, 120, width - 120, 720);
+    ctx.fillRect(60, 880, width - 120, 820);
+
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = '900 64px "Segoe UI", "Noto Sans JP", sans-serif';
+    ctx.fillText("MiracleBallLabo", 100, 210);
+    ctx.font = '700 34px "Segoe UI", "Noto Sans JP", sans-serif';
+    ctx.fillStyle = "#cbd5e1";
+    ctx.fillText("ミラクルボールラボ 実験シェアカード", 100, 270);
+
+    const previewW = width - 200;
+    const previewH = 480;
+    try {
+        ctx.drawImage(canvas, 100, 320, previewW, previewH);
+    } catch {
+        ctx.fillStyle = "#0b1220";
+        ctx.fillRect(100, 320, previewW, previewH);
+    }
+
+    const lines = [
+        `スコア ${runScore.toLocaleString()}`,
+        `処理 ${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}`,
+        `最高レア ${savedRecords.bestRank} ${savedRecords.bestLabel}`,
+        `発見済み ${getDiscoveredCount()} / ${SPECIAL_EVENT_DEFS.length}`,
+        `奇跡コンボ最高 ${bestComboThisRun}`,
+        `ミッション達成 ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length}`,
+    ];
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = '900 48px "Segoe UI", "Noto Sans JP", sans-serif';
+    ctx.fillText("RESULT", 100, 960);
+    ctx.font = '700 42px "Segoe UI", "Noto Sans JP", sans-serif';
+    lines.forEach((line, idx) => ctx.fillText(line, 100, 1050 + idx * 90));
+    ctx.fillStyle = "#93c5fd";
+    ctx.font = '700 30px "Segoe UI", "Noto Sans JP", sans-serif';
+    ctx.fillText("#MiracleBallLabo #ミラクルボールラボ", 100, 1760);
+
+    shareCanvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `miracle-ball-share-${Date.now()}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showMilestone("SNSカードを保存しました");
+    }, "image/png");
+}
+
+function showMissionPopup(): void {
+    const rows = missionDefs.map((mission) => {
+        const cleared = !!missionProgress[mission.id];
+        const totalClear = savedRecords.missionCompleted[mission.id] ?? 0;
+        return `<div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+                <div style="font-weight:900;font-size:${isMobile ? 22 : 18}px;color:${cleared ? "#166534" : "#1f2937"};">${cleared ? "✅" : "⬜"} ${mission.title}</div>
+                <div style="font-weight:800;color:#475569;">+${mission.rewardScore.toLocaleString()} score</div>
+            </div>
+            <div style="margin-top:6px;opacity:.82;line-height:1.55;">${mission.description}</div>
+            <div style="margin-top:6px;font-size:${isMobile ? 16 : 14}px;opacity:.72;">通算達成 ${totalClear}回</div>
+        </div>`;
+    }).join("");
+    showPopup("ミッション", `<div style="margin-top:8px;border-radius:18px;background:rgba(255,255,255,.72);padding:${isMobile ? "8px 14px" : "8px 16px"};">${rows}</div>`);
+}
+
+function showSharePopup(): void {
+    showPopup("録画・SNS", `
+        <p>奇跡クリップのGIF保存は「リプレイ」から行えます。ここではSNS投稿文コピーと縦長シェアカード保存を行えます。</p>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:18px;">
+            <button id="sns-copy-button" style="font-size:18px;padding:12px 18px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);">投稿文コピー</button>
+            <button id="sns-card-button" style="font-size:18px;padding:12px 18px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);">SNSカード保存</button>
+        </div>
+    `);
+    const copyBtn = document.getElementById("sns-copy-button") as HTMLButtonElement | null;
+    const cardBtn = document.getElementById("sns-card-button") as HTMLButtonElement | null;
+    if (copyBtn) copyBtn.onclick = () => { void shareToSns(); };
+    if (cardBtn) cardBtn.onclick = () => saveShareCard();
+}
+
 function recordSpecialDiscovery(def: SpecialEventDef): void {
     savedRecords.discovered[def.kind] = (savedRecords.discovered[def.kind] ?? 0) + 1;
+    if (!savedRecords.discoveredFirstAt[def.kind]) savedRecords.discoveredFirstAt[def.kind] = Date.now();
     if (getRankScore(def.rank) > getRankScore(savedRecords.bestRank)) {
         savedRecords.bestRank = def.rank;
         savedRecords.bestLabel = def.label;
     }
+    addScore(getRankBaseScore(def.rank), `RARE ${def.label}`);
     saveRecords();
 }
 
@@ -1856,29 +2211,31 @@ function showPopup(title: string, bodyHtml: string): void {
 
 function showMiracleBookPopup(): void {
     const rows = SPECIAL_EVENT_DEFS.slice().reverse().map((def) => {
-        const count = savedRecords.discovered[def.kind] ?? 0;
+        const totalCount = savedRecords.discovered[def.kind] ?? 0;
         const nowCount = specialCreated[def.kind] ?? 0;
-        const found = count > 0 || nowCount > 0;
+        const found = totalCount > 0 || nowCount > 0;
         const name = found ? `${def.symbol} ${def.label}` : `◼︎◼︎◼︎ (${getSilhouetteHint(def)})`;
+        const firstAt = found ? formatDateTime(savedRecords.discoveredFirstAt[def.kind]) : "-";
         if (isMobile) {
             return `<div style="padding:14px 0;border-bottom:1px solid rgba(80,90,120,.16);">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
                     <div style="font-weight:900;font-size:24px;color:${found ? "#243" : "#999"};">${def.rank}</div>
-                    <div style="font-weight:900;font-size:18px;white-space:nowrap;">${t("発見", "Found")} ${count + nowCount}${t("回", "x")}</div>
+                    <div style="font-weight:900;font-size:18px;white-space:nowrap;">${t("累計", "Total")} ${totalCount + nowCount}${t("回", "x")}</div>
                 </div>
                 <div style="margin-top:6px;font-size:21px;font-weight:900;line-height:1.35;word-break:keep-all;overflow-wrap:break-word;">${name}</div>
-                <div style="margin-top:8px;font-size:16px;line-height:1.55;opacity:.76;word-break:normal;overflow-wrap:break-word;">${t("確率", "Odds")} ${formatProbability(def.denominator)}</div>
-                <div style="margin-top:4px;font-size:16px;line-height:1.55;opacity:.76;word-break:normal;overflow-wrap:break-word;">${getProbabilityDangerText(def.denominator)}</div>
+                <div style="margin-top:8px;font-size:16px;line-height:1.55;opacity:.76;">${t("確率", "Odds")} ${formatProbability(def.denominator)}</div>
+                <div style="margin-top:4px;font-size:16px;line-height:1.55;opacity:.76;">${getProbabilityDangerText(def.denominator)}</div>
+                <div style="margin-top:4px;font-size:15px;line-height:1.5;opacity:.7;">初回発見: ${firstAt} / 今回: ${nowCount}回</div>
             </div>`;
         }
-        return `<div style="display:grid;grid-template-columns:86px minmax(0,1fr) 140px;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+        return `<div style="display:grid;grid-template-columns:86px minmax(0,1fr) 180px;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
             <div style="font-weight:900;font-size:24px;color:${found ? "#243" : "#999"};">${def.rank}</div>
-            <div style="min-width:0;"><b>${name}</b><br><span style="opacity:.72;">${t("確率", "Odds")} ${formatProbability(def.denominator)} / ${getProbabilityDangerText(def.denominator)}</span></div>
-            <div style="text-align:right;font-weight:900;">${t("発見", "Found")} ${count + nowCount}${t("回", "x")}</div>
+            <div style="min-width:0;"><b>${name}</b><br><span style="opacity:.72;">${t("確率", "Odds")} ${formatProbability(def.denominator)} / ${getProbabilityDangerText(def.denominator)}</span><br><span style="opacity:.64;">初回発見 ${firstAt} / 今回 ${nowCount}回</span></div>
+            <div style="text-align:right;font-weight:900;">${t("累計", "Total")} ${totalCount + nowCount}${t("回", "x")}</div>
         </div>`;
     }).join("");
     showPopup("奇跡図鑑", `
-        <p style="margin-top:0;">一度でも観測した低確率イベントはここに記録されます。ブラウザのlocalStorage保存なので、同じ端末・同じブラウザなら残ります。</p>
+        <p style="margin-top:0;">発見回数に加えて、初回発見日時と今回の実験中の観測回数も記録します。ブラウザのlocalStorage保存なので、同じ端末・同じブラウザなら残ります。</p>
         <div style="margin-top:16px;border-radius:22px;background:rgba(255,255,255,.75);padding:${isMobile ? "4px 14px" : "8px 16px"};box-sizing:border-box;max-width:100%;overflow:hidden;">${rows}</div>
     `);
 }
@@ -1889,6 +2246,9 @@ function showRecordsPopup(): void {
         <p><b>最大実処理数:</b> ${savedRecords.maxFinishedCount.toLocaleString()}回</p>
         <p><b>最大指定投下数:</b> ${savedRecords.maxTargetCount.toLocaleString()}回</p>
         <p><b>最高レア:</b> ${savedRecords.bestRank} / ${savedRecords.bestLabel}</p>
+        <p><b>最高スコア:</b> ${savedRecords.bestScore.toLocaleString()}</p>
+        <p><b>通算スコア:</b> ${savedRecords.totalScore.toLocaleString()}</p>
+        <p><b>ミッション達成種類:</b> ${Object.keys(savedRecords.missionCompleted).length} / ${missionDefs.length || buildMissionDefs().length}</p>
         <p>保存はブラウザ内です。別端末や別ブラウザでは共有されません。</p>
         <p style="opacity:.75;">消したい場合はブラウザのサイトデータ削除でリセットできます。</p>
     `);
@@ -1914,6 +2274,9 @@ function showButtonHelpPopup(): void {
         <p><b>リセット:</b> 設定を読み直して、実験を最初から待機状態に戻します。</p>
         <p><b>シンプル:</b> 演出を減らして軽くします。重い場合や大量回数を試す場合に便利です。</p>
         <p><b>音:</b> npm 依存の Tone.js を使って、レア玉や激レア演出で音を鳴らします。ブラウザ仕様上、最初にボタン操作が必要です。</p>
+        <p><b>衝撃波 / 磁石 / 時止め:</b> 実験中に使える操作スキルです。衝撃波は玉を散らし、磁石は上位受け皿へ吸わせ、時止めは短時間だけ盤面を静止させます。</p>
+        <p><b>ミッション:</b> 実験中の条件達成でスコア報酬を獲得します。</p>
+        <p><b>録画・SNS:</b> 投稿文コピーや縦長シェアカード保存ができます。奇跡のGIF保存はリプレイから行います。</p>
         <p><b>紙吹雪:</b> 達成時やレア演出時の紙吹雪をON/OFFします。</p>
         <p><b>Pixi背景:</b> Pixi.jsを使った背景演出をON/OFFします。見た目は楽しいですが、PCやスマホによっては重くなります。</p>
         <p><b>設定反映:</b> 投下数、同時に出す玉数、受け皿数、ピン段数などを反映してリセットします。</p>
@@ -2099,6 +2462,13 @@ function resetExperiment(startNow = false): void {
     updateStopButton();
 
     labels = parseLabels(createDefaultLabelText(settings.binCount), settings.binCount);
+    missionDefs = buildMissionDefs();
+    missionProgress = {};
+    runScore = 0;
+    bestComboThisRun = 0;
+    skillState = { shockwave: 2, magnet: 2, timeStop: 1 };
+    magnetUntil = 0;
+    updateSkillButtons();
     binCounts = Array.from({ length: settings.binCount }, () => 0);
     hitFlash = Array.from({ length: settings.binCount }, () => 0);
     discardedCount = 0;
@@ -2872,10 +3242,12 @@ function updateInfo(): void {
     recordHero.innerHTML = `
         <div style="font-size:${isMobile ? 24 : 22}px;">🏆 ${t("最高記録", "Best records")}</div>
         <div style="font-size:${isMobile ? 22 : 20}px;">${t("最高レア", "Best rarity")}: <b>${savedRecords.bestRank}</b> ${savedRecords.bestLabel}</div>
+        <div style="font-size:${isMobile ? 20 : 18}px;">${t("今回スコア", "Run score")}: <b>${runScore.toLocaleString()}</b> / ${t("最高スコア", "Best")} <b>${savedRecords.bestScore.toLocaleString()}</b></div>
         <div style="font-size:${isMobile ? 18 : 16}px;opacity:.86;">${t("実験", "Runs")} ${savedRecords.totalRuns.toLocaleString()}${t("回", "")} / ${t("最大", "Max")} ${savedRecords.maxFinishedCount.toLocaleString()}${t("玉", " balls")}</div>
     `;
 
-    const discoveredKinds = SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length;
+    const discoveredKinds = getDiscoveredCount();
+    const missionDoneCount = Object.values(missionProgress).filter(Boolean).length;
     topRow.innerHTML = `
         <div>${t("デバイス", "Device")}: <b>${isMobile ? t("スマホ向け", "Mobile") : t("PC向け", "Desktop")}</b></div>
         <div>${t("ブラウザ", "Browser")}: <b>${browserName}</b></div>
@@ -2892,6 +3264,9 @@ function updateInfo(): void {
         <div>${t("ピン段数", "Pin rows")}: <b>${settings.pinRows}</b></div>
         <div>${t("発見済み種類", "Discovered kinds")}: <b>${discoveredKinds}</b> / ${SPECIAL_EVENT_DEFS.length}</div>
         <div>${t("奇跡ログ件数", "Miracle logs")}: <b>${miracleLogs.length}</b></div>
+        <div>${t("スコア", "Score")}: <b>${runScore.toLocaleString()}</b></div>
+        <div>${t("ミッション", "Missions")}: <b>${missionDoneCount}</b> / ${missionDefs.length}</div>
+        <div>${t("スキル", "Skills")}: <b>衝${skillState.shockwave} / 磁${skillState.magnet} / 時${skillState.timeStop}</b></div>
         <div>${t("縦動画", "Vertical")}: <b>${isVerticalVideoMode ? "ON" : "OFF"}</b></div>
         <div>${t("OBSモード", "OBS mode")}: <b>${isObsMode ? "ON" : "OFF"}</b></div>
         <div>${t("捨て区画", "Discarded")}: <b>${discardedCount.toLocaleString()}</b></div>
@@ -2923,6 +3298,9 @@ function buildResultCsv(): string {
     rows.push(["pin_rows", settings.pinRows]);
     rows.push(["random_call_count", randomCallCount]);
     rows.push(["discarded_count", discardedCount]);
+    rows.push(["run_score", runScore]);
+    rows.push(["best_combo", bestComboThisRun]);
+    rows.push(["missions_cleared", Object.values(missionProgress).filter(Boolean).length]);
     rows.push(["gold_created", goldCreated]);
     rows.push(["rainbow_created", rainbowCreated]);
     rows.push(["giant_created", giantCreated]);
@@ -2980,6 +3358,8 @@ function showFinalResult(): void {
     savedRecords.totalRuns++;
     savedRecords.maxFinishedCount = Math.max(savedRecords.maxFinishedCount, finishedCount);
     savedRecords.maxTargetCount = Math.max(savedRecords.maxTargetCount, settings.targetCount);
+    savedRecords.bestScore = Math.max(savedRecords.bestScore, runScore);
+    savedRecords.totalScore += runScore;
     saveRecords();
     const ranking = binCounts.map((count, index) => ({ label: labels[index], count, percent: finishedCount > 0 ? (count / finishedCount) * 100 : 0 })).sort((a, b) => b.count - a.count);
     const rankingHtml = ranking.map((item, index) => `<div style="margin:7px 0;">${index + 1}位：${item.label}　${item.count.toLocaleString()}回　${item.percent.toFixed(2)}%</div>`).join("");
@@ -2988,15 +3368,17 @@ function showFinalResult(): void {
             <button id="close-result-button" aria-label="閉じる" style="position:absolute;right:14px;top:14px;width:46px;height:46px;border-radius:999px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.18);color:#fff;font-size:28px;font-weight:900;line-height:1;cursor:pointer;">×</button>
             <div style="font-size:clamp(38px,8vw,78px);font-weight:900;margin-bottom:18px;">実験完了</div>
             <div style="font-size:clamp(22px,4vw,40px);margin-bottom:18px;">${browserName} / 指定${settings.targetCount.toLocaleString()}回 / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime)}</div>
+            <div style="font-size:clamp(20px,3vw,34px);margin-bottom:18px;">スコア <b>${runScore.toLocaleString()}</b> / ミッション ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length} / 奇跡コンボ最高 ${bestComboThisRun}</div>
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の「宇宙卵」。出たら奇跡どころか、画面が伝説になります。</div>
             <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">発見済み種類: ${(SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length).toLocaleString()} / ${SPECIAL_EVENT_DEFS.length}　捨て区画: ${discardedCount.toLocaleString()}</div>
             <div style="margin-top:18px;font-size:clamp(16px,2vw,26px);opacity:.95;">${getResearchReportHtml()}</div>
-            <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="copy-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">結果コピー</button><button id="download-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">CSV保存</button><button id="bottom-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">閉じる</button></div>
+            <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="copy-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">結果コピー</button><button id="download-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">CSV保存</button><button id="share-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);box-shadow:0 5px 14px rgba(90,96,180,.16);">録画・SNS</button><button id="bottom-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">閉じる</button></div>
         </div>`;
     resultOverlay.style.display = "flex";
     document.getElementById("copy-result-button")!.onclick = () => copyResultCsv();
     document.getElementById("download-result-button")!.onclick = () => downloadResultCsv();
+    document.getElementById("share-result-button")!.onclick = () => showSharePopup();
     document.getElementById("close-result-button")!.onclick = () => closeFinalResult();
     document.getElementById("bottom-close-result-button")!.onclick = () => closeFinalResult();
 }
@@ -3409,6 +3791,7 @@ Events.on(engine, "afterUpdate", () => {
             finishedCount++;
             if (binIndex >= 0) {
                 binCounts[binIndex]++;
+                addScore(100, "DROP", body.position.x, geometry.ballCountY - 24 * geometry.scale);
                 if (!settings.simpleMode) hitFlash[binIndex] = 18;
             } else {
                 discardedCount++;
@@ -3416,6 +3799,14 @@ Events.on(engine, "afterUpdate", () => {
             activeDropCount--;
             removeTargets.push(body);
             continue;
+        }
+
+        if (magnetUntil > Date.now()) {
+            const maxCount = Math.max(...binCounts, 0);
+            const topIndex = Math.max(0, binCounts.indexOf(maxCount));
+            const targetX = geometry.binCenters[Math.min(topIndex >= 0 ? topIndex : Math.floor(settings.binCount / 2), geometry.binCenters.length - 1)] ?? (geometry.width / 2);
+            const dx = targetX - body.position.x;
+            Body.applyForce(body, body.position, { x: dx * 0.0000018, y: -0.00000035 });
         }
 
         if (plugin.kind === "shape" || plugin.kind === "giant") {
@@ -3456,15 +3847,15 @@ Events.on(engine, "afterUpdate", () => {
                 binCounts[binIndex]++;
                 if (!settings.simpleMode) hitFlash[binIndex] = 18;
                 triggerCameraShake(3 * geometry.scale, 100);
-                if (kind === "gold") { goldHits[binIndex]++; addFloatingText(`金 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 60 * geometry.scale, "#d89b00"); triggerCameraShake(7 * geometry.scale, 180); }
-                if (kind === "rainbow") { rainbowHits[binIndex]++; addFloatingText(`虹 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 60 * geometry.scale, "#b44cff"); triggerCameraShake(11 * geometry.scale, 240); }
-                if (kind === "giant") { giantHits[binIndex]++; addFloatingText(`巨大 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 70 * geometry.scale, "#111111"); triggerCameraShake(15 * geometry.scale, 300); }
-                if (kind === "shape") { shapeHits[binIndex]++; addFloatingText(`${plugin.shapeName ?? "図形"} → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 70 * geometry.scale, "#ffffff"); triggerCameraShake(9 * geometry.scale, 220); }
-                if (kind === "crown") { crownHits[binIndex]++; addFloatingText(`王冠 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ffd54a"); fireConfetti("miracle"); }
-                if (kind === "shootingStar") { starHits[binIndex]++; addFloatingText(`流れ星 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#78e7ff"); fireConfetti("miracle"); }
-                if (kind === "heart") { heartHits[binIndex]++; addFloatingText(`桃色ハート → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ff69b4"); triggerCameraShake(22 * geometry.scale, 480); fireConfetti("miracle"); }
-                if (kind === "blackSun") { blackSunHits[binIndex]++; addFloatingText(`黒い太陽 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ff0044"); triggerCameraShake(26 * geometry.scale, 600); fireConfetti("black"); }
-                if (kind === "cosmicEgg") { cosmicEggHits[binIndex]++; addFloatingText(`宇宙卵 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 90 * geometry.scale, "#00e5ff"); triggerCameraShake(38 * geometry.scale, 1200); fireConfetti("cosmic"); }
+                if (kind === "gold") { goldHits[binIndex]++; addScore(800, "GOLD", body.position.x, geometry.ballCountY - 60 * geometry.scale); addFloatingText(`金 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 60 * geometry.scale, "#d89b00"); triggerCameraShake(7 * geometry.scale, 180); }
+                if (kind === "rainbow") { rainbowHits[binIndex]++; addScore(1600, "RAINBOW", body.position.x, geometry.ballCountY - 60 * geometry.scale); addFloatingText(`虹 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 60 * geometry.scale, "#b44cff"); triggerCameraShake(11 * geometry.scale, 240); }
+                if (kind === "giant") { giantHits[binIndex]++; addScore(2200, "GIANT", body.position.x, geometry.ballCountY - 70 * geometry.scale); addFloatingText(`巨大 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 70 * geometry.scale, "#111111"); triggerCameraShake(15 * geometry.scale, 300); }
+                if (kind === "shape") { shapeHits[binIndex]++; addScore(1200, "SHAPE", body.position.x, geometry.ballCountY - 70 * geometry.scale); addFloatingText(`${plugin.shapeName ?? "図形"} → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 70 * geometry.scale, "#ffffff"); triggerCameraShake(9 * geometry.scale, 220); }
+                if (kind === "crown") { crownHits[binIndex]++; addScore(6000, "CROWN", body.position.x, geometry.ballCountY - 80 * geometry.scale); addFloatingText(`王冠 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ffd54a"); fireConfetti("miracle"); }
+                if (kind === "shootingStar") { starHits[binIndex]++; addScore(18000, "STAR", body.position.x, geometry.ballCountY - 80 * geometry.scale); addFloatingText(`流れ星 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#78e7ff"); fireConfetti("miracle"); }
+                if (kind === "heart") { heartHits[binIndex]++; addScore(60000, "HEART", body.position.x, geometry.ballCountY - 80 * geometry.scale); addFloatingText(`桃色ハート → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ff69b4"); triggerCameraShake(22 * geometry.scale, 480); fireConfetti("miracle"); }
+                if (kind === "blackSun") { blackSunHits[binIndex]++; addScore(120000, "BLACK SUN", body.position.x, geometry.ballCountY - 80 * geometry.scale); addFloatingText(`黒い太陽 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 80 * geometry.scale, "#ff0044"); triggerCameraShake(26 * geometry.scale, 600); fireConfetti("black"); }
+                if (kind === "cosmicEgg") { cosmicEggHits[binIndex]++; addScore(250000, "COSMIC EGG", body.position.x, geometry.ballCountY - 90 * geometry.scale); addFloatingText(`宇宙卵 → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 90 * geometry.scale, "#00e5ff"); triggerCameraShake(38 * geometry.scale, 1200); fireConfetti("cosmic"); }
                 const def = findSpecialDef(kind);
                 if (def && !["heart", "blackSun", "cosmicEgg"].includes(kind)) {
                     addFloatingText(`${def.label} → ${labels[binIndex]}`, body.position.x, geometry.ballCountY - 90 * geometry.scale, def.fillStyle);
@@ -3473,6 +3864,7 @@ Events.on(engine, "afterUpdate", () => {
                     fireConfetti(def.soundMode ?? "miracle");
                 }
 
+                checkMissionProgress();
                 while (finishedCount >= nextMilestone && nextMilestone <= settings.targetCount) {
                     showMilestone(`${nextMilestone.toLocaleString()}回 達成！`);
                     showFullScreenCelebration(nextMilestone);
@@ -3518,6 +3910,7 @@ Events.on(engine, "afterUpdate", () => {
 // ======================================================
 
 geometry = calculateGeometry();
+missionDefs = buildMissionDefs();
 applyTheme();
 resetExperiment(false);
 Render.run(render);
