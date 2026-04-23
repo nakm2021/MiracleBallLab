@@ -15,45 +15,7 @@ const Bodies = Matter.Bodies;
 const Body = Matter.Body;
 const Composite = Matter.Composite;
 
-type DropKind =
-    | "normal"
-    | "gold"
-    | "rainbow"
-    | "giant"
-    | "shape"
-    | "crown"
-    | "shootingStar"
-    | "heart"
-    | "blackSun"
-    | "cosmicEgg"
-    | "silverUfo"
-    | "blueFlame"
-    | "luckySeven"
-    | "timeRift"
-    | "labExplosion"
-    | "crystalDragon"
-    | "goldenDaruma"
-    | "moonRabbit"
-    | "phantomCastle"
-    | "rainbowWhale"
-    | "thunderKitsune"
-    | "pocketGalaxy"
-    | "ancientClock"
-    | "mirrorCat"
-    | "meteorCrown"
-    | "obsidianKing"
-    | "novaStar"
-    | "diamondSkull"
-    | "sunLion"
-    | "violetComet"
-    | "angelRing"
-    | "poseidonMode"
-    | "zeusuMode"
-    | "hadesuMode"
-    | "heartMode"
-    | "nekochanMode"
-    | "lifeQuoteMode"
-    | "fragment";
+type DropKind = string;
 
 type ProbabilityMode = "normal" | "festival" | "hard" | "hell";
 
@@ -212,7 +174,64 @@ const LOCAL_GOD_AUDIO_FILES = [
 ];
 type RareSoundFlavor = "normal" | "ur" | "ex" | "god";
 
-const SPECIAL_EVENT_DEFS: SpecialEventDef[] = [
+const MASSIVE_MIRACLE_PREFIXES = ["月光", "星屑", "深海", "天界", "終末", "黎明", "氷結", "紅蓮", "薄明", "幻影", "雷鳴", "翡翠", "白銀"];
+const MASSIVE_MIRACLE_SUFFIXES = [
+    { label: "ラーメン", symbol: "麺", emoji: "🍜" },
+    { label: "狐面", symbol: "面", emoji: "🦊" },
+    { label: "王笛", symbol: "笛", emoji: "🎺" },
+    { label: "時計塔", symbol: "塔", emoji: "🕰️" },
+    { label: "くじら雲", symbol: "雲", emoji: "☁️" },
+    { label: "招き猫", symbol: "猫", emoji: "🐱" },
+    { label: "竜巻飴", symbol: "飴", emoji: "🍭" },
+    { label: "流星札", symbol: "札", emoji: "🎴" },
+];
+
+function hslToHex(h: number, s: number, l: number): string {
+    s /= 100;
+    l /= 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const hp = h / 60;
+    const x = c * (1 - Math.abs((hp % 2) - 1));
+    let [r, g, b] = [0, 0, 0];
+    if (hp >= 0 && hp < 1) [r, g, b] = [c, x, 0];
+    else if (hp < 2) [r, g, b] = [x, c, 0];
+    else if (hp < 3) [r, g, b] = [0, c, x];
+    else if (hp < 4) [r, g, b] = [0, x, c];
+    else if (hp < 5) [r, g, b] = [x, 0, c];
+    else [r, g, b] = [c, 0, x];
+    const m = l - c / 2;
+    const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function buildMassiveMiracleDefs(): SpecialEventDef[] {
+    const defs: SpecialEventDef[] = [];
+    let index = 0;
+    for (const prefix of MASSIVE_MIRACLE_PREFIXES) {
+        for (const suffix of MASSIVE_MIRACLE_SUFFIXES) {
+            const hue = (index * 17) % 360;
+            const rank = index % 12 === 0 ? "UR" : index % 5 === 0 ? "SSR" : "SR";
+            const denominator = rank === "UR" ? 650_000 : rank === "SSR" ? 120_000 : 30_000;
+            const soundMode = rank === "UR" ? "cosmic" : "miracle";
+            defs.push({
+                kind: `miracleExtra${String(index + 1).padStart(3, "0")}`,
+                label: `${prefix}${suffix.label}`,
+                rank,
+                rate: 1 / denominator,
+                denominator,
+                symbol: suffix.symbol,
+                emoji: suffix.emoji,
+                fillStyle: hslToHex(hue, 88, rank === "UR" ? 61 : rank === "SSR" ? 67 : 72),
+                radiusScale: rank === "UR" ? 1.96 : rank === "SSR" ? 1.86 : 1.74,
+                soundMode,
+            });
+            index++;
+        }
+    }
+    return defs;
+}
+
+const BASE_SPECIAL_EVENT_DEFS: SpecialEventDef[] = [
     { kind: "cosmicEgg", label: "宇宙卵", rank: "GOD", rate: COSMIC_EGG_RATE, denominator: 1_000_000_000_000, symbol: "卵", emoji: "卵", fillStyle: "#240038", radiusScale: 2.7, soundMode: "cosmic" },
     { kind: "labExplosion", label: "研究所爆発", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "爆", emoji: "爆", fillStyle: "#ff3b30", radiusScale: 2.45, soundMode: "cosmic" },
     { kind: "poseidonMode", label: "poseidon mode", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "海", emoji: "海", fillStyle: "#1e88ff", radiusScale: 2.25, soundMode: "cosmic" },
@@ -223,8 +242,8 @@ const SPECIAL_EVENT_DEFS: SpecialEventDef[] = [
     { kind: "lifeQuoteMode", label: "人生名言ボイス", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "声", emoji: "声", fillStyle: "#ff9ed4", radiusScale: 2.15, soundMode: "miracle" },
     { kind: "blackSun", label: "黒い太陽", rank: "EX", rate: BLACK_SUN_RATE, denominator: 10_000_000, symbol: "黒", emoji: "黒", fillStyle: "#050505", radiusScale: 2.2, soundMode: "black" },
     { kind: "timeRift", label: "時空の裂け目", rank: "EX", rate: 0.0000005, denominator: 2_000_000, symbol: "裂", emoji: "裂", fillStyle: "#622aff", radiusScale: 2.05, soundMode: "cosmic" },
+    { kind: "obsidianKing", label: "黒曜王", rank: "EX", rate: 0.0000005, denominator: 2_000_000, symbol: "王", emoji: "王", fillStyle: "#1f1626", radiusScale: 2.18, soundMode: "black" },
 
-    // 100万分の1レベル追加イベント
     { kind: "crystalDragon", label: "水晶ドラゴン", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "竜", emoji: "竜", fillStyle: "#72f1ff", radiusScale: 2.0, soundMode: "cosmic" },
     { kind: "goldenDaruma", label: "黄金だるま", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "達", emoji: "達", fillStyle: "#ffbf2e", radiusScale: 1.95, soundMode: "miracle" },
     { kind: "moonRabbit", label: "月うさぎ", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "月", emoji: "月", fillStyle: "#d8e7ff", radiusScale: 1.95, soundMode: "miracle" },
@@ -235,20 +254,22 @@ const SPECIAL_EVENT_DEFS: SpecialEventDef[] = [
     { kind: "ancientClock", label: "古代時計", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "時", emoji: "時", fillStyle: "#b58b4a", radiusScale: 1.95, soundMode: "cosmic" },
     { kind: "mirrorCat", label: "鏡ねこ", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "猫", emoji: "猫", fillStyle: "#f5f7ff", radiusScale: 1.95, soundMode: "miracle" },
     { kind: "meteorCrown", label: "隕石クラウン", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "冠", emoji: "冠", fillStyle: "#ff6d3a", radiusScale: 2.05, soundMode: "cosmic" },
-    { kind: "obsidianKing", label: "黒曜王", rank: "EX", rate: 0.0000005, denominator: 2_000_000, symbol: "王", emoji: "王", fillStyle: "#1f1626", radiusScale: 2.18, soundMode: "black" },
     { kind: "novaStar", label: "新星", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "星", emoji: "星", fillStyle: "#fff066", radiusScale: 1.95, soundMode: "miracle" },
     { kind: "diamondSkull", label: "ダイヤ髑髏", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "骸", emoji: "骸", fillStyle: "#8df3ff", radiusScale: 2.0, soundMode: "cosmic" },
     { kind: "sunLion", label: "太陽獅子", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "獅", emoji: "獅", fillStyle: "#ffb12f", radiusScale: 2.02, soundMode: "miracle" },
     { kind: "violetComet", label: "紫彗星", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "彗", emoji: "彗", fillStyle: "#8d63ff", radiusScale: 1.96, soundMode: "cosmic" },
-    { kind: "angelRing", label: "天使輪", rank: "SSR", rate: 0.00001, denominator: 100_000, symbol: "輪", emoji: "輪", fillStyle: "#fff1a6", radiusScale: 1.88, soundMode: "miracle" },
-
     { kind: "heart", label: "桃色ハート", rank: "UR", rate: HEART_RATE, denominator: 1_000_000, symbol: "愛", emoji: "愛", fillStyle: "#ff69b4", radiusScale: 1.9, soundMode: "miracle" },
     { kind: "luckySeven", label: "ラッキーセブン", rank: "UR", rate: 1 / 777777, denominator: 777_777, symbol: "7", emoji: "7", fillStyle: "#ff2bd6", radiusScale: 1.85, soundMode: "miracle" },
+
+    { kind: "angelRing", label: "天使輪", rank: "SSR", rate: 0.00001, denominator: 100_000, symbol: "輪", emoji: "輪", fillStyle: "#fff1a6", radiusScale: 1.88, soundMode: "miracle" },
     { kind: "blueFlame", label: "青い炎", rank: "SSR", rate: 0.000004, denominator: 250_000, symbol: "炎", emoji: "炎", fillStyle: "#00aaff", radiusScale: 1.75, soundMode: "miracle" },
     { kind: "shootingStar", label: "流れ星", rank: "SSR", rate: SHOOTING_STAR_RATE, denominator: 100_000, symbol: "星", emoji: "星", fillStyle: "#78e7ff", radiusScale: 1.7, soundMode: "miracle" },
+
     { kind: "silverUfo", label: "銀のUFO", rank: "SR", rate: 0.00002, denominator: 50_000, symbol: "UFO", emoji: "UFO", fillStyle: "#cfd8dc", radiusScale: 1.65, soundMode: "miracle" },
     { kind: "crown", label: "王", rank: "SR", rate: CROWN_RATE, denominator: 10_000, symbol: "王", emoji: "王", fillStyle: "#ffd54a", radiusScale: 1.9, soundMode: "miracle" },
 ];
+
+const SPECIAL_EVENT_DEFS: SpecialEventDef[] = [...BASE_SPECIAL_EVENT_DEFS, ...buildMassiveMiracleDefs()];
 
 const RANDOM_BUCKET_COUNT = 10;
 const STUCK_NUDGE_FRAMES = 90;
@@ -855,7 +876,6 @@ missionButton = setTooltip(setButtonLabel(createButton("ミッション", () => 
 utilityButtons.appendChild(missionButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("最高記録", () => showRecordsPopup()), "最高記録", "Records"), "最高記録や通算記録を表示します。", "Show best and lifetime records."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡ログ", () => showMiracleLogPopup()), "奇跡ログ", "Miracle log"), "発生した奇跡の履歴を見ます。", "Show the history of miracles."));
-utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡ランキング", () => showMiracleRankingPopup()), "奇跡ランキング", "Ranking"), "レア度順に奇跡を並べます。", "Rank miracles by rarity."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("研究レポート", () => showResearchReportPopup()), "研究レポート", "Report"), "現在の実験状況をまとめます。", "Summarize the current experiment."));
 const replayButton = setTooltip(setButtonLabel(createButton("リプレイ", () => showReplayPopup()), "リプレイ", "Replay"), "奇跡クリップを再生・GIF保存します。", "Play or export miracle clips as GIF.");
 utilityButtons.appendChild(replayButton);
@@ -873,25 +893,38 @@ utilityButtons.appendChild(languageButton);
 const fullScreenButton = setTooltip(setButtonLabel(createButton("全画面", () => toggleGameFullscreen()), "全画面", "Fullscreen"), "実験画面だけを大きく表示します。", "Expand only the game screen." );
 utilityButtons.appendChild(fullScreenButton);
 
+speedButtons.appendChild(setTooltip(setButtonLabel(createButton("超低速", () => {
+    speedLabelText = "超低速";
+    engine.timing.timeScale = getCurrentTimeScale();
+    updateInfo();
+}), "超低速", "Very slow"), "かなりゆっくり進めます。観察向けです。", "Very slow for close observation."));
+
+speedButtons.appendChild(setTooltip(setButtonLabel(createButton("低速", () => {
+    speedLabelText = "低速";
+    engine.timing.timeScale = getCurrentTimeScale();
+    updateInfo();
+}), "低速", "Slow"), "ゆっくり進めます。", "Run slowly."));
+
 speedButtons.appendChild(setTooltip(setButtonLabel(createButton("通常", () => {
-    engine.timing.timeScale = 1;
     speedLabelText = "通常";
+    engine.timing.timeScale = getCurrentTimeScale();
     updateInfo();
 }), "通常", "Normal"), "標準速度で観測します。", "Observe at standard speed."));
 
 speedButtons.appendChild(setTooltip(setButtonLabel(createButton("高速", () => {
-    engine.timing.timeScale = 2;
     speedLabelText = "高速";
+    engine.timing.timeScale = getCurrentTimeScale();
     updateInfo();
 }), "高速", "Fast"), "やや速めに流します。", "Run the simulation faster."));
 
 speedButtons.appendChild(setTooltip(setButtonLabel(createButton("超高速", () => {
-    engine.timing.timeScale = 4;
     speedLabelText = "超高速";
+    engine.timing.timeScale = getCurrentTimeScale();
     updateInfo();
 }), "超高速", "Ultra"), "かなり速いので演出を見逃しやすいです。", "Very fast and easier to miss effects."));
 
 const stopButton = setTooltip(setButtonLabel(createButton("ストップ", () => togglePause()), "ストップ", "Stop"), "実験を一時停止・再開します。", "Pause or resume the experiment.");
+stopButton.addEventListener("touchend", (event) => { event.preventDefault(); togglePause(); }, { passive: false });
 displayButtons.appendChild(stopButton);
 const shockwaveButton = setTooltip(setButtonLabel(createButton("衝撃波 ×2", () => useSkill("shockwave")), "衝撃波 ×2", "Shockwave ×2"), "画面中央から玉を散らすスキルです。", "Scatter balls from the center.");
 const magnetButton = setTooltip(setButtonLabel(createButton("磁石 ×2", () => useSkill("magnet")), "磁石 ×2", "Magnet ×2"), "一定時間、上位の受け皿へ吸い寄せます。", "Pull balls toward the current top bin for a while.");
@@ -1252,6 +1285,90 @@ function getProbabilityScale(): number {
     return 1;
 }
 
+function getPassiveMiracleBoost(): number {
+    if (!isStarted || isFinished) return 1;
+    const elapsedSec = Math.max(0, (Date.now() - startTime) / 1000);
+    return clamp(1 + Math.floor(elapsedSec / 20) * 0.06, 1, 6);
+}
+
+function getCurrentTimeScale(): number {
+    if (speedLabelText === "超低速") return 0.28;
+    if (speedLabelText === "低速") return 0.55;
+    if (speedLabelText === "通常") return 1;
+    if (speedLabelText === "高速") return 2;
+    return 4;
+}
+
+function getSpeedDisplayLabel(): string {
+    if (isEnglish) {
+        if (speedLabelText === "超低速") return "Very slow";
+        if (speedLabelText === "低速") return "Slow";
+        if (speedLabelText === "通常") return "Normal";
+        if (speedLabelText === "高速") return "Fast";
+        return "Ultra";
+    }
+    return speedLabelText;
+}
+
+function getMiraclePauseDuration(def?: SpecialEventDef): number {
+    if (!def) return 5000;
+    if (def.rank === "SR" || def.rank === "SSR") return 2500;
+    if (def.rank === "UR") return 3600;
+    return 5000;
+}
+
+function getMiracleFeatureText(def: SpecialEventDef): string {
+    const prefix = def.label.replace(/mode$/i, "モード").replace(/\s+/g, "");
+    const specialMap: Record<string, string> = {
+        cosmicEgg: "研究ログの最後にだけ名前が残る、極秘扱いの奇跡です。",
+        labExplosion: "研究所の空気まで騒がしくなる、全部盛り級の事故演出です。",
+        poseidonMode: "盤面が海の気配に染まり、最後まで世界観を持っていきます。",
+        zeusuMode: "雷鳴の主役。出た瞬間から画面のテンションが明らかに変わります。",
+        hadesuMode: "暗さと重さで押してくる、低温なのに圧のある奇跡です。",
+        heartMode: "かわいさで盤面を支配する、甘めの暴走イベントです。",
+        nekochanMode: "急に猫派の世界になります。説明不能ですが人気は高いです。",
+        lifeQuoteMode: "急に言葉で殴ってくる、音声つきの哲学枠です。",
+        blackSun: "光るのに不穏。見た瞬間に普通のレアとは別物だとわかります。",
+        timeRift: "時間の縫い目みたいな演出で、盤面の空気を一段変えます。",
+        obsidianKing: "王の中でも重厚寄り。静かなのに存在感が異様です。",
+        crown: "定番の当たり役。見慣れてもちゃんとうれしい王道レアです。",
+        silverUfo: "スッと現れて妙に記憶に残る、SF寄りのごほうび演出です。",
+        angelRing: "軽やかで明るい、SSRらしい見栄え担当です。",
+        blueFlame: "静かに熱い系。派手さよりも青の異質感で刺してきます。",
+        shootingStar: "通過時間は短いのに、出たあと妙に印象が残るスピード系です。",
+        heart: "甘さ全振りの幸運印。画面が一気にやさしい空気になります。",
+        luckySeven: "数字ネタなのにちゃんと縁起がいい、遊び心の強いレアです。",
+    };
+    if (specialMap[def.kind]) return specialMap[def.kind];
+    if (def.rank === "GOD") return `${prefix}は、その回の空気をまるごと持っていく別格の奇跡です。`;
+    if (def.rank === "EX") return `${prefix}は、見た瞬間に盤面のルールが少し変わった気がする異常系レアです。`;
+    if (def.rank === "UR") return `${prefix}は、出たらその回を覚えていられる記念写真向けの奇跡です。`;
+    if (def.rank === "SSR") return `${prefix}は、比較的会いやすいのに見栄えが強いサービス枠レアです。`;
+    return `${prefix}は、数を回しているとふっと混ざる、うれしい日常型レアです。`;
+}
+
+function createMiracleImageDataUri(def: SpecialEventDef): string {
+    const bg = encodeURIComponent(def.fillStyle);
+    const symbol = encodeURIComponent(def.symbol || "奇");
+    const rank = encodeURIComponent(def.rank);
+    const emoji = encodeURIComponent(def.emoji || def.symbol || "✨");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+        <defs>
+            <radialGradient id="g" cx="30%" cy="25%">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="45%" stop-color="${bg}"/>
+                <stop offset="100%" stop-color="#111827"/>
+            </radialGradient>
+        </defs>
+        <rect width="320" height="320" rx="42" fill="#0f172a"/>
+        <circle cx="160" cy="132" r="92" fill="url(#g)" stroke="rgba(255,255,255,.65)" stroke-width="10"/>
+        <text x="160" y="155" text-anchor="middle" font-size="96" font-family="Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#ffffff">${symbol}</text>
+        <text x="160" y="58" text-anchor="middle" font-size="30" font-family="Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${rank}</text>
+        <text x="160" y="280" text-anchor="middle" font-size="44" font-family="Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${emoji}</text>
+    </svg>`;
+    return `data:image/svg+xml;charset=UTF-8,${svg}`;
+}
+
 
 function openMobileSettingsPopup(): void {
     if (!mobileSettingsOverlay) return;
@@ -1286,6 +1403,7 @@ function setupMobileLayout(): void {
     dock.appendChild(mobileDockRunButton);
 
     mobileDockPauseButton = createButton(t("一時停止", "Pause"), () => togglePause());
+    mobileDockPauseButton.addEventListener("touchend", (event) => { event.preventDefault(); togglePause(); }, { passive: false });
     mobileDockPauseButton.style.width = "100%";
     mobileDockPauseButton.style.height = "66px";
     mobileDockPauseButton.style.fontSize = "22px";
@@ -1762,7 +1880,7 @@ function incrementSpecialCreated(kind: DropKind): void {
 }
 
 function rollSpecialEvent(): SpecialEventDef | null {
-    const scale = getProbabilityScale();
+    const scale = getProbabilityScale() * getPassiveMiracleBoost();
     let threshold = 0;
     const roll = appRandom();
     for (const def of SPECIAL_EVENT_DEFS) {
@@ -2030,19 +2148,6 @@ function showMiracleLogPopup(): void {
     showPopup(t("奇跡発生ログ", "Miracle log"), rows);
 }
 
-function showMiracleRankingPopup(): void {
-    const rows = SPECIAL_EVENT_DEFS.slice().sort((a,b) => b.denominator - a.denominator || (savedRecords.discovered[b.kind] ?? 0) - (savedRecords.discovered[a.kind] ?? 0))
-        .map((def, i) => {
-            const total = (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0);
-            return `<div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;">
-                <div style="font-weight:900;">#${i+1}</div>
-                <div><b>${def.label}</b><br><span style="opacity:.74;">[${def.rank}] ${formatProbability(def.denominator)}</span></div>
-                <div style="font-weight:900;">${total}${t("回", "x")}</div>
-            </div>`;
-        }).join("");
-    showPopup(t("奇跡ランキング", "Miracle ranking"), rows);
-}
-
 function getResearchReportHtml(): string {
     const sum = binCounts.reduce((a,b) => a+b, 0) || 1;
     const maxCount = Math.max(...binCounts, 0);
@@ -2159,9 +2264,7 @@ function updateBoardAnomaly(): void {
         anomalyUntil = 0;
         engine.gravity.x = anomalyOldGravityX;
         anomalyHidePins = false;
-        if (speedLabelText === "通常") engine.timing.timeScale = 1;
-        else if (speedLabelText === "高速") engine.timing.timeScale = 2;
-        else engine.timing.timeScale = 4;
+        engine.timing.timeScale = getCurrentTimeScale();
     }
 }
 
@@ -2209,33 +2312,34 @@ function showPopup(title: string, bodyHtml: string): void {
     document.getElementById("bottom-close-help-popup-button")!.onclick = () => closeHelpPopup();
 }
 
+
 function showMiracleBookPopup(): void {
     const rows = SPECIAL_EVENT_DEFS.slice().reverse().map((def) => {
-        const totalCount = savedRecords.discovered[def.kind] ?? 0;
+        const savedCount = savedRecords.discovered[def.kind] ?? 0;
         const nowCount = specialCreated[def.kind] ?? 0;
-        const found = totalCount > 0 || nowCount > 0;
-        const name = found ? `${def.symbol} ${def.label}` : `◼︎◼︎◼︎ (${getSilhouetteHint(def)})`;
-        const firstAt = found ? formatDateTime(savedRecords.discoveredFirstAt[def.kind]) : "-";
-        if (isMobile) {
-            return `<div style="padding:14px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                    <div style="font-weight:900;font-size:24px;color:${found ? "#243" : "#999"};">${def.rank}</div>
-                    <div style="font-weight:900;font-size:18px;white-space:nowrap;">${t("累計", "Total")} ${totalCount + nowCount}${t("回", "x")}</div>
+        const totalCount = savedCount + nowCount;
+        const found = totalCount > 0;
+        const firstFoundAt = savedRecords.discoveredFirstAt[def.kind];
+        const displayName = found ? `${def.symbol} ${def.label}` : `◼︎◼︎◼︎ (${getSilhouetteHint(def)})`;
+        const imageHtml = found
+            ? `<img src="${createMiracleImageDataUri(def)}" alt="${def.label}" style="width:${isMobile ? 98 : 112}px;height:${isMobile ? 98 : 112}px;border-radius:22px;object-fit:cover;box-shadow:0 10px 24px rgba(0,0,0,.18);background:#0f172a;" />`
+            : `<div style="width:${isMobile ? 98 : 112}px;height:${isMobile ? 98 : 112}px;border-radius:22px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#d9dde7,#b9c0cf);color:#6b7280;font-size:${isMobile ? 26 : 30}px;font-weight:900;box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);">?</div>`;
+        const firstFoundText = found && firstFoundAt ? new Date(firstFoundAt).toLocaleString() : "----";
+        return `<div style="display:grid;grid-template-columns:${isMobile ? "98px minmax(0,1fr)" : "112px minmax(0,1fr)"};gap:14px;align-items:start;padding:14px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+            <div>${imageHtml}</div>
+            <div style="min-width:0;">
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                    <span style="display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:999px;background:${found ? "rgba(53,98,59,.14)" : "rgba(120,130,140,.14)"};font-weight:900;color:${found ? "#214329" : "#727a86"};">${def.rank}</span>
+                    <span style="font-size:${isMobile ? 21 : 22}px;font-weight:900;line-height:1.35;word-break:break-word;color:${found ? "#1d2738" : "#999"};">${displayName}</span>
                 </div>
-                <div style="margin-top:6px;font-size:21px;font-weight:900;line-height:1.35;word-break:keep-all;overflow-wrap:break-word;">${name}</div>
-                <div style="margin-top:8px;font-size:16px;line-height:1.55;opacity:.76;">${t("確率", "Odds")} ${formatProbability(def.denominator)}</div>
-                <div style="margin-top:4px;font-size:16px;line-height:1.55;opacity:.76;">${getProbabilityDangerText(def.denominator)}</div>
-                <div style="margin-top:4px;font-size:15px;line-height:1.5;opacity:.7;">初回発見: ${firstAt} / 今回: ${nowCount}回</div>
-            </div>`;
-        }
-        return `<div style="display:grid;grid-template-columns:86px minmax(0,1fr) 180px;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <div style="font-weight:900;font-size:24px;color:${found ? "#243" : "#999"};">${def.rank}</div>
-            <div style="min-width:0;"><b>${name}</b><br><span style="opacity:.72;">${t("確率", "Odds")} ${formatProbability(def.denominator)} / ${getProbabilityDangerText(def.denominator)}</span><br><span style="opacity:.64;">初回発見 ${firstAt} / 今回 ${nowCount}回</span></div>
-            <div style="text-align:right;font-weight:900;">${t("累計", "Total")} ${totalCount + nowCount}${t("回", "x")}</div>
+                <div style="margin-top:8px;font-size:${isMobile ? 15 : 16}px;line-height:1.7;opacity:.82;">${getMiracleFeatureText(def)}</div>
+                <div style="margin-top:8px;font-size:${isMobile ? 15 : 16}px;line-height:1.6;opacity:.72;">${t("確率", "Odds")} ${formatProbability(def.denominator)} / ${t("累計発見", "Total found")} ${totalCount}${t("回", "x")}</div>
+                <div style="margin-top:2px;font-size:${isMobile ? 14 : 15}px;line-height:1.6;opacity:.62;">${t("初回発見", "First found")} ${firstFoundText}</div>
+            </div>
         </div>`;
     }).join("");
     showPopup("奇跡図鑑", `
-        <p style="margin-top:0;">発見回数に加えて、初回発見日時と今回の実験中の観測回数も記録します。ブラウザのlocalStorage保存なので、同じ端末・同じブラウザなら残ります。</p>
+        <p style="margin-top:0;">発見済みの奇跡は画像つきで表示されます。未発見のものは名前を伏せたまま記録されます。</p>
         <div style="margin-top:16px;border-radius:22px;background:rgba(255,255,255,.75);padding:${isMobile ? "4px 14px" : "8px 16px"};box-sizing:border-box;max-width:100%;overflow:hidden;">${rows}</div>
     `);
 }
@@ -2257,7 +2361,7 @@ function showRecordsPopup(): void {
 function showAboutPopup(): void {
     showPopup("ミラクルボールラボについて", `
         <p><b>ミラクルボールラボ</b>は、玉を上から落として、ピンに当たりながらどの受け皿に入るかを観測するランダム実験です。</p>
-        <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王、銀のUFO、青い炎、流れ星、ラッキーセブン、桃色ハート、時空の裂け目、黒い太陽、研究所爆発、宇宙卵などのレア玉がまれに出ます。特に宇宙卵は<b>1兆分の1</b>の超レア演出です。</p>
+        <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王、銀のUFO、青い炎、流れ星、ラッキーセブン、桃色ハート、時空の裂け目、黒い太陽、研究所爆発、そして極秘の最上位奇跡など、たくさんのレア玉がまれに出ます。最上位は<b>1兆分の1</b>級です。</p>
         <p>さらに<b>10億分の1</b>レベルで、<b>poseidon mode / zeusu mode / hadesu mode / heart mode / nekochan mode / 人生名言ボイス</b>が発生します。mode系は出た瞬間から実験終了まで盤面全体の世界観が変わり続けます。</p>
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
         <p>5000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
@@ -2269,8 +2373,8 @@ function showAboutPopup(): void {
 function showButtonHelpPopup(): void {
     showPopup("ボタン説明", `
         <p><b>実行:</b> 現在の設定で実験を開始します。開始前は待機中です。</p>
-        <p><b>通常 / 高速 / 超高速:</b> 玉の動く速度を変えます。超高速は処理は速いですが、レア演出を見逃しやすくなります。</p>
-        <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。奇跡演出中は自動停止して約5秒後に再開します。スマホ下部にも一時停止ボタンがあります。</p>
+        <p><b>超低速 / 低速 / 通常 / 高速 / 超高速:</b> 玉の動く速度を変えます。超低速と低速は観察向け、超高速は処理は速いですがレア演出を見逃しやすくなります。</p>
+        <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。奇跡演出中でも一時停止を優先できます。スマホ下部にも一時停止ボタンがあります。</p>
         <p><b>リセット:</b> 設定を読み直して、実験を最初から待機状態に戻します。</p>
         <p><b>シンプル:</b> 演出を減らして軽くします。重い場合や大量回数を試す場合に便利です。</p>
         <p><b>音:</b> npm 依存の Tone.js を使って、レア玉や激レア演出で音を鳴らします。ブラウザ仕様上、最初にボタン操作が必要です。</p>
@@ -2551,12 +2655,13 @@ async function startExperiment(): Promise<void> {
     void ensureGifReady();
     // ブラウザの仕様上、音声開始はユーザー操作後が安全なので、実行ボタン押下時に準備する
     if (soundEnabled && !toneReady) await enableSound(false);
-    engine.timing.timeScale = speedLabelText === "超高速" ? 4 : speedLabelText === "高速" ? 2 : 1;
+    engine.timing.timeScale = getCurrentTimeScale();
     resetExperiment(true);
 }
 
-function pauseForMiracle(): void {
+function pauseForMiracle(def?: SpecialEventDef): void {
     if (!isStarted || isFinished || isMiraclePaused) return;
+    const durationMs = getMiraclePauseDuration(def);
     isMiraclePaused = true;
     Runner.stop(runner);
     updateInfo();
@@ -2565,16 +2670,21 @@ function pauseForMiracle(): void {
         miraclePauseTimer = undefined;
         if (isStarted && !isFinished && !isPaused) Runner.run(runner, engine);
         updateInfo();
-    }, 5000);
+    }, durationMs);
 }
 
 function togglePause(): void {
-    if (!isStarted || isFinished || isMiraclePaused) return;
+    if (!isStarted || isFinished) return;
     if (isPaused) {
         isPaused = false;
-        Runner.run(runner, engine);
+        if (!isMiraclePaused) Runner.run(runner, engine);
     } else {
         isPaused = true;
+        if (miraclePauseTimer !== undefined) {
+            window.clearTimeout(miraclePauseTimer);
+            miraclePauseTimer = undefined;
+        }
+        isMiraclePaused = false;
         Runner.stop(runner);
     }
     updateStopButton();
@@ -3016,9 +3126,9 @@ function speakLifeQuoteEvent(): void {
 }
 
 function showMiracle(kind: DropKind, symbol: string, probabilityText: string, feelingText: string): void {
-    pauseForMiracle();
     const def = findSpecialDef(kind);
     if (def) {
+        pauseForMiracle(def);
         updateMiracleCombo();
         addMiracleLog(def);
         const subtitle = `${def.label} ${t("発生", "appeared")} / [${def.rank}] ${formatProbability(def.denominator)}`;
@@ -3031,8 +3141,10 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     vibrateOnMobile(def?.rank === "GOD" ? [90, 50, 160, 60, 220] : def?.rank === "EX" ? [70, 40, 120, 40, 140] : [55, 28, 80]);
     triggerCameraShake(def?.rank === "GOD" ? 46 * geometry.scale : def?.rank === "EX" ? 34 * geometry.scale : 24 * geometry.scale, def?.rank === "GOD" ? 1200 : 760);
     if (settings.simpleMode) return;
+    const overlayDurationMs = getMiraclePauseDuration(def);
+    const overlayDurationSec = Math.max(1.8, overlayDurationMs / 1000);
     miracleOverlay.innerHTML = `
-        <div style="max-width:900px;animation:miracle-pop 4.8s ease-out forwards;">
+        <div style="max-width:900px;animation:miracle-pop ${overlayDurationSec.toFixed(2)}s ease-out forwards;">
             <style>@keyframes miracle-pop{0%{transform:scale(.65);opacity:0}15%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:0}}</style>
             ${getMiracleIconHtml(kind, symbol)}
             <div style="font-size:clamp(36px,8vw,90px);font-weight:900;margin-top:12px;text-shadow:0 8px 30px rgba(0,0,0,.6);">${def?.label ?? "奇跡"} 発生</div>
@@ -3044,7 +3156,7 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     void playAnimeMiracleEffect(def);
     fireConfetti(kind === "blackSun" ? "black" : kind === "cosmicEgg" ? "cosmic" : "miracle");
     playSpecialSound(kind);
-    window.setTimeout(() => { miracleOverlay.style.display = "none"; miracleOverlay.innerHTML = ""; }, 4900);
+    window.setTimeout(() => { miracleOverlay.style.display = "none"; miracleOverlay.innerHTML = ""; }, overlayDurationMs + 120);
 }
 
 function updateSoundButton(): void {
@@ -3253,7 +3365,7 @@ function updateInfo(): void {
         <div>${t("ブラウザ", "Browser")}: <b>${browserName}</b></div>
         <div>${t("実行回数", "Progress")}: <b>${finishedCount.toLocaleString()}</b> / ${settings.targetCount.toLocaleString()}</div>
         <div>${t("画面上の玉", "Balls on screen")}: <b>${activeDropCount}</b></div>
-        <div>${t("速度", "Speed")}: <b>${isEnglish ? (speedLabelText === "通常" ? "Normal" : speedLabelText === "高速" ? "Fast" : "Ultra") : speedLabelText}</b></div>
+        <div>${t("速度", "Speed")}: <b>${getSpeedDisplayLabel()}</b></div>
         <div>${t("確率モード", "Probability mode")}: <b>${isEnglish ? ({normal:"Normal",festival:"Festival",hard:"Hard",hell:"Hell"} as any)[settings.probabilityMode] : getProbabilityModeLabel()}</b></div>
         <div>${t("状態", "Status")}: <b>${!isStarted ? t("待機中", "Idle") : isFinished ? t("完了", "Finished") : isMiraclePaused ? t("奇跡で停止中", "Paused by miracle") : isPaused ? t("停止中", "Paused") : targetReachedTime ? t("残り玉回収中", "Collecting remaining balls") : t("実行中", "Running")}</b></div>
         <div>${t("経過時間", "Elapsed")}: <b>${formatElapsedTime(elapsedMs)}</b></div>
@@ -3266,7 +3378,7 @@ function updateInfo(): void {
         <div>${t("奇跡ログ件数", "Miracle logs")}: <b>${miracleLogs.length}</b></div>
         <div>${t("スコア", "Score")}: <b>${runScore.toLocaleString()}</b></div>
         <div>${t("ミッション", "Missions")}: <b>${missionDoneCount}</b> / ${missionDefs.length}</div>
-        <div>${t("スキル", "Skills")}: <b>衝${skillState.shockwave} / 磁${skillState.magnet} / 時${skillState.timeStop}</b></div>
+        <div>${t("スキル", "Skills")}: <b>衝${skillState.shockwave} / 磁${skillState.magnet} / 時${skillState.timeStop}</b></div>\n        <div>${t("奇跡ブースト", "Miracle boost")}: <b>x${getPassiveMiracleBoost().toFixed(2)}</b></div>
         <div>${t("縦動画", "Vertical")}: <b>${isVerticalVideoMode ? "ON" : "OFF"}</b></div>
         <div>${t("OBSモード", "OBS mode")}: <b>${isObsMode ? "ON" : "OFF"}</b></div>
         <div>${t("捨て区画", "Discarded")}: <b>${discardedCount.toLocaleString()}</b></div>
@@ -3370,7 +3482,7 @@ function showFinalResult(): void {
             <div style="font-size:clamp(22px,4vw,40px);margin-bottom:18px;">${browserName} / 指定${settings.targetCount.toLocaleString()}回 / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime)}</div>
             <div style="font-size:clamp(20px,3vw,34px);margin-bottom:18px;">スコア <b>${runScore.toLocaleString()}</b> / ミッション ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length} / 奇跡コンボ最高 ${bestComboThisRun}</div>
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
-            <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の「宇宙卵」。出たら奇跡どころか、画面が伝説になります。</div>
+            <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の極秘イベント。出たら奇跡どころか、画面が伝説になります。</div>
             <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">発見済み種類: ${(SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length).toLocaleString()} / ${SPECIAL_EVENT_DEFS.length}　捨て区画: ${discardedCount.toLocaleString()}</div>
             <div style="margin-top:18px;font-size:clamp(16px,2vw,26px);opacity:.95;">${getResearchReportHtml()}</div>
             <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="copy-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">結果コピー</button><button id="download-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">CSV保存</button><button id="share-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);box-shadow:0 5px 14px rgba(90,96,180,.16);">録画・SNS</button><button id="bottom-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">閉じる</button></div>
