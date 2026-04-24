@@ -467,7 +467,7 @@ let settings: Settings = {
     simpleMode: false,
     cameraShakeEnabled: false,
     slowMiracleEffects: false,
-    effectsEnabled: false,
+    effectsEnabled: true,
     commentaryEnabled: true,
     boardAnomalyEnabled: true,
     normalBallTraitsEnabled: true,
