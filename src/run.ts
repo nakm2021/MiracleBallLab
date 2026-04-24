@@ -293,6 +293,7 @@ const MIRACLE_ASSET_BASE_URL = "https://pub-53a4b50cc39c4d7882f67fc9340fe6e8.r2.
 const MIRACLE_MANIFEST_URL = `${MIRACLE_ASSET_BASE_URL}/manifest.json`;
 const REMOTE_MIRACLE_MANIFEST_CACHE_MS = 5 * 60 * 1000;
 const REMOTE_MIRACLE_VIDEO_DISPLAY_MS = 10 * 1000;
+const REMOTE_MIRACLE_BAD_URL_CACHE_MS = 30 * 60 * 1000;
 const SECRET_KEY_SEQUENCES: Record<string, { label: string; detail: string }> = {
     miracle: { label: "MIRACLE コード", detail: "キーボードで隠しコードを入力しました。今日の研究所は少しだけ騒がしくなります。" },
     lab: { label: "LAB コード", detail: "研究所の短縮コードを入力しました。秘密研究員として記録します。" },
@@ -335,17 +336,8 @@ const RARE_PIN_DEFS: RarePinDef[] = [
     { kind: "rainbow", label: "虹ピン", description: "触れると奇跡予兆が出やすい特別なピンです。", fillStyle: "#a855f7", strokeStyle: "#fef3c7", rate: 0.005 },
 ];
 
-const LOCAL_RARE_AUDIO_FILES = [
-    "/audio/rare-01.mp3",
-    "/audio/rare-02.mp3",
-    "/audio/rare-03.mp3",
-    "/audio/rare-04.mp3",
-];
-const LOCAL_GOD_AUDIO_FILES = [
-    "/audio/god-01.mp3",
-    "/audio/god-02.mp3",
-    "/audio/god-03.mp3",
-];
+const LOCAL_RARE_AUDIO_FILES: string[] = [];
+const LOCAL_GOD_AUDIO_FILES: string[] = [];
 type RareSoundFlavor = "normal" | "ur" | "ex" | "god";
 
 const MASSIVE_MIRACLE_PREFIXES = ["月光", "星屑", "深海", "天界", "終末", "黎明", "氷結", "紅蓮", "薄明", "幻影", "雷鳴", "翡翠", "白銀"];
@@ -1586,6 +1578,7 @@ let remoteMiracleAssetsLoadedAt = 0;
 let remoteMiracleAssetsLoading: Promise<RemoteMiracleAsset[]> | null = null;
 let activeRemoteMiracleVideo: HTMLVideoElement | null = null;
 let remoteMiracleVideoTimer: number | undefined;
+let remoteMiracleBadUrls = new Map<string, number>();
 
 const flashOverlay = document.createElement("div");
 flashOverlay.style.position = "fixed";
@@ -4608,6 +4601,58 @@ function getRemoteAssetRank(asset: RemoteMiracleAsset): string {
     return String(asset.rank ?? "common").toLowerCase();
 }
 
+function getRemoteMiracleAssetSources(asset: RemoteMiracleAsset): RemoteMiracleAssetSource[] {
+    const sources: RemoteMiracleAssetSource[] = [];
+
+    if (asset.sources && asset.sources.length > 0) {
+        for (const source of asset.sources) {
+            if (!source.url) continue;
+
+            sources.push({
+                url: normalizeRemoteMiracleUrl(source.url),
+                mimeType: source.mimeType,
+            });
+        }
+    } else if (asset.url) {
+        sources.push({
+            url: normalizeRemoteMiracleUrl(asset.url),
+            mimeType: asset.mimeType,
+        });
+    }
+
+    return sources;
+}
+
+function cleanupRemoteMiracleBadUrls(): void {
+    const now = Date.now();
+
+    remoteMiracleBadUrls.forEach((failedAt, url) => {
+        if (now - failedAt > REMOTE_MIRACLE_BAD_URL_CACHE_MS) {
+            remoteMiracleBadUrls.delete(url);
+        }
+    });
+}
+
+function markRemoteMiracleAssetBad(asset: RemoteMiracleAsset): void {
+    const now = Date.now();
+
+    for (const source of getRemoteMiracleAssetSources(asset)) {
+        remoteMiracleBadUrls.set(source.url, now);
+    }
+}
+
+function getUsableRemoteMiracleAssetSources(asset: RemoteMiracleAsset): RemoteMiracleAssetSource[] {
+    cleanupRemoteMiracleBadUrls();
+
+    return getRemoteMiracleAssetSources(asset).filter((source) => {
+        return !remoteMiracleBadUrls.has(source.url);
+    });
+}
+
+function isRemoteMiracleAssetUsable(asset: RemoteMiracleAsset): boolean {
+    return getUsableRemoteMiracleAssetSources(asset).length > 0;
+}
+
 function getDefRank(def?: SpecialEventDef): string {
     return String(def?.rank ?? "common").toLowerCase();
 }
@@ -4678,7 +4723,7 @@ function weightedPickRemoteAsset(assets: RemoteMiracleAsset[]): RemoteMiracleAss
 }
 
 function selectRemoteMiracleVideoAsset(assets: RemoteMiracleAsset[], def?: SpecialEventDef): RemoteMiracleAsset | null {
-    const videos = assets.filter((asset) => asset.kind === "video");
+    const videos = assets.filter((asset) => asset.kind === "video" && isRemoteMiracleAssetUsable(asset));
     if (videos.length === 0) return null;
 
     const defRank = getDefRank(def);
@@ -4733,10 +4778,7 @@ function resumeRemoteMiracleVideo(): void {
 }
 
 function getRemoteMiracleAssetMainUrl(asset: RemoteMiracleAsset): string {
-    const firstSource = asset.sources?.[0];
-    if (firstSource?.url) return normalizeRemoteMiracleUrl(firstSource.url);
-    if (asset.url) return normalizeRemoteMiracleUrl(asset.url);
-    return "";
+    return getRemoteMiracleAssetSources(asset)[0]?.url ?? "";
 }
 
 function getRemoteMiracleAssetLabel(asset: RemoteMiracleAsset): string {
@@ -4758,11 +4800,13 @@ function applyRemoteMiracleVideoSoundState(): void {
     }
 }
 
-async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = false): Promise<void> {
-    if (isAppTerminated) return;
-    if (asset.kind !== "video") return;
-    if (!force && settings.simpleMode) return;
-    if (!asset.url && (!asset.sources || asset.sources.length === 0)) return;
+async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = false): Promise<boolean> {
+    if (isAppTerminated) return false;
+    if (asset.kind !== "video") return false;
+    if (!force && settings.simpleMode) return false;
+
+    const usableSources = getUsableRemoteMiracleAssetSources(asset);
+    if (usableSources.length === 0) return false;
 
     stopRemoteMiracleVideo();
 
@@ -4785,18 +4829,59 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     video.style.mixBlendMode = "screen";
     video.style.pointerEvents = "none";
 
-    if (asset.sources && asset.sources.length > 0) {
-        for (const sourceDef of asset.sources) {
-            const source = document.createElement("source");
-            source.src = normalizeRemoteMiracleUrl(sourceDef.url);
-            if (sourceDef.mimeType) source.type = sourceDef.mimeType;
-            video.appendChild(source);
-        }
-    } else if (asset.url) {
+    for (const sourceDef of usableSources) {
         const source = document.createElement("source");
-        source.src = normalizeRemoteMiracleUrl(asset.url);
-        if (asset.mimeType) source.type = asset.mimeType;
+        source.src = sourceDef.url;
+        if (sourceDef.mimeType) source.type = sourceDef.mimeType;
         video.appendChild(source);
+    }
+
+    const ready = await new Promise<boolean>((resolve) => {
+        let settled = false;
+        let timer: number | undefined;
+
+        const finish = (ok: boolean) => {
+            if (settled) return;
+            settled = true;
+
+            if (timer !== undefined) {
+                window.clearTimeout(timer);
+            }
+
+            video.removeEventListener("canplay", onReady);
+            video.removeEventListener("loadeddata", onReady);
+            video.removeEventListener("error", onError);
+
+            resolve(ok);
+        };
+
+        const onReady = () => finish(true);
+        const onError = () => finish(false);
+
+        video.addEventListener("canplay", onReady, { once: true });
+        video.addEventListener("loadeddata", onReady, { once: true });
+        video.addEventListener("error", onError, { once: true });
+
+        timer = window.setTimeout(() => {
+            finish(false);
+        }, 5000);
+
+        try {
+            video.load();
+        } catch {
+            finish(false);
+        }
+    });
+
+    if (!ready) {
+        console.warn("[Miracle R2] video file not found or not ready", asset);
+        markRemoteMiracleAssetBad(asset);
+
+        if (force) {
+            showSoftToast("R2動画の読み込みに失敗しました。manifest.json のファイル名を確認してください");
+        }
+
+        return false;
     }
 
     video.addEventListener("ended", () => {
@@ -4811,9 +4896,13 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     });
 
     video.addEventListener("error", () => {
-        console.warn("[Miracle R2] admin video load failed", asset);
+        console.warn("[Miracle R2] video load failed", asset);
+        markRemoteMiracleAssetBad(asset);
         stopRemoteMiracleVideo();
-        showSoftToast("R2動画の読み込みに失敗しました");
+
+        if (force) {
+            showSoftToast("R2動画の読み込みに失敗しました。manifest.json のファイル名を確認してください");
+        }
     }, { once: true });
 
     remoteMiracleVideoOverlay.innerHTML = "";
@@ -4831,10 +4920,18 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
         remoteMiracleVideoTimer = window.setTimeout(() => {
             stopRemoteMiracleVideo();
         }, REMOTE_MIRACLE_VIDEO_DISPLAY_MS);
+
+        return true;
     } catch (error) {
-        console.warn("[Miracle R2] admin video autoplay failed", error);
+        console.warn("[Miracle R2] video autoplay/load failed", error);
+        markRemoteMiracleAssetBad(asset);
         stopRemoteMiracleVideo();
-        showSoftToast("ブラウザ制限で動画を自動再生できませんでした");
+
+        if (force) {
+            showSoftToast("R2動画を再生できませんでした。manifest.json のファイル名を確認してください");
+        }
+
+        return false;
     }
 }
 
@@ -4844,10 +4941,14 @@ async function playRemoteMiracleVideo(def?: SpecialEventDef): Promise<void> {
     if (!settings.effectsEnabled && !shouldForceMiracleEffects(def)) return;
 
     const assets = await loadRemoteMiracleAssets();
-    const asset = selectRemoteMiracleVideoAsset(assets, def);
-    if (!asset) return;
 
-    await playRemoteMiracleVideoAsset(asset, false);
+    for (let i = 0; i < 5; i++) {
+        const asset = selectRemoteMiracleVideoAsset(assets, def);
+        if (!asset) return;
+
+        const played = await playRemoteMiracleVideoAsset(asset, false);
+        if (played) return;
+    }
 }
 
 function hideMiracleOverlayNow(stopRemoteVideo = false): void {
