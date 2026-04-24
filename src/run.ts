@@ -292,6 +292,7 @@ const SECRET_KEY_SEQUENCE = "miracle";
 const MIRACLE_ASSET_BASE_URL = "https://pub-53a4b50cc39c4d7882f67fc9340fe6e8.r2.dev";
 const MIRACLE_MANIFEST_URL = `${MIRACLE_ASSET_BASE_URL}/manifest.json`;
 const REMOTE_MIRACLE_MANIFEST_CACHE_MS = 5 * 60 * 1000;
+const REMOTE_MIRACLE_VIDEO_DISPLAY_MS = 10 * 1000;
 const SECRET_KEY_SEQUENCES: Record<string, { label: string; detail: string }> = {
     miracle: { label: "MIRACLE コード", detail: "キーボードで隠しコードを入力しました。今日の研究所は少しだけ騒がしくなります。" },
     lab: { label: "LAB コード", detail: "研究所の短縮コードを入力しました。秘密研究員として記録します。" },
@@ -3290,7 +3291,7 @@ async function showAdminRemoteVideoTestPopup(): Promise<void> {
         const mainUrl = getRemoteMiracleAssetMainUrl(asset);
         const rank = escapeHtml(String(asset.rank ?? "common").toUpperCase());
         const id = escapeHtml(asset.id);
-        const seconds = asset.seconds ? `${asset.seconds}秒` : "未指定";
+        const seconds = "10秒固定";
         const opacity = asset.opacity ?? 0.45;
         const weight = asset.weight ?? 1;
         const urlText = escapeHtml(mainUrl);
@@ -4724,6 +4725,7 @@ function pauseRemoteMiracleVideo(): void {
 function resumeRemoteMiracleVideo(): void {
     if (!activeRemoteMiracleVideo) return;
     try {
+        activeRemoteMiracleVideo.muted = !soundEnabled;
         void activeRemoteMiracleVideo.play();
     } catch {
         // 自動再生制限などは無視
@@ -4739,8 +4741,21 @@ function getRemoteMiracleAssetMainUrl(asset: RemoteMiracleAsset): string {
 
 function getRemoteMiracleAssetLabel(asset: RemoteMiracleAsset): string {
     const rank = String(asset.rank ?? "common").toUpperCase();
-    const seconds = asset.seconds ? `${asset.seconds}秒` : "秒数未指定";
-    return `[${rank}] ${asset.id} / ${seconds}`;
+    return `[${rank}] ${asset.id} / 再生10秒固定`;
+}
+
+function getRemoteMiracleVideoVolume(asset: RemoteMiracleAsset): number {
+    return clamp(Number(asset.volume ?? 0.45), 0, 1);
+}
+
+function applyRemoteMiracleVideoSoundState(): void {
+    if (!activeRemoteMiracleVideo) return;
+
+    try {
+        activeRemoteMiracleVideo.muted = !soundEnabled;
+    } catch {
+        // 無視
+    }
 }
 
 async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = false): Promise<void> {
@@ -4753,7 +4768,8 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
     const video = document.createElement("video");
     video.autoplay = true;
-    video.muted = true;
+    video.muted = !soundEnabled;
+    video.volume = getRemoteMiracleVideoVolume(asset);
     video.loop = false;
     video.playsInline = true;
     video.preload = "auto";
@@ -4784,8 +4800,15 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     }
 
     video.addEventListener("ended", () => {
-        stopRemoteMiracleVideo();
-    }, { once: true });
+        if (!activeRemoteMiracleVideo || activeRemoteMiracleVideo !== video) return;
+
+        try {
+            video.currentTime = 0;
+            void video.play();
+        } catch {
+            // 10秒表示を優先するため、再再生できなくてもオーバーレイは残します
+        }
+    });
 
     video.addEventListener("error", () => {
         console.warn("[Miracle R2] admin video load failed", asset);
@@ -4798,13 +4821,16 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     remoteMiracleVideoOverlay.style.display = "block";
     activeRemoteMiracleVideo = video;
 
-    const fallbackMs = Math.max(1200, Number(asset.seconds ?? 8) * 1000 + 800);
-    remoteMiracleVideoTimer = window.setTimeout(() => {
-        stopRemoteMiracleVideo();
-    }, fallbackMs);
-
     try {
         await video.play();
+
+        if (remoteMiracleVideoTimer !== undefined) {
+            window.clearTimeout(remoteMiracleVideoTimer);
+        }
+
+        remoteMiracleVideoTimer = window.setTimeout(() => {
+            stopRemoteMiracleVideo();
+        }, REMOTE_MIRACLE_VIDEO_DISPLAY_MS);
     } catch (error) {
         console.warn("[Miracle R2] admin video autoplay failed", error);
         stopRemoteMiracleVideo();
@@ -4824,7 +4850,7 @@ async function playRemoteMiracleVideo(def?: SpecialEventDef): Promise<void> {
     await playRemoteMiracleVideoAsset(asset, false);
 }
 
-function hideMiracleOverlayNow(): void {
+function hideMiracleOverlayNow(stopRemoteVideo = false): void {
     if (miracleOverlayTimer !== undefined) {
         window.clearTimeout(miracleOverlayTimer);
         miracleOverlayTimer = undefined;
@@ -4839,7 +4865,9 @@ function hideMiracleOverlayNow(): void {
     miracleOverlay.style.display = "none";
     miracleOverlay.innerHTML = "";
 
-    stopRemoteMiracleVideo();
+    if (stopRemoteVideo) {
+        stopRemoteMiracleVideo();
+    }
 }
 
 function startMiracleOverlayTimer(durationMs: number): void {
@@ -5776,6 +5804,8 @@ async function enableSound(showNotice = true): Promise<void> {
         toneReady = true;
         soundEnabled = true;
         updateSoundButton();
+        applyRemoteMiracleVideoSoundState();
+
         if (showNotice) {
             showMilestone(t("音ON", "Sound ON"));
             window.setTimeout(() => playUiSound("start"), 30);
@@ -5789,13 +5819,16 @@ async function toggleSound(): Promise<void> {
     if (soundEnabled) {
         soundEnabled = false;
         updateSoundButton();
+        applyRemoteMiracleVideoSoundState();
         showMilestone(t("音OFF", "Sound OFF"));
         showSoftToast(t("音をOFFにしました", "Sound disabled"));
         return;
     }
+
     soundEnabled = true;
     updateSoundButton();
     await enableSound(true);
+    applyRemoteMiracleVideoSoundState();
     showSoftToast(t("音をONにしました", "Sound enabled"));
 }
 
