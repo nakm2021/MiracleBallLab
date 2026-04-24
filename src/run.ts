@@ -142,8 +142,8 @@ type FloatingText = {
 const BASE_WIDTH = 800;
 const BASE_HEIGHT = 600;
 
-const MILESTONE_INTERVAL = 5000;
-const GIANT_EVENT_INTERVAL = 5000;
+const MILESTONE_INTERVAL = 100000;
+const GIANT_EVENT_INTERVAL = 100000;
 const FINAL_SWEEP_DELAY_MS = 3000;
 const SCORE_STORAGE_BONUS_INTERVAL = 5000;
 const MAGNET_DURATION_MS = 5000;
@@ -455,6 +455,112 @@ globalStyle.textContent = `
   #miracle-horizontal-guard { width: 100%; max-width: 100%; overflow-x: hidden; }
 `;
 document.head.appendChild(globalStyle);
+
+const bootStartedAt = Date.now();
+const bootMinimumDurationMs = 2000;
+const faviconUrl = `${import.meta.env.BASE_URL}favicon.png`;
+
+function preloadImage(src: string): Promise<void> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.decoding = "sync";
+        img.loading = "eager";
+        img.referrerPolicy = "no-referrer";
+        img.onload = () => resolve();
+        img.onerror = () => {
+            window.setTimeout(() => resolve(), 250);
+        };
+        img.src = src;
+        if (img.complete) resolve();
+    });
+}
+
+const bootFaviconReady = preloadImage(faviconUrl);
+const bootOverlay = document.createElement("div");
+bootOverlay.id = "miracle-boot-overlay";
+bootOverlay.style.position = "fixed";
+bootOverlay.style.inset = "0";
+bootOverlay.style.zIndex = "9999";
+bootOverlay.style.display = "flex";
+bootOverlay.style.flexDirection = "column";
+bootOverlay.style.alignItems = "center";
+bootOverlay.style.justifyContent = "center";
+bootOverlay.style.gap = "18px";
+bootOverlay.style.background = "radial-gradient(circle at 50% 38%, #f9fff0 0%, #dceec2 42%, #152019 100%)";
+bootOverlay.style.color = "#f8fff0";
+bootOverlay.style.textAlign = "center";
+bootOverlay.style.transition = "opacity 420ms ease";
+bootOverlay.style.pointerEvents = "auto";
+
+const bootIcon = document.createElement("img");
+bootIcon.src = faviconUrl;
+bootIcon.alt = "ミラクルボールラボ";
+bootIcon.decoding = "sync";
+bootIcon.loading = "eager";
+bootIcon.setAttribute("fetchpriority", "high");
+bootIcon.style.width = "min(36vw,156px)";
+bootIcon.style.height = "min(36vw,156px)";
+bootIcon.style.borderRadius = "30px";
+bootIcon.style.objectFit = "contain";
+bootIcon.style.filter = "drop-shadow(0 16px 28px rgba(0,0,0,.34))";
+bootIcon.style.background = "rgba(255,255,255,.92)";
+bootIcon.style.padding = "10px";
+bootIcon.style.display = "block";
+
+const bootTitle = document.createElement("div");
+bootTitle.textContent = "ミラクルボールラボ";
+bootTitle.style.fontSize = "clamp(28px,8vw,58px)";
+bootTitle.style.fontWeight = "1000";
+bootTitle.style.letterSpacing = ".04em";
+bootTitle.style.textShadow = "0 6px 22px rgba(0,0,0,.36)";
+
+const bootLabel = document.createElement("div");
+bootLabel.textContent = "ロード中...";
+bootLabel.style.fontSize = "clamp(15px,4vw,22px)";
+bootLabel.style.fontWeight = "900";
+bootLabel.style.opacity = ".92";
+
+const bootBarFrame = document.createElement("div");
+bootBarFrame.style.width = "min(64vw,360px)";
+bootBarFrame.style.height = "10px";
+bootBarFrame.style.borderRadius = "999px";
+bootBarFrame.style.background = "rgba(255,255,255,.24)";
+bootBarFrame.style.overflow = "hidden";
+bootBarFrame.style.boxShadow = "inset 0 0 0 1px rgba(255,255,255,.18)";
+
+const bootBar = document.createElement("div");
+bootBar.style.width = "42%";
+bootBar.style.height = "100%";
+bootBar.style.borderRadius = "999px";
+bootBar.style.background = "rgba(255,255,255,.88)";
+bootBar.style.animation = "miracle-boot-bar 1.05s ease-in-out infinite";
+bootBarFrame.appendChild(bootBar);
+
+const bootAnimationStyle = document.createElement("style");
+bootAnimationStyle.textContent = "@keyframes miracle-boot-bar{0%{transform:translateX(-120%)}100%{transform:translateX(260%)}}";
+
+bootOverlay.appendChild(bootIcon);
+bootOverlay.appendChild(bootTitle);
+bootOverlay.appendChild(bootLabel);
+bootOverlay.appendChild(bootBarFrame);
+bootOverlay.appendChild(bootAnimationStyle);
+document.body.appendChild(bootOverlay);
+
+let bootOverlayHidden = false;
+function hideBootOverlay(): void {
+    if (bootOverlayHidden) return;
+    bootOverlayHidden = true;
+    void Promise.all([
+        bootFaviconReady,
+        new Promise<void>((resolve) => {
+            const wait = Math.max(0, bootMinimumDurationMs - (Date.now() - bootStartedAt));
+            window.setTimeout(() => resolve(), wait);
+        }),
+    ]).then(() => {
+        bootOverlay.style.opacity = "0";
+        window.setTimeout(() => bootOverlay.remove(), 460);
+    });
+}
 
 const appRoot = document.createElement("div");
 appRoot.id = "miracle-horizontal-guard";
@@ -1311,10 +1417,10 @@ function getSpeedDisplayLabel(): string {
 }
 
 function getMiraclePauseDuration(def?: SpecialEventDef): number {
-    if (!def) return 5000;
-    if (def.rank === "SR" || def.rank === "SSR") return 2500;
-    if (def.rank === "UR") return 3600;
-    return 5000;
+    if (!def) return 1200;
+    if (def.rank === "SR" || def.rank === "SSR") return 520;
+    if (def.rank === "UR") return 1800;
+    return 3000;
 }
 
 function getMiracleFeatureText(def: SpecialEventDef): string {
@@ -1348,10 +1454,10 @@ function getMiracleFeatureText(def: SpecialEventDef): string {
 }
 
 function createMiracleImageDataUri(def: SpecialEventDef): string {
-    const bg = encodeURIComponent(def.fillStyle);
-    const symbol = encodeURIComponent(def.symbol || "奇");
-    const rank = encodeURIComponent(def.rank);
-    const emoji = encodeURIComponent(def.emoji || def.symbol || "✨");
+    const bg = def.fillStyle;
+    const symbol = def.symbol || "奇";
+    const rank = def.rank;
+    const emoji = def.emoji || def.symbol || "✨";
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
         <defs>
             <radialGradient id="g" cx="30%" cy="25%">
@@ -1366,7 +1472,7 @@ function createMiracleImageDataUri(def: SpecialEventDef): string {
         <text x="160" y="58" text-anchor="middle" font-size="30" font-family="Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${rank}</text>
         <text x="160" y="280" text-anchor="middle" font-size="44" font-family="Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${emoji}</text>
     </svg>`;
-    return `data:image/svg+xml;charset=UTF-8,${svg}`;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 
@@ -1419,7 +1525,7 @@ function setupMobileLayout(): void {
     mobileSettingsOverlay.style.position = "fixed";
     mobileSettingsOverlay.style.inset = "0";
     mobileSettingsOverlay.style.display = "none";
-    mobileSettingsOverlay.style.alignItems = "flex-end";
+    mobileSettingsOverlay.style.alignItems = "stretch";
     mobileSettingsOverlay.style.justifyContent = "center";
     mobileSettingsOverlay.style.background = "rgba(5,8,18,.62)";
     mobileSettingsOverlay.style.zIndex = "140";
@@ -1431,13 +1537,17 @@ function setupMobileLayout(): void {
 
     mobileSettingsPanel = document.createElement("div");
     mobileSettingsPanel.style.width = "100%";
-    mobileSettingsPanel.style.height = "82dvh";
+    mobileSettingsPanel.style.height = "100dvh";
+    mobileSettingsPanel.style.maxHeight = "100dvh";
     mobileSettingsPanel.style.background = "linear-gradient(180deg,#fbfdff 0%,#eff4ff 100%)";
-    mobileSettingsPanel.style.borderTopLeftRadius = "28px";
-    mobileSettingsPanel.style.borderTopRightRadius = "28px";
+    mobileSettingsPanel.style.borderTopLeftRadius = "0";
+    mobileSettingsPanel.style.borderTopRightRadius = "0";
     mobileSettingsPanel.style.boxShadow = "0 -12px 40px rgba(0,0,0,.28)";
     mobileSettingsPanel.style.padding = "14px 12px 22px 12px";
-    mobileSettingsPanel.style.overflow = "auto";
+    mobileSettingsPanel.style.overflowY = "auto";
+    mobileSettingsPanel.style.overflowX = "hidden";
+    mobileSettingsPanel.style.overscrollBehavior = "contain";
+    mobileSettingsPanel.style.touchAction = "pan-y";
     mobileSettingsPanel.style.setProperty("-webkit-overflow-scrolling", "touch");
     mobileSettingsOverlay.appendChild(mobileSettingsPanel);
 
@@ -3043,11 +3153,12 @@ async function playAnimeMiracleEffect(def?: SpecialEventDef): Promise<void> {
     const overlayCard = miracleOverlay.firstElementChild as HTMLElement | null;
     if (!overlayCard) return;
     const strength = def?.rank === "GOD" ? 1.35 : def?.rank === "EX" ? 1.18 : 1;
+    const isQuickRare = def?.rank === "SR" || def?.rank === "SSR";
     anime.remove([overlayCard, canvas, gameArea]);
     anime({
         targets: gameArea,
         scale: [1, 1.018 * strength, 1],
-        duration: 1100,
+        duration: isQuickRare ? 360 : 900,
         easing: "easeOutQuad",
     });
     anime.timeline({ easing: "easeOutExpo" })
@@ -3056,18 +3167,18 @@ async function playAnimeMiracleEffect(def?: SpecialEventDef): Promise<void> {
             scale: [0.72, 1.06, 1],
             opacity: [0, 1],
             rotate: [-2.2 * strength, 0],
-            duration: 700,
+            duration: isQuickRare ? 240 : 620,
         }, 0)
         .add({
             targets: overlayCard,
-            translateY: [0, -12 * strength, 0],
-            duration: 1800,
+            translateY: [0, -8 * strength, 0],
+            duration: isQuickRare ? 320 : 1200,
             easing: "easeInOutSine",
-        }, 140)
+        }, isQuickRare ? 80 : 140)
         .add({
             targets: canvas,
             scale: [1, 1.028 * strength, 1],
-            duration: 900,
+            duration: isQuickRare ? 320 : 780,
             easing: "easeOutBack",
         }, 0);
 }
@@ -3139,10 +3250,10 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     }
     triggerScreenFlash(def?.soundMode ?? "miracle");
     vibrateOnMobile(def?.rank === "GOD" ? [90, 50, 160, 60, 220] : def?.rank === "EX" ? [70, 40, 120, 40, 140] : [55, 28, 80]);
-    triggerCameraShake(def?.rank === "GOD" ? 46 * geometry.scale : def?.rank === "EX" ? 34 * geometry.scale : 24 * geometry.scale, def?.rank === "GOD" ? 1200 : 760);
+    triggerCameraShake(def?.rank === "GOD" ? 46 * geometry.scale : def?.rank === "EX" ? 34 * geometry.scale : 18 * geometry.scale, def?.rank === "GOD" ? 1200 : def?.rank === "EX" ? 760 : 420);
     if (settings.simpleMode) return;
     const overlayDurationMs = getMiraclePauseDuration(def);
-    const overlayDurationSec = Math.max(1.8, overlayDurationMs / 1000);
+    const overlayDurationSec = Math.max(0.48, overlayDurationMs / 1000);
     miracleOverlay.innerHTML = `
         <div style="max-width:900px;animation:miracle-pop ${overlayDurationSec.toFixed(2)}s ease-out forwards;">
             <style>@keyframes miracle-pop{0%{transform:scale(.65);opacity:0}15%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:0}}</style>
@@ -4029,6 +4140,7 @@ Render.run(render);
 void ensureAnimeReady();
 void ensureGifReady();
 void ensureTippyReady();
+hideBootOverlay();
 
 let resizeTimer: number | undefined;
 function scheduleResize(): void {
