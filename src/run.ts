@@ -471,8 +471,8 @@ const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
 const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
 
 let settings: Settings = {
-    targetCount: 50000,
-    activeLimit: isMobile ? 18 : 30,
+    targetCount: 500,
+    activeLimit: 15,
     binCount: isMobile ? 6 : 8,
     pinRows: isMobile ? 6 : 7,
     labelText: isMobile ? "１\n２\n３\n４\n５\n６" : "１\n２\n３\n４\n５\n６\n７\n８",
@@ -559,7 +559,7 @@ let randomCallCount = 0;
 let floatingTexts: FloatingText[] = [];
 let shakeUntil = 0;
 let shakePower = 0;
-let speedLabelText = "高速";
+let speedLabelText = "通常";
 let isEnglish = false;
 let isFullscreenMode = false;
 let isVerticalVideoMode = false;
@@ -646,7 +646,7 @@ let adminForceNextMiracleEffect = false;
 
 const engine = Engine.create();
 engine.gravity.y = 8;
-engine.timing.timeScale = 2;
+engine.timing.timeScale = 1;
 
 const render = Render.create({
     element: document.body,
@@ -1330,7 +1330,7 @@ addField(binField.wrapper, binField.labelEl, "下の受け皿数", "Bottom bins"
 const pinField = createField("ピン段数", pinRowInput);
 addField(pinField.wrapper, pinField.labelEl, "ピン段数", "Pin rows");
 const bgField = createField("背景画像URL", backgroundInput);
-addField(bgField.wrapper, bgField.labelEl, "背景画像URL", "Background image URL");
+// 背景画像URL入力は不要になったため、画面には表示しません。
 const bgFileField = createField("背景画像を写真から選択", backgroundFileInput);
 addField(bgFileField.wrapper, bgFileField.labelEl, "背景画像を写真から選択", "Choose background photo");
 const probField = createField("確率モード", probabilityModeSelect);
@@ -1376,32 +1376,44 @@ utilityButtons.appendChild(languageButton);
 const fullScreenButton = setTooltip(setButtonLabel(createButton("全画面", () => toggleGameFullscreen()), "全画面", "Fullscreen"), "実験画面だけを大きく表示します。", "Expand only the game screen." );
 utilityButtons.appendChild(fullScreenButton);
 
+const speedButtonRefs: Record<string, HTMLButtonElement> = {};
+
+function updateSpeedButtons(): void {
+    const uiAccent = getUiAccentPaletteByKind(getCurrentUiAccentKind());
+    for (const [label, button] of Object.entries(speedButtonRefs)) {
+        const selected = speedLabelText === label;
+        button.style.background = selected
+            ? (uiAccent?.badge ?? "linear-gradient(180deg,#4b8cff 0%,#1d4ed8 100%)")
+            : (settings.blackModeEnabled ? "linear-gradient(180deg,#172033 0%,#0f172a 100%)" : "linear-gradient(180deg,#ececec 0%,#d7d7d7 100%)");
+        button.style.color = selected ? (uiAccent?.badgeText ?? "#ffffff") : (settings.blackModeEnabled ? "#f8fafc" : "#444444");
+        button.style.borderColor = selected ? (uiAccent?.border ?? "#1d4ed8") : (settings.blackModeEnabled ? "#64748b" : "rgba(70,80,110,.28)");
+        button.style.boxShadow = selected ? "inset 0 3px 10px rgba(0,0,0,.34), 0 0 0 2px rgba(255,255,255,.28)" : "0 6px 16px rgba(0,0,0,.12)";
+        button.style.transform = selected ? "translateY(2px)" : "translateY(0)";
+        button.style.filter = selected ? "brightness(.96)" : "";
+    }
+}
+
+function createSpeedButton(label: string, en: string, jaTip: string, enTip: string): HTMLButtonElement {
+    const button = setTooltip(setButtonLabel(createButton(label, () => changeSpeed(label)), label, en), jaTip, enTip);
+    speedButtonRefs[label] = button;
+    speedButtons.appendChild(button);
+    return button;
+}
+
 function changeSpeed(label: string): void {
     speedLabelText = label;
     engine.timing.timeScale = getCurrentTimeScale();
+    updateSpeedButtons();
     updateInfo();
     showSoftToast(`${getSpeedDisplayLabel()}${t("に変更しました", " selected")}`);
 }
 
-speedButtons.appendChild(setTooltip(setButtonLabel(createButton("超低速", () => {
-    changeSpeed("超低速");
-}), "超低速", "Very slow"), "かなりゆっくり進めます。観察向けです。", "Very slow for close observation."));
-
-speedButtons.appendChild(setTooltip(setButtonLabel(createButton("低速", () => {
-    changeSpeed("低速");
-}), "低速", "Slow"), "ゆっくり進めます。", "Run slowly."));
-
-speedButtons.appendChild(setTooltip(setButtonLabel(createButton("通常", () => {
-    changeSpeed("通常");
-}), "通常", "Normal"), "標準速度で観測します。", "Observe at standard speed."));
-
-speedButtons.appendChild(setTooltip(setButtonLabel(createButton("高速", () => {
-    changeSpeed("高速");
-}), "高速", "Fast"), "やや速めに流します。", "Run the simulation faster."));
-
-speedButtons.appendChild(setTooltip(setButtonLabel(createButton("超高速", () => {
-    changeSpeed("超高速");
-}), "超高速", "Ultra"), "かなり速いので演出を見逃しやすいです。", "Very fast and easier to miss effects."));
+createSpeedButton("超低速", "Very slow", "かなりゆっくり進めます。観察向けです。", "Very slow for close observation.");
+createSpeedButton("低速", "Slow", "ゆっくり進めます。", "Run slowly.");
+createSpeedButton("通常", "Normal", "標準速度で観測します。", "Observe at standard speed.");
+createSpeedButton("高速", "Fast", "やや速めに流します。", "Run the simulation faster.");
+createSpeedButton("超高速", "Ultra", "かなり速いので演出を見逃しやすいです。", "Very fast and easier to miss effects.");
+updateSpeedButtons();
 
 const stopButton = setTooltip(setButtonLabel(createButton("ストップ", () => togglePause()), "ストップ", "Stop"), "実験を一時停止・再開します。", "Pause or resume the experiment.");
 stopButton.addEventListener("touchend", (event) => { event.preventDefault(); togglePause(); }, { passive: false });
@@ -1538,12 +1550,6 @@ settingButtons.appendChild(setTooltip(setButtonLabel(createButton("設定反映"
     showSoftToast(t("設定を反映しました", "Settings applied"));
 }), "設定反映", "Apply settings"), "入力した設定を盤面へ反映します。", "Apply the input settings to the board."));
 
-settingButtons.appendChild(setTooltip(setButtonLabel(createButton("背景だけ反映", () => {
-    selectedBackgroundObjectUrl = "";
-    settings.backgroundImage = backgroundInput.value.trim();
-    applyBackgroundImage();
-    showSoftToast(t("背景を反映しました", "Background applied"));
-}), "背景だけ反映", "Apply background"), "背景画像だけ更新します。", "Update only the background image."));
 
 settingButtons.appendChild(setTooltip(setButtonLabel(createButton("結果コピー", () => copyResultCsv()), "結果コピー", "Copy result"), "結果をCSV形式でコピーします。", "Copy the result as CSV."));
 settingButtons.appendChild(setTooltip(setButtonLabel(createButton("CSV保存", () => downloadResultCsv()), "CSV保存", "Save CSV"), "結果CSVを保存します。", "Save the result as CSV."));
@@ -2461,6 +2467,8 @@ function applyDynamicUiPalette(): void {
     recentMiracleMini.style.color = palette.fieldText;
     activeEffectBadge.style.background = palette.badge;
     activeEffectBadge.style.color = palette.badgeText;
+    for (const item of sectionTitles) item.el.style.color = palette.title;
+    for (const item of uiFieldRefs) item.labelEl.style.color = palette.fieldText;
     for (const el of Array.from(info.querySelectorAll('input, textarea, select')) as Array<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
         el.style.background = palette.fieldBg;
         el.style.color = palette.fieldText;
@@ -2699,8 +2707,10 @@ function scheduleFirstRunShowcase(): void {
         guideTimers.push(id);
     };
     schedule(900, () => showWelcomeShowcase());
+    schedule(1800, () => { void playFirstRunShowcaseVideo(); });
     schedule(5200, () => maybeShowCommentary("研究員A「まずは盤面を観測してみましょう」", true));
     schedule(9200, () => triggerSmallMiracleEvent("pinSpark"));
+    schedule(11200, () => { if (appRandom() < 0.85) void playFirstRunShowcaseVideo(); });
     schedule(14500, () => maybeTriggerMiracleOmen(true));
     schedule(21000, () => triggerSmallMiracleEvent("faviconWink"));
     schedule(30000, () => {
@@ -4269,7 +4279,6 @@ function showButtonHelpPopup(): void {
         <p><b>紙吹雪:</b> 達成時やレア演出時の紙吹雪をON/OFFします。</p>
         <p><b>Pixi背景:</b> Pixi.jsを使った背景演出をON/OFFします。見た目は楽しいですが、PCやスマホによっては重くなります。</p>
         <p><b>設定反映:</b> 投下数、同時に出す玉数、受け皿数、ピン段数などを反映してリセットします。</p>
-        <p><b>背景だけ反映:</b> 背景画像だけを差し替えます。</p>
         <p><b>結果コピー / CSV保存:</b> 実験結果をコピー、またはCSVファイルとして保存します。</p>
         <p><b>ピンをタップ/クリック:</b> 近くのピンを揺らして、詰まり気味の玉を少し動かせます。</p>
         <p><b>SR/SSR演出:</b> 実行中に同じSR/SSR演出が再発生した場合は、2回目以降さらに短く閉じます。</p>
@@ -4305,7 +4314,6 @@ function applySettingsFromInputs(showInvalidPopup = true): boolean {
         pinRowInput.value = String(oldSettings.pinRows);
         probabilityModeSelect.value = oldSettings.probabilityMode;
         effectModeSelect.value = oldSettings.effectMode;
-        if (!selectedBackgroundObjectUrl) backgroundInput.value = oldSettings.backgroundImage;
         if (showInvalidPopup) {
             showPopup("入力チェック", `<p>${errors.join("</p><p>")}</p><p>入力前の値に戻しました。</p>`);
         }
@@ -4321,7 +4329,6 @@ function applySettingsFromInputs(showInvalidPopup = true): boolean {
     settings.effectMode = (effectModeSelect.value as EffectMode) || "normal";
 
     if (selectedBackgroundObjectUrl && backgroundInput.value.startsWith("選択した画像:")) settings.backgroundImage = selectedBackgroundObjectUrl;
-    else settings.backgroundImage = backgroundInput.value.trim();
 
     targetInput.value = String(settings.targetCount);
     activeBallInput.value = String(settings.activeLimit);
@@ -4329,7 +4336,6 @@ function applySettingsFromInputs(showInvalidPopup = true): boolean {
     pinRowInput.value = String(settings.pinRows);
     probabilityModeSelect.value = settings.probabilityMode;
     effectModeSelect.value = settings.effectMode;
-    if (!selectedBackgroundObjectUrl) backgroundInput.value = settings.backgroundImage;
     return true;
 }
 
@@ -4601,12 +4607,16 @@ function updateBlackModeButton(): void {
     blackModeButton.style.background = settings.blackModeEnabled ? "linear-gradient(180deg,#000 0%,#171717 100%)" : (uiAccent?.badge ?? "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)");
     blackModeButton.style.color = settings.blackModeEnabled ? "#f8fafc" : (uiAccent?.badgeText ?? "#444444");
     blackModeButton.style.borderColor = settings.blackModeEnabled ? "#64748b" : (uiAccent?.border ?? "rgba(70,80,110,.28)");
+    blackModeButton.style.boxShadow = settings.blackModeEnabled ? "inset 0 3px 10px rgba(0,0,0,.42), 0 0 0 2px rgba(255,255,255,.22)" : "0 6px 16px rgba(0,0,0,.12)";
+    blackModeButton.style.transform = settings.blackModeEnabled ? "translateY(2px)" : "translateY(0)";
 }
 
 function updateSimpleModeButton(): void {
     simpleModeButton.textContent = settings.simpleMode ? t("シンプル: ON", "Simple: ON") : t("シンプル: OFF", "Simple: OFF");
     simpleModeButton.style.background = settings.simpleMode ? "linear-gradient(180deg, #222 0%, #444 100%)" : "linear-gradient(180deg, #f3f8e8 0%, #dceec2 100%)";
     simpleModeButton.style.color = settings.simpleMode ? "#ffffff" : "#222222";
+    simpleModeButton.style.boxShadow = settings.simpleMode ? "inset 0 3px 10px rgba(0,0,0,.34), 0 0 0 2px rgba(255,255,255,.22)" : "0 6px 16px rgba(0,0,0,.12)";
+    simpleModeButton.style.transform = settings.simpleMode ? "translateY(2px)" : "translateY(0)";
 }
 
 function updateCameraShakeButton(): void {
@@ -4626,6 +4636,8 @@ function paintToggleButton(button: HTMLButtonElement, enabled: boolean, onColor 
     button.style.background = enabled ? (uiAccent?.badge ?? onColor) : (settings.blackModeEnabled ? "linear-gradient(180deg,#172033 0%, #0f172a 100%)" : "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)");
     button.style.color = enabled ? (uiAccent?.badgeText ?? "#26351f") : (settings.blackModeEnabled ? "#f8fafc" : "#444444");
     button.style.borderColor = settings.blackModeEnabled ? "#64748b" : (uiAccent?.border ?? "rgba(70,80,110,.28)");
+    button.style.boxShadow = enabled ? "inset 0 3px 10px rgba(0,0,0,.24), 0 0 0 2px rgba(255,255,255,.22)" : "0 6px 16px rgba(0,0,0,.12)";
+    button.style.transform = enabled ? "translateY(2px)" : "translateY(0)";
 }
 
 function updateEffectsButton(): void {
@@ -5130,6 +5142,22 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
         }
 
         return false;
+    }
+}
+
+async function playFirstRunShowcaseVideo(): Promise<void> {
+    if (isAppTerminated || settings.simpleMode) return;
+    const assets = await loadRemoteMiracleAssets();
+    const videos = assets.filter((asset) => asset.kind === "video" && isRemoteMiracleAssetUsable(asset));
+    if (videos.length === 0) return;
+    for (let i = 0; i < 4; i++) {
+        const asset = weightedPickRemoteAsset(videos);
+        if (!asset) return;
+        const played = await playRemoteMiracleVideoAsset(asset, false);
+        if (played) {
+            showSoftToast(t("初回サービス演出を再生しました", "First-run showcase video played"));
+            return;
+        }
     }
 }
 
