@@ -41,6 +41,27 @@ type MiracleLogEntry = {
     mode: ProbabilityMode;
     speedLabel: string;
     combo: number;
+    note?: string;
+};
+
+type FusionDef = {
+    id: string;
+    label: string;
+    rank: string;
+    sourceKinds: DropKind[];
+    requiredCount: number;
+    description: string;
+    rewardScore: number;
+};
+
+type DailyFortune = {
+    dateKey: string;
+    title: string;
+    rateBoost: number;
+    luckyKind: string;
+    luckyBin: number;
+    advice: string;
+    seed: number;
 };
 
 type MiracleClip = {
@@ -68,6 +89,9 @@ type SavedRecords = {
     bestScore: number;
     totalScore: number;
     missionCompleted: Record<string, number>;
+    miracleLogs: MiracleLogEntry[];
+    fusions: Record<string, number>;
+    secretUnlocked: Record<string, number>;
 };
 
 type MissionDef = {
@@ -159,6 +183,15 @@ const BLACK_SUN_RATE = 0.0000001;  // 1/10,000,000
 const COSMIC_EGG_RATE = 0.000000000001; // 1/1,000,000,000,000
 
 const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v3";
+const SECRET_KEY_SEQUENCE = "miracle";
+
+const FUSION_DEFS: FusionDef[] = [
+    { id: "royal-meteor", label: "王の流星群", rank: "UR", sourceKinds: ["crown", "shootingStar"], requiredCount: 1, description: "王と流れ星が同じ研究記録に残ると派生する、記念撮影向けの合成奇跡です。", rewardScore: 42000 },
+    { id: "blue-angel", label: "蒼天の輪炎", rank: "SSR+", sourceKinds: ["blueFlame", "angelRing"], requiredCount: 1, description: "青い炎と天使輪が混ざった、静かに派手な派生奇跡です。", rewardScore: 28000 },
+    { id: "heart-seven", label: "ラッキーハートセブン", rank: "SR+", sourceKinds: ["heart", "luckySeven"], requiredCount: 1, description: "桃色ハートとラッキーセブンの縁起を合わせた、やさしい確率改変です。", rewardScore: 18000 },
+    { id: "black-rift", label: "黒裂日食", rank: "EX", sourceKinds: ["blackSun", "timeRift"], requiredCount: 1, description: "黒い太陽と時空の裂け目が揃ったときだけ研究所に記録される危険な派生です。", rewardScore: 120000 },
+    { id: "lab-cosmos", label: "研究所宇宙卵", rank: "GOD", sourceKinds: ["labExplosion", "cosmicEgg"], requiredCount: 1, description: "研究所爆発と宇宙卵が同時期に観測された、ほぼ都市伝説の合成記録です。", rewardScore: 300000 },
+];
 
 
 const LOCAL_RARE_AUDIO_FILES = [
@@ -363,7 +396,11 @@ let isFullscreenMode = false;
 let isVerticalVideoMode = false;
 let isObsMode = false;
 let currentTheme: ThemeMode = "lab";
-let miracleLogs: MiracleLogEntry[] = [];
+let miracleLogs: MiracleLogEntry[] = [...(savedRecords.miracleLogs ?? [])];
+let currentDailyFortune: DailyFortune | null = null;
+let secretKeyBuffer = "";
+let bootIconTapCount = 0;
+let repeatedMiracleRunCounts: Record<string, number> = {};
 let miracleClips: MiracleClip[] = [];
 let replayFrameBuffer: string[] = [];
 let replayCaptureTick = 0;
@@ -545,6 +582,14 @@ bootOverlay.appendChild(bootLabel);
 bootOverlay.appendChild(bootBarFrame);
 bootOverlay.appendChild(bootAnimationStyle);
 document.body.appendChild(bootOverlay);
+bootIcon.addEventListener("click", () => {
+    bootIconTapCount++;
+    if (bootIconTapCount >= 5) {
+        unlockSecret("favicon-five-taps", "favicon 5連打", "起動ロゴを5回タップしました。ロード画面にも秘密がありました。");
+        bootIconTapCount = 0;
+    }
+});
+document.addEventListener("keydown", handleSecretKey);
 
 let bootOverlayHidden = false;
 function hideBootOverlay(): void {
@@ -982,6 +1027,9 @@ missionButton = setTooltip(setButtonLabel(createButton("ミッション", () => 
 utilityButtons.appendChild(missionButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("最高記録", () => showRecordsPopup()), "最高記録", "Records"), "最高記録や通算記録を表示します。", "Show best and lifetime records."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡ログ", () => showMiracleLogPopup()), "奇跡ログ", "Miracle log"), "発生した奇跡の履歴を見ます。", "Show the history of miracles."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("今日の運勢", () => showDailyFortunePopup()), "今日の運勢", "Fortune"), "今日の奇跡率とラッキー受け皿を表示します。", "Show today's miracle rate and lucky bin."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡合成", () => showFusionPopup()), "奇跡合成", "Fusion"), "奇跡同士の合成・派生記録を表示します。", "Show miracle fusion records."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("秘密", () => showSecretPopup()), "秘密", "Secret"), "裏コマンドの解放状況を表示します。", "Show secret command unlocks."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("研究レポート", () => showResearchReportPopup()), "研究レポート", "Report"), "現在の実験状況をまとめます。", "Summarize the current experiment."));
 const replayButton = setTooltip(setButtonLabel(createButton("リプレイ", () => showReplayPopup()), "リプレイ", "Replay"), "奇跡クリップを再生・GIF保存します。", "Play or export miracle clips as GIF.");
 utilityButtons.appendChild(replayButton);
@@ -1356,6 +1404,9 @@ function loadSavedRecords(): SavedRecords {
                 bestScore: data.bestScore ?? 0,
                 totalScore: data.totalScore ?? 0,
                 missionCompleted: data.missionCompleted ?? {},
+                miracleLogs: Array.isArray(data.miracleLogs) ? data.miracleLogs.slice(0, 80) : [],
+                fusions: data.fusions ?? {},
+                secretUnlocked: data.secretUnlocked ?? {},
             };
         }
     }
@@ -1373,6 +1424,9 @@ function loadSavedRecords(): SavedRecords {
         bestScore: 0,
         totalScore: 0,
         missionCompleted: {},
+        miracleLogs: [],
+        fusions: {},
+        secretUnlocked: {},
     };
 }
 
@@ -1416,9 +1470,9 @@ function getSpeedDisplayLabel(): string {
     return speedLabelText;
 }
 
-function getMiraclePauseDuration(def?: SpecialEventDef): number {
+function getMiraclePauseDuration(def?: SpecialEventDef, repeatedInRun = false): number {
     if (!def) return 1200;
-    if (def.rank === "SR" || def.rank === "SSR") return 520;
+    if (def.rank === "SR" || def.rank === "SSR") return repeatedInRun ? 240 : 520;
     if (def.rank === "UR") return 1800;
     return 3000;
 }
@@ -1910,6 +1964,8 @@ function saveShareCard(): void {
         `処理 ${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}`,
         `最高レア ${savedRecords.bestRank} ${savedRecords.bestLabel}`,
         `発見済み ${getDiscoveredCount()} / ${SPECIAL_EVENT_DEFS.length}`,
+        `研究Lv ${getResearchLevelInfo().level} / 合成 ${getFusionCount()} / ${FUSION_DEFS.length}`,
+        `今日の奇跡率 x${(currentDailyFortune ?? getDailyFortune()).rateBoost.toFixed(2)}`,
         `奇跡コンボ最高 ${bestComboThisRun}`,
         `ミッション達成 ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length}`,
     ];
@@ -1950,17 +2006,49 @@ function showMissionPopup(): void {
     showPopup("ミッション", `<div style="margin-top:8px;border-radius:18px;background:rgba(255,255,255,.72);padding:${isMobile ? "8px 14px" : "8px 16px"};">${rows}</div>`);
 }
 
+
+function saveCurrentScreenshot(): void {
+    const shotCanvas = document.createElement("canvas");
+    shotCanvas.width = Math.max(1, canvas.width);
+    shotCanvas.height = Math.max(1, canvas.height);
+    const ctx = shotCanvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#0b0d14";
+    ctx.fillRect(0, 0, shotCanvas.width, shotCanvas.height);
+    try {
+        ctx.drawImage(canvas, 0, 0);
+    } catch {
+        showPopup("スクリーンショット", "<p>現在の画面保存に失敗しました。</p>");
+        return;
+    }
+    shotCanvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `miracle-ball-screenshot-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+        showMilestone("スクリーンショットを保存しました");
+    }, "image/png");
+}
+
 function showSharePopup(): void {
     showPopup("録画・SNS", `
-        <p>奇跡クリップのGIF保存は「リプレイ」から行えます。ここではSNS投稿文コピーと縦長シェアカード保存を行えます。</p>
+        <p>奇跡クリップのGIF保存は「リプレイ」から行えます。ここでは投稿文コピー、現在画面のスクリーンショット保存、縦長シェアカード保存を行えます。</p>
         <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:18px;">
             <button id="sns-copy-button" style="font-size:18px;padding:12px 18px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);">投稿文コピー</button>
+            <button id="screenshot-save-button" style="font-size:18px;padding:12px 18px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#fff7ed 0%,#fed7aa 100%);">現在画面を保存</button>
             <button id="sns-card-button" style="font-size:18px;padding:12px 18px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);">SNSカード保存</button>
         </div>
     `);
     const copyBtn = document.getElementById("sns-copy-button") as HTMLButtonElement | null;
+    const shotBtn = document.getElementById("screenshot-save-button") as HTMLButtonElement | null;
     const cardBtn = document.getElementById("sns-card-button") as HTMLButtonElement | null;
     if (copyBtn) copyBtn.onclick = () => { void shareToSns(); };
+    if (shotBtn) shotBtn.onclick = () => saveCurrentScreenshot();
     if (cardBtn) cardBtn.onclick = () => saveShareCard();
 }
 
@@ -1972,6 +2060,7 @@ function recordSpecialDiscovery(def: SpecialEventDef): void {
         savedRecords.bestLabel = def.label;
     }
     addScore(getRankBaseScore(def.rank), `RARE ${def.label}`);
+    tryUnlockFusions();
     saveRecords();
 }
 
@@ -1990,7 +2079,9 @@ function incrementSpecialCreated(kind: DropKind): void {
 }
 
 function rollSpecialEvent(): SpecialEventDef | null {
-    const scale = getProbabilityScale() * getPassiveMiracleBoost();
+    const fortune = currentDailyFortune ?? getDailyFortune();
+    currentDailyFortune = fortune;
+    const scale = getProbabilityScale() * getPassiveMiracleBoost() * fortune.rateBoost;
     let threshold = 0;
     const roll = appRandom();
     for (const def of SPECIAL_EVENT_DEFS) {
@@ -2030,6 +2121,166 @@ function getProbabilityDangerText(denominator: number): string {
     return "確率のヤバさ：まあまあ珍しい。小さめの奇跡です。";
 }
 
+
+
+function getTodayKey(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function hashTextToNumber(text: string): number {
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+}
+
+function getDailyFortune(): DailyFortune {
+    const dateKey = getTodayKey();
+    const seed = hashTextToNumber(`${dateKey}:miracle-ball-lab`);
+    const titles = ["大吉", "中吉", "小吉", "研究日和", "乱数注意", "捨て区間警報", "奇跡濃度高め"];
+    const advices = [
+        "通常速度で眺めると、演出を見逃しにくい日です。",
+        "投下数を少し増やすと、研究ログが育ちやすい日です。",
+        "捨て区間に入りやすい気配があります。ピンを軽く揺らすとよさそうです。",
+        "録画・SNSカード向けの見栄えが出やすい日です。",
+        "同じSR/SSRが続くと演出が短縮されるので、長時間放置に向いています。",
+    ];
+    const luckyDefs = SPECIAL_EVENT_DEFS.length > 0 ? SPECIAL_EVENT_DEFS : BASE_SPECIAL_EVENT_DEFS;
+    const lucky = luckyDefs[seed % luckyDefs.length];
+    const rateBoost = 1 + ((seed >>> 5) % 17) / 100;
+    return {
+        dateKey,
+        title: titles[seed % titles.length] ?? "研究日和",
+        rateBoost,
+        luckyKind: lucky?.label ?? "王",
+        luckyBin: (seed % Math.max(1, settings.binCount)) + 1,
+        advice: advices[(seed >>> 9) % advices.length] ?? advices[0],
+        seed,
+    };
+}
+
+function getResearchExp(): number {
+    const discoveredBonus = getDiscoveredCount() * 4200;
+    const fusionBonus = getFusionCount() * 12000;
+    const logBonus = miracleLogs.length * 260;
+    return Math.max(0, savedRecords.totalScore + runScore + discoveredBonus + fusionBonus + logBonus + savedRecords.totalRuns * 120);
+}
+
+function getResearchLevelInfo(): { level: number; title: string; exp: number; current: number; next: number; percent: number } {
+    const exp = getResearchExp();
+    const level = Math.max(1, Math.floor(Math.sqrt(exp / 900)) + 1);
+    const currentLevelExp = Math.pow(level - 1, 2) * 900;
+    const nextLevelExp = Math.pow(level, 2) * 900;
+    const titles = ["見習い研究員", "確率観測員", "奇跡解析官", "主任研究員", "世界改変監査官", "乱数司祭", "奇跡所長"];
+    const title = titles[Math.min(titles.length - 1, Math.floor((level - 1) / 8))] ?? titles[0];
+    const current = Math.max(0, exp - currentLevelExp);
+    const next = Math.max(1, nextLevelExp - currentLevelExp);
+    return { level, title, exp, current, next, percent: clamp((current / next) * 100, 0, 100) };
+}
+
+function getFusionCount(): number {
+    return Object.keys(savedRecords.fusions ?? {}).length;
+}
+
+function getFusionUnlocked(def: FusionDef): boolean {
+    return !!savedRecords.fusions?.[def.id];
+}
+
+function getFusionReady(def: FusionDef): boolean {
+    return def.sourceKinds.every((kind) => (savedRecords.discovered[kind] ?? 0) >= def.requiredCount);
+}
+
+function tryUnlockFusions(): void {
+    let changed = false;
+    for (const fusion of FUSION_DEFS) {
+        if (getFusionUnlocked(fusion) || !getFusionReady(fusion)) continue;
+        savedRecords.fusions[fusion.id] = Date.now();
+        addScore(fusion.rewardScore, `FUSION ${fusion.label}`);
+        miracleLogs.unshift({
+            label: fusion.label,
+            rank: fusion.rank,
+            denominator: 0,
+            finishedAt: Date.now(),
+            finishedCount,
+            mode: settings.probabilityMode,
+            speedLabel: speedLabelText,
+            combo: miracleCombo,
+            note: "合成・派生で解放",
+        });
+        miracleLogs = miracleLogs.slice(0, 80);
+        savedRecords.miracleLogs = miracleLogs;
+        showMilestone(`合成奇跡 解放: ${fusion.label}`);
+        changed = true;
+    }
+    if (changed) saveRecords();
+}
+
+function showDailyFortunePopup(): void {
+    const fortune = currentDailyFortune ?? getDailyFortune();
+    currentDailyFortune = fortune;
+    showPopup("今日の運勢・奇跡率", `
+        <div style="display:grid;gap:12px;">
+            <div style="font-size:${isMobile ? "30px" : "26px"};font-weight:1000;">${fortune.title}</div>
+            <div><b>今日の奇跡率:</b> x${fortune.rateBoost.toFixed(2)}</div>
+            <div><b>今日の注目奇跡:</b> ${fortune.luckyKind}</div>
+            <div><b>ラッキー受け皿:</b> ${fortune.luckyBin}</div>
+            <div style="line-height:1.7;">${fortune.advice}</div>
+            <div style="opacity:.7;font-size:${isMobile ? "15px" : "13px"};">日付ごとに固定されます。奇跡率はレア抽選にほんの少しだけ加算されます。</div>
+        </div>
+    `);
+}
+
+function showFusionPopup(): void {
+    const rows = FUSION_DEFS.map((fusion) => {
+        const unlocked = getFusionUnlocked(fusion);
+        const ready = getFusionReady(fusion);
+        const sources = fusion.sourceKinds.map((kind) => {
+            const def = findSpecialDef(kind);
+            const count = savedRecords.discovered[kind] ?? 0;
+            return `${def?.label ?? kind} ${count}/${fusion.requiredCount}`;
+        }).join(" / ");
+        return `<div style="padding:13px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+                <div style="font-weight:1000;font-size:${isMobile ? "22px" : "18px"};color:${unlocked ? "#166534" : ready ? "#854d0e" : "#334155"};">${unlocked ? "✅" : ready ? "🧪" : "🔒"} ${unlocked || ready ? fusion.label : "未解放の派生奇跡"} [${fusion.rank}]</div>
+                <div style="font-weight:900;color:#475569;">+${fusion.rewardScore.toLocaleString()} score</div>
+            </div>
+            <div style="margin-top:6px;opacity:.80;line-height:1.55;">${unlocked ? fusion.description : "素材奇跡を集めると解放されます。"}</div>
+            <div style="margin-top:6px;opacity:.72;">素材: ${sources}</div>
+        </div>`;
+    }).join("");
+    showPopup("奇跡合成・派生", `<p>特定の奇跡を観測すると、合成・派生の研究記録が解放されます。</p>${rows}`);
+}
+
+function unlockSecret(id: string, label: string, detail: string): void {
+    if (savedRecords.secretUnlocked[id]) {
+        showMilestone(`${label} 起動`);
+        return;
+    }
+    savedRecords.secretUnlocked[id] = Date.now();
+    addScore(7777, `SECRET ${label}`);
+    saveRecords();
+    showPopup("秘密操作を発見", `<p><b>${label}</b> を解放しました。</p><p>${detail}</p><p>研究レベルに少しだけボーナスが入ります。</p>`);
+}
+
+function showSecretPopup(): void {
+    const unlocked = Object.keys(savedRecords.secretUnlocked ?? {});
+    const rows = unlocked.length === 0 ? "<p>まだ秘密操作は見つかっていません。</p>" : unlocked.map((id) => `<div style="padding:10px 0;border-bottom:1px solid rgba(80,90,120,.16);"><b>${id}</b><br><span style="opacity:.72;">${new Date(savedRecords.secretUnlocked[id]).toLocaleString()}</span></div>`).join("");
+    showPopup("秘密操作", `<p>ヒント: キーボードで研究所名に関係する英字、または起動ロゴを何度かタップ。</p>${rows}`);
+}
+
+function handleSecretKey(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (!/^[a-z]$/.test(key)) return;
+    secretKeyBuffer = (secretKeyBuffer + key).slice(-SECRET_KEY_SEQUENCE.length);
+    if (secretKeyBuffer === SECRET_KEY_SEQUENCE) {
+        unlockSecret("keyword-miracle", "MIRACLE コード", "キーボードで隠しコードを入力しました。今日の研究所は少しだけ騒がしくなります。");
+        secretKeyBuffer = "";
+    }
+}
 
 function getThemeOptions(): Array<{ value: ThemeMode; ja: string; en: string }> {
     return [
@@ -2077,6 +2328,7 @@ function getSilhouetteHint(def: SpecialEventDef): string {
 }
 
 function addMiracleLog(def: SpecialEventDef): void {
+    const repeatCount = repeatedMiracleRunCounts[def.kind] ?? 0;
     miracleLogs.unshift({
         label: def.label,
         rank: def.rank,
@@ -2086,8 +2338,11 @@ function addMiracleLog(def: SpecialEventDef): void {
         mode: settings.probabilityMode,
         speedLabel: speedLabelText,
         combo: miracleCombo,
+        note: repeatCount >= 2 && (def.rank === "SR" || def.rank === "SSR") ? "同一SR/SSRのため短縮演出" : undefined,
     });
     miracleLogs = miracleLogs.slice(0, 80);
+    savedRecords.miracleLogs = miracleLogs;
+    saveRecords();
 }
 
 function setSubtitle(text: string): void {
@@ -2251,8 +2506,8 @@ function showMiracleLogPopup(): void {
     }
     const rows = miracleLogs.map((log, i) => `
         <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <div style="font-weight:900;">${i + 1}. ${log.label} [${log.rank}] ${formatProbability(log.denominator)}</div>
-            <div style="opacity:.78;">${t("投下位置", "Count")}: ${log.finishedCount.toLocaleString()} / ${t("モード", "Mode")}: ${log.mode} / ${t("速度", "Speed")}: ${isEnglish ? log.speedLabel : log.speedLabel} / combo x${log.combo}</div>
+            <div style="font-weight:900;">${i + 1}. ${log.label} [${log.rank}] ${log.denominator > 0 ? formatProbability(log.denominator) : "派生解放"}</div>
+            <div style="opacity:.78;">${t("投下位置", "Count")}: ${log.finishedCount.toLocaleString()} / ${t("モード", "Mode")}: ${log.mode} / ${t("速度", "Speed")}: ${isEnglish ? log.speedLabel : log.speedLabel} / combo x${log.combo}${log.note ? ` / ${log.note}` : ""}</div>
             <div style="opacity:.62;">${new Date(log.finishedAt).toLocaleString()}</div>
         </div>`).join("");
     showPopup(t("奇跡発生ログ", "Miracle log"), rows);
@@ -2267,14 +2522,20 @@ function getResearchReportHtml(): string {
     const diagnosis = imbalance > 18 ? t("かなり偏っています。盤面が機嫌を出しています。", "Very biased. The board is showing mood.") :
         imbalance > 10 ? t("少し偏っています。中央か端が主張気味です。", "Slightly biased. Center or edges are asserting themselves.") :
         t("比較的なだらかです。現実寄りの分布です。", "Relatively smooth. A realistic distribution.");
-    const recentMiracles = miracleLogs.slice(0, 5).map((x) => `${x.label} [${x.rank}] ${formatProbability(x.denominator)}`).join("<br>") || t("なし", "None");
+    const recentMiracles = miracleLogs.slice(0, 5).map((x) => `${x.label} [${x.rank}] ${x.denominator > 0 ? formatProbability(x.denominator) : "派生解放"}`).join("<br>") || t("なし", "None");
+    const level = getResearchLevelInfo();
+    const fortune = currentDailyFortune ?? getDailyFortune();
     return `
         <div style="display:grid;gap:10px;">
+            <div><b>研究レベル:</b> Lv.${level.level} ${level.title} (${level.percent.toFixed(1)}%)</div>
+            <div><b>今日の奇跡率:</b> x${fortune.rateBoost.toFixed(2)} / 注目: ${fortune.luckyKind}</div>
             <div><b>${t("総投下数", "Total count")}:</b> ${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}</div>
             <div><b>${t("捨て区間", "Discarded")}:</b> ${discardedCount.toLocaleString()}</div>
             <div><b>${t("最頻受け皿", "Top bin")}:</b> ${topIndex >= 0 ? labels[topIndex] : "-" } (${maxCount.toLocaleString()})</div>
             <div><b>${t("偏り診断", "Bias diagnosis")}:</b> ${diagnosis}</div>
             <div><b>${t("発見済み種類", "Discovered kinds")}:</b> ${SPECIAL_EVENT_DEFS.filter((d) => (savedRecords.discovered[d.kind] ?? 0) + (specialCreated[d.kind] ?? 0) > 0).length} / ${SPECIAL_EVENT_DEFS.length}</div>
+            <div><b>合成・派生:</b> ${getFusionCount()} / ${FUSION_DEFS.length}</div>
+            <div><b>秘密操作:</b> ${Object.keys(savedRecords.secretUnlocked ?? {}).length}</div>
             <div><b>${t("最近の奇跡", "Recent miracles")}:</b><br>${recentMiracles}</div>
         </div>`;
 }
@@ -2474,8 +2735,9 @@ function showAboutPopup(): void {
         <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王、銀のUFO、青い炎、流れ星、ラッキーセブン、桃色ハート、時空の裂け目、黒い太陽、研究所爆発、そして極秘の最上位奇跡など、たくさんのレア玉がまれに出ます。最上位は<b>1兆分の1</b>級です。</p>
         <p>さらに<b>10億分の1</b>レベルで、<b>poseidon mode / zeusu mode / hadesu mode / heart mode / nekochan mode / 人生名言ボイス</b>が発生します。mode系は出た瞬間から実験終了まで盤面全体の世界観が変わり続けます。</p>
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
-        <p>5000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
-        <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。</p>
+        <p>100,000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
+        <p>奇跡ログ、今日の運勢・奇跡率、研究レベル、奇跡合成・派生、スクリーンショット保存、秘密操作を追加しています。</p>
+        <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。SR/SSRで同じ奇跡演出が実行中に再発生した場合は、2回目以降さらに短く閉じます。</p>
         <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
     `);
 }
@@ -2490,13 +2752,17 @@ function showButtonHelpPopup(): void {
         <p><b>音:</b> npm 依存の Tone.js を使って、レア玉や激レア演出で音を鳴らします。ブラウザ仕様上、最初にボタン操作が必要です。</p>
         <p><b>衝撃波 / 磁石 / 時止め:</b> 実験中に使える操作スキルです。衝撃波は玉を散らし、磁石は上位受け皿へ吸わせ、時止めは短時間だけ盤面を静止させます。</p>
         <p><b>ミッション:</b> 実験中の条件達成でスコア報酬を獲得します。</p>
-        <p><b>録画・SNS:</b> 投稿文コピーや縦長シェアカード保存ができます。奇跡のGIF保存はリプレイから行います。</p>
+        <p><b>今日の運勢:</b> 日付ごとの奇跡率、注目奇跡、ラッキー受け皿を表示します。奇跡率はレア抽選に少しだけ反映されます。</p>
+        <p><b>奇跡合成:</b> 特定の奇跡同士を観測すると、派生奇跡が研究記録として解放されます。</p>
+        <p><b>秘密:</b> 裏コマンドの発見状況を表示します。隠し操作を見つけると研究レベルに少しだけボーナスが入ります。</p>
+        <p><b>録画・SNS:</b> 投稿文コピー、現在画面のスクリーンショット保存、縦長シェアカード保存ができます。奇跡のGIF保存はリプレイから行います。</p>
         <p><b>紙吹雪:</b> 達成時やレア演出時の紙吹雪をON/OFFします。</p>
         <p><b>Pixi背景:</b> Pixi.jsを使った背景演出をON/OFFします。見た目は楽しいですが、PCやスマホによっては重くなります。</p>
         <p><b>設定反映:</b> 投下数、同時に出す玉数、受け皿数、ピン段数などを反映してリセットします。</p>
         <p><b>背景だけ反映:</b> 背景画像だけを差し替えます。</p>
         <p><b>結果コピー / CSV保存:</b> 実験結果をコピー、またはCSVファイルとして保存します。</p>
         <p><b>ピンをタップ/クリック:</b> 近くのピンを揺らして、詰まり気味の玉を少し動かせます。</p>
+        <p><b>SR/SSR演出:</b> 実行中に同じSR/SSR演出が再発生した場合は、2回目以降さらに短く閉じます。</p>
     `);
 }
 
@@ -2716,6 +2982,7 @@ function resetExperiment(startNow = false): void {
     timeRiftCreated = 0;
     labExplosionCreated = 0;
     specialCreated = {};
+    repeatedMiracleRunCounts = {};
     currentSubtitleText = "";
     subtitleOverlay.style.display = "none";
     comboOverlay.style.display = "none";
@@ -2771,7 +3038,8 @@ async function startExperiment(): Promise<void> {
 
 function pauseForMiracle(def?: SpecialEventDef): void {
     if (!isStarted || isFinished || isMiraclePaused) return;
-    const durationMs = getMiraclePauseDuration(def);
+    const repeatedInRun = !!def && (repeatedMiracleRunCounts[def.kind] ?? 0) >= 2;
+    const durationMs = getMiraclePauseDuration(def, repeatedInRun);
     isMiraclePaused = true;
     Runner.stop(runner);
     updateInfo();
@@ -2979,6 +3247,7 @@ function createDrop(): Matter.Body {
             density = special.kind === "labExplosion" ? 0.0019 : 0.0013;
             isHeart = special.kind === "heart";
             incrementSpecialCreated(special.kind);
+            repeatedMiracleRunCounts[special.kind] = (repeatedMiracleRunCounts[special.kind] ?? 0) + 1;
             recordSpecialDiscovery(special);
             showMiracle(special.kind, special.symbol, `[${special.rank}] ${formatProbability(special.denominator)}`, buildWeirdMiracleText(special));
         } else {
@@ -3153,12 +3422,13 @@ async function playAnimeMiracleEffect(def?: SpecialEventDef): Promise<void> {
     const overlayCard = miracleOverlay.firstElementChild as HTMLElement | null;
     if (!overlayCard) return;
     const strength = def?.rank === "GOD" ? 1.35 : def?.rank === "EX" ? 1.18 : 1;
-    const isQuickRare = def?.rank === "SR" || def?.rank === "SSR";
+    const isRepeatedQuickRare = !!def && (repeatedMiracleRunCounts[def.kind] ?? 0) >= 2 && (def.rank === "SR" || def.rank === "SSR");
+    const isQuickRare = isRepeatedQuickRare || def?.rank === "SR" || def?.rank === "SSR";
     anime.remove([overlayCard, canvas, gameArea]);
     anime({
         targets: gameArea,
         scale: [1, 1.018 * strength, 1],
-        duration: isQuickRare ? 360 : 900,
+        duration: isRepeatedQuickRare ? 180 : isQuickRare ? 360 : 900,
         easing: "easeOutQuad",
     });
     anime.timeline({ easing: "easeOutExpo" })
@@ -3167,18 +3437,18 @@ async function playAnimeMiracleEffect(def?: SpecialEventDef): Promise<void> {
             scale: [0.72, 1.06, 1],
             opacity: [0, 1],
             rotate: [-2.2 * strength, 0],
-            duration: isQuickRare ? 240 : 620,
+            duration: isRepeatedQuickRare ? 130 : isQuickRare ? 240 : 620,
         }, 0)
         .add({
             targets: overlayCard,
             translateY: [0, -8 * strength, 0],
-            duration: isQuickRare ? 320 : 1200,
+            duration: isRepeatedQuickRare ? 180 : isQuickRare ? 320 : 1200,
             easing: "easeInOutSine",
         }, isQuickRare ? 80 : 140)
         .add({
             targets: canvas,
             scale: [1, 1.028 * strength, 1],
-            duration: isQuickRare ? 320 : 780,
+            duration: isRepeatedQuickRare ? 180 : isQuickRare ? 320 : 780,
             easing: "easeOutBack",
         }, 0);
 }
@@ -3252,8 +3522,9 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     vibrateOnMobile(def?.rank === "GOD" ? [90, 50, 160, 60, 220] : def?.rank === "EX" ? [70, 40, 120, 40, 140] : [55, 28, 80]);
     triggerCameraShake(def?.rank === "GOD" ? 46 * geometry.scale : def?.rank === "EX" ? 34 * geometry.scale : 18 * geometry.scale, def?.rank === "GOD" ? 1200 : def?.rank === "EX" ? 760 : 420);
     if (settings.simpleMode) return;
-    const overlayDurationMs = getMiraclePauseDuration(def);
-    const overlayDurationSec = Math.max(0.48, overlayDurationMs / 1000);
+    const repeatedInRun = !!def && (repeatedMiracleRunCounts[def.kind] ?? 0) >= 2;
+    const overlayDurationMs = getMiraclePauseDuration(def, repeatedInRun);
+    const overlayDurationSec = Math.max(0.24, overlayDurationMs / 1000);
     miracleOverlay.innerHTML = `
         <div style="max-width:900px;animation:miracle-pop ${overlayDurationSec.toFixed(2)}s ease-out forwards;">
             <style>@keyframes miracle-pop{0%{transform:scale(.65);opacity:0}15%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:0}}</style>
@@ -3262,6 +3533,7 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
             <div style="font-size:clamp(22px,4vw,44px);font-weight:900;margin-top:12px;">${probabilityText}</div>
             <div style="font-size:clamp(18px,3vw,32px);margin-top:12px;opacity:.94;line-height:1.5;">${feelingText}</div>
             ${miracleCombo >= 2 ? `<div style="margin-top:10px;font-size:clamp(20px,4vw,40px);font-weight:900;color:#ffe560;">${t("奇跡コンボ", "Miracle combo")} x${miracleCombo}</div>` : ""}
+            ${repeatedInRun && (def?.rank === "SR" || def?.rank === "SSR") ? `<div style="margin-top:8px;font-size:clamp(16px,3vw,26px);font-weight:900;color:#bbf7d0;">同じSR/SSRのため短縮演出</div>` : ""}
         </div>`;
     miracleOverlay.style.display = "flex";
     void playAnimeMiracleEffect(def);
@@ -3462,15 +3734,18 @@ function updateInfo(): void {
     const maxCount = Math.max(...binCounts, 0);
     const topIndex = binCounts.indexOf(maxCount);
     const topText = maxCount > 0 && topIndex >= 0 ? `${labels[topIndex]} (${maxCount.toLocaleString()}回)` : "-";
+    const discoveredKinds = getDiscoveredCount();
+    const missionDoneCount = Object.values(missionProgress).filter(Boolean).length;
+    const levelInfo = getResearchLevelInfo();
+    const fortune = currentDailyFortune ?? getDailyFortune();
+    currentDailyFortune = fortune;
     recordHero.innerHTML = `
         <div style="font-size:${isMobile ? 24 : 22}px;">🏆 ${t("最高記録", "Best records")}</div>
         <div style="font-size:${isMobile ? 22 : 20}px;">${t("最高レア", "Best rarity")}: <b>${savedRecords.bestRank}</b> ${savedRecords.bestLabel}</div>
-        <div style="font-size:${isMobile ? 20 : 18}px;">${t("今回スコア", "Run score")}: <b>${runScore.toLocaleString()}</b> / ${t("最高スコア", "Best")} <b>${savedRecords.bestScore.toLocaleString()}</b></div>
-        <div style="font-size:${isMobile ? 18 : 16}px;opacity:.86;">${t("実験", "Runs")} ${savedRecords.totalRuns.toLocaleString()}${t("回", "")} / ${t("最大", "Max")} ${savedRecords.maxFinishedCount.toLocaleString()}${t("玉", " balls")}</div>
+        <div style="font-size:${isMobile ? 20 : 18}px;">研究Lv: <b>${levelInfo.level}</b> ${levelInfo.title} / ${t("今回スコア", "Run score")}: <b>${runScore.toLocaleString()}</b></div>
+        <div style="font-size:${isMobile ? 18 : 16}px;opacity:.86;">${t("実験", "Runs")} ${savedRecords.totalRuns.toLocaleString()}${t("回", "")} / ${t("最大", "Max")} ${savedRecords.maxFinishedCount.toLocaleString()}${t("玉", " balls")} / 今日 x${fortune.rateBoost.toFixed(2)}</div>
     `;
 
-    const discoveredKinds = getDiscoveredCount();
-    const missionDoneCount = Object.values(missionProgress).filter(Boolean).length;
     topRow.innerHTML = `
         <div>${t("デバイス", "Device")}: <b>${isMobile ? t("スマホ向け", "Mobile") : t("PC向け", "Desktop")}</b></div>
         <div>${t("ブラウザ", "Browser")}: <b>${browserName}</b></div>
@@ -3486,6 +3761,9 @@ function updateInfo(): void {
         <div>${t("受け皿", "Bins")}: <b>${settings.binCount}</b> ${t("+ 両端捨て区画", "+ edge discard zones")}</div>
         <div>${t("ピン段数", "Pin rows")}: <b>${settings.pinRows}</b></div>
         <div>${t("発見済み種類", "Discovered kinds")}: <b>${discoveredKinds}</b> / ${SPECIAL_EVENT_DEFS.length}</div>
+        <div>研究レベル: <b>Lv.${levelInfo.level}</b> ${levelInfo.title}</div>
+        <div>今日の奇跡率: <b>x${fortune.rateBoost.toFixed(2)}</b> / ${fortune.luckyKind}</div>
+        <div>合成・派生: <b>${getFusionCount()}</b> / ${FUSION_DEFS.length}</div>
         <div>${t("奇跡ログ件数", "Miracle logs")}: <b>${miracleLogs.length}</b></div>
         <div>${t("スコア", "Score")}: <b>${runScore.toLocaleString()}</b></div>
         <div>${t("ミッション", "Missions")}: <b>${missionDoneCount}</b> / ${missionDefs.length}</div>
