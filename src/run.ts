@@ -75,6 +75,31 @@ type MiracleClip = {
     frames: string[];
 };
 
+type RemoteMiracleAssetSource = {
+    url: string;
+    mimeType?: string;
+};
+
+type RemoteMiracleAsset = {
+    id: string;
+    kind: "video" | "audio";
+    rank?: string;
+    url?: string;
+    mimeType?: string;
+    sources?: RemoteMiracleAssetSource[];
+    seconds?: number;
+    opacity?: number;
+    weight?: number;
+    volume?: number;
+    tags?: string[];
+};
+
+type RemoteMiracleManifest = {
+    version: number;
+    updatedAt?: string;
+    assets: RemoteMiracleAsset[];
+};
+
 type ThemeMode = "lab" | "space" | "sunset" | "retro" | "midnight";
 type EffectMode = "quiet" | "normal" | "flashy" | "recording";
 type WorldMode = "poseidon" | "zeusu" | "hadesu" | "heart" | "nekochan" | null;
@@ -264,6 +289,9 @@ const SWORD_IMPACT_RATE = 0.0000002; // 1/5,000,000
 
 const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v3";
 const SECRET_KEY_SEQUENCE = "miracle";
+const MIRACLE_ASSET_BASE_URL = "https://pub-53a4b50cc39c4d7882f67fc9340fe6e8.r2.dev";
+const MIRACLE_MANIFEST_URL = `${MIRACLE_ASSET_BASE_URL}/manifest.json`;
+const REMOTE_MIRACLE_MANIFEST_CACHE_MS = 5 * 60 * 1000;
 const SECRET_KEY_SEQUENCES: Record<string, { label: string; detail: string }> = {
     miracle: { label: "MIRACLE コード", detail: "キーボードで隠しコードを入力しました。今日の研究所は少しだけ騒がしくなります。" },
     lab: { label: "LAB コード", detail: "研究所の短縮コードを入力しました。秘密研究員として記録します。" },
@@ -1535,10 +1563,28 @@ miracleOverlay.style.color = "#fff";
 miracleOverlay.style.padding = "24px";
 miracleOverlay.style.boxSizing = "border-box";
 document.body.appendChild(miracleOverlay);
+const remoteMiracleVideoOverlay = document.createElement("div");
+remoteMiracleVideoOverlay.style.position = "fixed";
+remoteMiracleVideoOverlay.style.left = "0";
+remoteMiracleVideoOverlay.style.top = "0";
+remoteMiracleVideoOverlay.style.width = "100vw";
+remoteMiracleVideoOverlay.style.height = "100dvh";
+remoteMiracleVideoOverlay.style.zIndex = "118";
+remoteMiracleVideoOverlay.style.pointerEvents = "none";
+remoteMiracleVideoOverlay.style.display = "none";
+remoteMiracleVideoOverlay.style.overflow = "hidden";
+remoteMiracleVideoOverlay.style.background = "transparent";
+document.body.appendChild(remoteMiracleVideoOverlay);
+
 let miracleOverlayTimer: number | undefined;
 let miracleOverlayEndsAt = 0;
 let miracleOverlayRemainingMs = 0;
 let miracleOverlayFrozen = false;
+let remoteMiracleAssets: RemoteMiracleAsset[] = [];
+let remoteMiracleAssetsLoadedAt = 0;
+let remoteMiracleAssetsLoading: Promise<RemoteMiracleAsset[]> | null = null;
+let activeRemoteMiracleVideo: HTMLVideoElement | null = null;
+let remoteMiracleVideoTimer: number | undefined;
 
 const flashOverlay = document.createElement("div");
 flashOverlay.style.position = "fixed";
@@ -3187,6 +3233,7 @@ function showAdminPanelPopup(): void {
             <button id="admin-cosmic-egg-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(127,29,29,.25);background:linear-gradient(180deg,#2e1065 0%,#111827 100%);color:#fff;cursor:pointer;">宇宙卵<br><span style="font-size:.75em;">1兆分の1</span></button>
             <button id="admin-sword-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">剣の衝撃</button>
             <button id="admin-all-effects-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#dcfce7 0%,#bbf7d0 100%);color:#14532d;cursor:pointer;">演出系を全部ON</button>
+            <button id="admin-r2-video-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">R2動画確認</button>
             <button id="admin-skill-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#eef2ff 0%,#c7d2fe 100%);color:#312e81;cursor:pointer;">スキル+99</button>
             <button id="admin-unlock-book-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#fef9c3 0%,#fde68a 100%);color:#713f12;cursor:pointer;">図鑑テスト解放</button>
             <button id="admin-lock-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(127,29,29,.25);background:linear-gradient(180deg,#fee2e2 0%,#fecaca 100%);color:#7f1d1d;cursor:pointer;">管理者解除</button>
@@ -3197,6 +3244,7 @@ function showAdminPanelPopup(): void {
     document.getElementById("admin-cosmic-egg-button")!.onclick = () => triggerAdminMiracle("cosmicEgg");
     document.getElementById("admin-sword-button")!.onclick = () => triggerAdminMiracle("swordImpact");
     document.getElementById("admin-all-effects-button")!.onclick = () => adminEnableAllEffects();
+    document.getElementById("admin-r2-video-button")!.onclick = () => { void showAdminRemoteVideoTestPopup(); };
     document.getElementById("admin-skill-button")!.onclick = () => adminAddSkillStock();
     document.getElementById("admin-unlock-book-button")!.onclick = () => adminUnlockMiracleBookForTest();
     document.getElementById("admin-lock-button")!.onclick = () => adminLockMode();
@@ -3214,6 +3262,120 @@ function triggerAdminMiracle(kind: string): void {
     adminForceNextMiracleEffect = true;
     showMiracle(def.kind, def.symbol, `[${def.rank}] ${formatProbability(def.denominator)}`, buildWeirdMiracleText(def));
     showSoftToast(`${def.label} を強制発動しました`);
+}
+
+async function showAdminRemoteVideoTestPopup(): Promise<void> {
+    if (!isAdminMode) {
+        showAdminGatePopup();
+        return;
+    }
+
+    showPopup("R2動画確認", `
+        <p>R2 の <b>manifest.json</b> を再取得しています。</p>
+        <p style="opacity:.72;">${escapeHtml(MIRACLE_MANIFEST_URL)}</p>
+    `);
+
+    const assets = await loadRemoteMiracleAssets(true);
+    const videos = assets.filter((asset) => asset.kind === "video");
+
+    if (videos.length === 0) {
+        showPopup("R2動画確認", `
+            <p>manifest.json に動画が見つかりませんでした。</p>
+            <p style="opacity:.72;">動画は <code>kind: "video"</code> で登録してください。</p>
+        `);
+        return;
+    }
+
+    const rows = videos.map((asset, index) => {
+        const mainUrl = getRemoteMiracleAssetMainUrl(asset);
+        const rank = escapeHtml(String(asset.rank ?? "common").toUpperCase());
+        const id = escapeHtml(asset.id);
+        const seconds = asset.seconds ? `${asset.seconds}秒` : "未指定";
+        const opacity = asset.opacity ?? 0.45;
+        const weight = asset.weight ?? 1;
+        const urlText = escapeHtml(mainUrl);
+
+        return `
+            <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.18);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;">
+                <div style="min-width:0;">
+                    <div style="font-weight:1000;font-size:${isMobile ? "18px" : "16px"};">
+                        ${index + 1}. [${rank}] ${id}
+                    </div>
+                    <div style="margin-top:4px;opacity:.78;font-size:${isMobile ? "14px" : "13px"};line-height:1.5;">
+                        秒数: ${escapeHtml(seconds)} / 透明度: ${escapeHtml(opacity)} / weight: ${escapeHtml(weight)}
+                    </div>
+                    <div style="margin-top:4px;opacity:.62;font-size:${isMobile ? "12px" : "12px"};word-break:break-all;">
+                        ${urlText}
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <button class="admin-r2-video-play-button" data-asset-id="${id}" style="font-size:${isMobile ? "16px" : "14px"};font-weight:900;padding:10px 14px;border-radius:999px;border:1px solid rgba(14,116,144,.24);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">再生</button>
+                    <button class="admin-r2-video-open-button" data-asset-id="${id}" style="font-size:${isMobile ? "16px" : "14px"};font-weight:900;padding:10px 14px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;cursor:pointer;">URLを開く</button>
+                </div>
+            </div>
+        `;
+    }).join("");
+
+    showPopup("R2動画確認", `
+        <p><b>${videos.length}件</b> の動画を確認できます。</p>
+        <p style="opacity:.72;line-height:1.6;">
+            「再生」を押すと、このポップアップを閉じて対象動画を半透明オーバーレイで強制再生します。
+        </p>
+        <div style="margin-top:10px;border-radius:18px;background:rgba(255,255,255,.70);padding:4px 14px;">
+            ${rows}
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+            <button id="admin-r2-video-reload-button" style="font-size:${isMobile ? "18px" : "16px"};font-weight:900;padding:10px 16px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:linear-gradient(180deg,#fef9c3 0%,#fde68a 100%);color:#713f12;cursor:pointer;">manifest再読込</button>
+            <button id="admin-r2-video-stop-button" style="font-size:${isMobile ? "18px" : "16px"};font-weight:900;padding:10px 16px;border-radius:999px;border:1px solid rgba(127,29,29,.24);background:linear-gradient(180deg,#fee2e2 0%,#fecaca 100%);color:#7f1d1d;cursor:pointer;">動画停止</button>
+        </div>
+    `);
+
+    document.querySelectorAll<HTMLButtonElement>(".admin-r2-video-play-button").forEach((button) => {
+        button.onclick = () => {
+            const asset = videos.find((x) => x.id === button.dataset.assetId);
+            if (!asset) {
+                showSoftToast("対象動画が見つかりません");
+                return;
+            }
+
+            closeHelpPopup();
+            showSoftToast(`${getRemoteMiracleAssetLabel(asset)} を再生します`);
+            void playRemoteMiracleVideoAsset(asset, true);
+        };
+    });
+
+    document.querySelectorAll<HTMLButtonElement>(".admin-r2-video-open-button").forEach((button) => {
+        button.onclick = () => {
+            const asset = videos.find((x) => x.id === button.dataset.assetId);
+            if (!asset) {
+                showSoftToast("対象動画が見つかりません");
+                return;
+            }
+
+            const url = getRemoteMiracleAssetMainUrl(asset);
+            if (!url) {
+                showSoftToast("URLがありません");
+                return;
+            }
+
+            window.open(url, "_blank", "noopener,noreferrer");
+        };
+    });
+
+    const reloadButton = document.getElementById("admin-r2-video-reload-button") as HTMLButtonElement | null;
+    if (reloadButton) {
+        reloadButton.onclick = () => {
+            void showAdminRemoteVideoTestPopup();
+        };
+    }
+
+    const stopButton = document.getElementById("admin-r2-video-stop-button") as HTMLButtonElement | null;
+    if (stopButton) {
+        stopButton.onclick = () => {
+            stopRemoteMiracleVideo();
+            showSoftToast("R2動画を停止しました");
+        };
+    }
 }
 
 function adminEnableAllEffects(): void {
@@ -4436,6 +4598,232 @@ function setMiracleOverlayAnimationPaused(paused: boolean): void {
         });
 }
 
+function normalizeRemoteMiracleUrl(url: string): string {
+    if (/^https?:\/\//i.test(url)) return url;
+    return `${MIRACLE_ASSET_BASE_URL}/${url.replace(/^\/+/, "")}`;
+}
+
+function getRemoteAssetRank(asset: RemoteMiracleAsset): string {
+    return String(asset.rank ?? "common").toLowerCase();
+}
+
+function getDefRank(def?: SpecialEventDef): string {
+    return String(def?.rank ?? "common").toLowerCase();
+}
+
+function getRemoteRankCandidates(def?: SpecialEventDef): string[] {
+    const rank = getDefRank(def);
+
+    if (rank === "god") return ["god", "secret", "ex", "ur", "ssr", "rare", "common"];
+    if (rank === "ex") return ["ex", "secret", "god", "ur", "ssr", "rare", "common"];
+    if (rank === "ur") return ["ur", "ssr", "rare", "common"];
+    if (rank === "ssr") return ["ssr", "rare", "common"];
+    if (rank === "sr") return ["sr", "rare", "common"];
+    if (rank === "rare") return ["rare", "common"];
+
+    return ["common", "rare"];
+}
+
+async function loadRemoteMiracleAssets(force = false): Promise<RemoteMiracleAsset[]> {
+    const now = Date.now();
+
+    if (!force && remoteMiracleAssets.length > 0 && now - remoteMiracleAssetsLoadedAt < REMOTE_MIRACLE_MANIFEST_CACHE_MS) {
+        return remoteMiracleAssets;
+    }
+
+    if (!force && remoteMiracleAssetsLoading) {
+        return remoteMiracleAssetsLoading;
+    }
+
+    remoteMiracleAssetsLoading = fetch(MIRACLE_MANIFEST_URL, { cache: "no-cache" })
+        .then(async (res) => {
+            if (!res.ok) throw new Error(`manifest fetch failed: ${res.status}`);
+            const manifest = (await res.json()) as RemoteMiracleManifest;
+            const assets = Array.isArray(manifest.assets) ? manifest.assets : [];
+
+            remoteMiracleAssets = assets.filter((asset) => {
+                if (!asset || !asset.id || !asset.kind) return false;
+                if (asset.kind !== "video" && asset.kind !== "audio") return false;
+                if (!asset.url && (!asset.sources || asset.sources.length === 0)) return false;
+                return true;
+            });
+
+            remoteMiracleAssetsLoadedAt = Date.now();
+            return remoteMiracleAssets;
+        })
+        .catch((error) => {
+            console.warn("[Miracle R2] manifest load failed", error);
+            return remoteMiracleAssets;
+        })
+        .finally(() => {
+            remoteMiracleAssetsLoading = null;
+        });
+
+    return remoteMiracleAssetsLoading;
+}
+
+function weightedPickRemoteAsset(assets: RemoteMiracleAsset[]): RemoteMiracleAsset | null {
+    if (assets.length === 0) return null;
+
+    const total = assets.reduce((sum, asset) => sum + Math.max(1, Number(asset.weight ?? 1)), 0);
+    let roll = appRandom() * total;
+
+    for (const asset of assets) {
+        roll -= Math.max(1, Number(asset.weight ?? 1));
+        if (roll <= 0) return asset;
+    }
+
+    return assets[assets.length - 1] ?? null;
+}
+
+function selectRemoteMiracleVideoAsset(assets: RemoteMiracleAsset[], def?: SpecialEventDef): RemoteMiracleAsset | null {
+    const videos = assets.filter((asset) => asset.kind === "video");
+    if (videos.length === 0) return null;
+
+    const defRank = getDefRank(def);
+    const exact = videos.filter((asset) => getRemoteAssetRank(asset) === defRank);
+    if (exact.length > 0) return weightedPickRemoteAsset(exact);
+
+    const candidates = getRemoteRankCandidates(def);
+    const ranked = videos.filter((asset) => candidates.includes(getRemoteAssetRank(asset)));
+    if (ranked.length > 0) return weightedPickRemoteAsset(ranked);
+
+    return weightedPickRemoteAsset(videos);
+}
+
+function stopRemoteMiracleVideo(): void {
+    if (remoteMiracleVideoTimer !== undefined) {
+        window.clearTimeout(remoteMiracleVideoTimer);
+        remoteMiracleVideoTimer = undefined;
+    }
+
+    if (activeRemoteMiracleVideo) {
+        try {
+            activeRemoteMiracleVideo.pause();
+            activeRemoteMiracleVideo.removeAttribute("src");
+            activeRemoteMiracleVideo.load();
+        } catch {
+            // 動画停止失敗は無視
+        }
+        activeRemoteMiracleVideo = null;
+    }
+
+    remoteMiracleVideoOverlay.innerHTML = "";
+    remoteMiracleVideoOverlay.style.display = "none";
+}
+
+function pauseRemoteMiracleVideo(): void {
+    if (!activeRemoteMiracleVideo) return;
+    try {
+        activeRemoteMiracleVideo.pause();
+    } catch {
+        // 無視
+    }
+}
+
+function resumeRemoteMiracleVideo(): void {
+    if (!activeRemoteMiracleVideo) return;
+    try {
+        void activeRemoteMiracleVideo.play();
+    } catch {
+        // 自動再生制限などは無視
+    }
+}
+
+function getRemoteMiracleAssetMainUrl(asset: RemoteMiracleAsset): string {
+    const firstSource = asset.sources?.[0];
+    if (firstSource?.url) return normalizeRemoteMiracleUrl(firstSource.url);
+    if (asset.url) return normalizeRemoteMiracleUrl(asset.url);
+    return "";
+}
+
+function getRemoteMiracleAssetLabel(asset: RemoteMiracleAsset): string {
+    const rank = String(asset.rank ?? "common").toUpperCase();
+    const seconds = asset.seconds ? `${asset.seconds}秒` : "秒数未指定";
+    return `[${rank}] ${asset.id} / ${seconds}`;
+}
+
+async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = false): Promise<void> {
+    if (isAppTerminated) return;
+    if (asset.kind !== "video") return;
+    if (!force && settings.simpleMode) return;
+    if (!asset.url && (!asset.sources || asset.sources.length === 0)) return;
+
+    stopRemoteMiracleVideo();
+
+    const video = document.createElement("video");
+    video.autoplay = true;
+    video.muted = true;
+    video.loop = false;
+    video.playsInline = true;
+    video.preload = "auto";
+
+    video.style.position = "absolute";
+    video.style.left = "0";
+    video.style.top = "0";
+    video.style.width = "100%";
+    video.style.height = "100%";
+    video.style.objectFit = "cover";
+    video.style.opacity = String(clamp(Number(asset.opacity ?? 0.45), 0.05, 0.9));
+    video.style.filter = "saturate(1.15) contrast(1.08)";
+    video.style.mixBlendMode = "screen";
+    video.style.pointerEvents = "none";
+
+    if (asset.sources && asset.sources.length > 0) {
+        for (const sourceDef of asset.sources) {
+            const source = document.createElement("source");
+            source.src = normalizeRemoteMiracleUrl(sourceDef.url);
+            if (sourceDef.mimeType) source.type = sourceDef.mimeType;
+            video.appendChild(source);
+        }
+    } else if (asset.url) {
+        const source = document.createElement("source");
+        source.src = normalizeRemoteMiracleUrl(asset.url);
+        if (asset.mimeType) source.type = asset.mimeType;
+        video.appendChild(source);
+    }
+
+    video.addEventListener("ended", () => {
+        stopRemoteMiracleVideo();
+    }, { once: true });
+
+    video.addEventListener("error", () => {
+        console.warn("[Miracle R2] admin video load failed", asset);
+        stopRemoteMiracleVideo();
+        showSoftToast("R2動画の読み込みに失敗しました");
+    }, { once: true });
+
+    remoteMiracleVideoOverlay.innerHTML = "";
+    remoteMiracleVideoOverlay.appendChild(video);
+    remoteMiracleVideoOverlay.style.display = "block";
+    activeRemoteMiracleVideo = video;
+
+    const fallbackMs = Math.max(1200, Number(asset.seconds ?? 8) * 1000 + 800);
+    remoteMiracleVideoTimer = window.setTimeout(() => {
+        stopRemoteMiracleVideo();
+    }, fallbackMs);
+
+    try {
+        await video.play();
+    } catch (error) {
+        console.warn("[Miracle R2] admin video autoplay failed", error);
+        stopRemoteMiracleVideo();
+        showSoftToast("ブラウザ制限で動画を自動再生できませんでした");
+    }
+}
+
+async function playRemoteMiracleVideo(def?: SpecialEventDef): Promise<void> {
+    if (isAppTerminated) return;
+    if (settings.simpleMode) return;
+    if (!settings.effectsEnabled && !shouldForceMiracleEffects(def)) return;
+
+    const assets = await loadRemoteMiracleAssets();
+    const asset = selectRemoteMiracleVideoAsset(assets, def);
+    if (!asset) return;
+
+    await playRemoteMiracleVideoAsset(asset, false);
+}
+
 function hideMiracleOverlayNow(): void {
     if (miracleOverlayTimer !== undefined) {
         window.clearTimeout(miracleOverlayTimer);
@@ -4450,6 +4838,8 @@ function hideMiracleOverlayNow(): void {
 
     miracleOverlay.style.display = "none";
     miracleOverlay.innerHTML = "";
+
+    stopRemoteMiracleVideo();
 }
 
 function startMiracleOverlayTimer(durationMs: number): void {
@@ -4477,6 +4867,8 @@ function pauseMiracleOverlayTimer(): void {
 
     miracleOverlayFrozen = true;
     setMiracleOverlayAnimationPaused(true);
+
+    pauseRemoteMiracleVideo();
 }
 
 function resumeMiracleOverlayTimer(): void {
@@ -4484,6 +4876,7 @@ function resumeMiracleOverlayTimer(): void {
 
     miracleOverlayFrozen = false;
     setMiracleOverlayAnimationPaused(false);
+    resumeRemoteMiracleVideo();
 
     const remainingMs = Math.max(120, miracleOverlayRemainingMs || 600);
     startMiracleOverlayTimer(remainingMs);
@@ -4666,6 +5059,7 @@ function terminateExperimentSafely(): void {
     for (const timer of [miracleOverlayTimer, miraclePauseTimer, subtitleTimer, comboTimer, rareBackgroundTimer, lifeQuoteOverlayTimer, commentaryTimer, toastTimer, resizeTimer]) {
         if (timer !== undefined) window.clearTimeout(timer);
     }
+    stopRemoteMiracleVideo();
     miracleOverlay.style.display = "none";
     celebrationOverlay.style.display = "none";
     milestoneOverlay.style.display = "none";
@@ -5318,7 +5712,10 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
         miracleOverlayTimer = undefined;
     }
     miracleOverlay.style.display = "flex";
+
+    void playRemoteMiracleVideo(def);
     void playAnimeMiracleEffect(def);
+
     fireConfetti(kind === "blackSun" ? "black" : kind === "cosmicEgg" ? "cosmic" : "miracle", forceRareEffect);
     playSpecialSound(kind);
     startMiracleOverlayTimer(overlayDurationMs + 120);
@@ -6477,6 +6874,7 @@ Render.run(render);
 void ensureAnimeReady();
 void ensureGifReady();
 void ensureTippyReady();
+void loadRemoteMiracleAssets();
 hideBootOverlay();
 
 let resizeTimer: number | undefined;
