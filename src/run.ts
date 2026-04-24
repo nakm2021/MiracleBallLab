@@ -165,6 +165,7 @@ type Settings = {
     timeBallSkinsEnabled: boolean;
     mobileCompactMode: boolean;
     showRecentMiracles: boolean;
+    blackModeEnabled: boolean;
     effectMode: EffectMode;
     probabilityMode: ProbabilityMode;
 };
@@ -244,6 +245,20 @@ type RarePinDef = {
     fillStyle: string;
     strokeStyle: string;
     rate: number;
+};
+
+type PachinkoYakumonoKind = "start" | "center" | "premium";
+
+type PachinkoYakumonoDef = {
+    kind: PachinkoYakumonoKind;
+    label: string;
+    xRatio: number;
+    yRatio: number;
+    widthRatio: number;
+    height: number;
+    oddsScale: number;
+    score: number;
+    color: string;
 };
 
 type TutorialMissionDef = {
@@ -334,6 +349,12 @@ const RARE_PIN_DEFS: RarePinDef[] = [
     { kind: "blue", label: "青ピン", description: "触れた玉を少し中央へ寄せます。", fillStyle: "#2563eb", strokeStyle: "#dbeafe", rate: 0.014 },
     { kind: "black", label: "黒ピン", description: "通常玉を低確率で金玉へ変質させます。", fillStyle: "#111827", strokeStyle: "#f87171", rate: 0.007 },
     { kind: "rainbow", label: "虹ピン", description: "触れると奇跡予兆が出やすい特別なピンです。", fillStyle: "#a855f7", strokeStyle: "#fef3c7", rate: 0.005 },
+];
+
+const PACHINKO_YAKUMONO_DEFS: PachinkoYakumonoDef[] = [
+    { kind: "start", label: "START", xRatio: 0.50, yRatio: 0.39, widthRatio: 0.23, height: 18, oddsScale: 1.00, score: 500, color: "#facc15" },
+    { kind: "center", label: "役物", xRatio: 0.50, yRatio: 0.53, widthRatio: 0.30, height: 24, oddsScale: 1.85, score: 900, color: "#fb7185" },
+    { kind: "premium", label: "PREMIUM", xRatio: 0.50, yRatio: 0.24, widthRatio: 0.16, height: 16, oddsScale: 5.50, score: 2500, color: "#a78bfa" },
 ];
 
 const LOCAL_RARE_AUDIO_FILES: string[] = [];
@@ -466,6 +487,7 @@ let settings: Settings = {
     timeBallSkinsEnabled: true,
     mobileCompactMode: false,
     showRecentMiracles: false,
+    blackModeEnabled: false,
     effectMode: "normal",
     probabilityMode: "normal",
 };
@@ -561,6 +583,9 @@ let miracleCombo = 0;
 let lastMiracleAt = 0;
 let activeRareBackgroundKind: DropKind | null = null;
 let activeWorldMode: WorldMode = null;
+let activeUiAccentKind: DropKind | null = null;
+let uiAccentTimer: number | undefined;
+let currentPachinkoNailPattern = "standard";
 let lifeQuoteOverlayTimer: number | undefined;
 let rareBackgroundTimer: number | undefined;
 let anomalyUntil = 0;
@@ -580,6 +605,8 @@ let isAppTerminated = false;
 let lastMiracleOmenAt = 0;
 let lastOmenText = "";
 let rarePinTouchCount: Record<RarePinKind, number> = { red: 0, blue: 0, black: 0, rainbow: 0 };
+let pachinkoYakumonoHitCount: Record<PachinkoYakumonoKind, number> = { start: 0, center: 0, premium: 0 };
+let pachinkoJackpotCount = 0;
 let tutorialMissionProgress: Record<string, boolean> = {};
 let tutorialMissionPanelVisible = false;
 let tutorialMissionExpanded = !isMobile;
@@ -671,6 +698,39 @@ globalStyle.textContent = `
   body { overscroll-behavior-x: none; font-family: "M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif; }
   button, input, textarea, select, pre, code { font-family: inherit; }
   #miracle-horizontal-guard { width: 100%; max-width: 100%; overflow-x: hidden; }
+  body.miracle-black-mode { background:#020617 !important; color:#f8fafc !important; }
+  body.miracle-black-mode #miracle-horizontal-guard,
+  body.miracle-black-mode #miracle-game-area { background:#020617 !important; color:#f8fafc !important; }
+  body.miracle-black-mode #miracle-info-area {
+    background:linear-gradient(180deg, rgba(7,12,24,.98) 0%, rgba(10,18,32,.96) 100%) !important;
+    color:#f8fafc !important;
+  }
+  body.miracle-black-mode #miracle-info-area > div,
+  body.miracle-black-mode #miracle-info-area section,
+  body.miracle-black-mode .miracle-popup-panel,
+  body.miracle-black-mode .miracle-mobile-panel {
+    background:linear-gradient(180deg, rgba(15,23,42,.96) 0%, rgba(8,15,30,.92) 100%) !important;
+    color:#f8fafc !important;
+    border-color:rgba(148,163,184,.34) !important;
+    box-shadow:0 18px 40px rgba(0,0,0,.45) !important;
+  }
+  body.miracle-black-mode button {
+    background:linear-gradient(180deg,#172033 0%, #0f172a 100%) !important;
+    color:#f8fafc !important;
+    border-color:#64748b !important;
+    box-shadow:0 0 0 1px rgba(255,255,255,.05), 0 8px 22px rgba(0,0,0,.45) !important;
+    text-shadow:0 1px 0 rgba(0,0,0,.35);
+  }
+  body.miracle-black-mode input,
+  body.miracle-black-mode textarea,
+  body.miracle-black-mode select {
+    background:#0f172a !important;
+    color:#f8fafc !important;
+    border-color:#64748b !important;
+    box-shadow:0 0 0 1px rgba(255,255,255,.05), 0 8px 22px rgba(0,0,0,.45) !important;
+  }
+  body.miracle-black-mode button:hover { filter:brightness(1.15); }
+  body.miracle-black-mode canvas { background-color:#020617 !important; }
 `;
 document.head.appendChild(globalStyle);
 
@@ -1367,11 +1427,22 @@ displayButtons.appendChild(setTooltip(setButtonLabel(createButton("リセット"
 
 const simpleModeButton = setTooltip(setButtonLabel(createButton("シンプル: OFF", () => {
     settings.simpleMode = !settings.simpleMode;
+    applyBlackMode();
     updateSimpleModeButton();
+    updateBlackModeButton();
     updateInfo();
     showSoftToast(settings.simpleMode ? t("シンプル表示をONにしました", "Simple mode enabled") : t("シンプル表示をOFFにしました", "Simple mode disabled"));
 }), "シンプル: OFF", "Simple: OFF"), "演出を軽くして見やすくします。", "Reduce effects for a lighter view.");
 displayButtons.appendChild(simpleModeButton);
+
+const blackModeButton = setTooltip(setButtonLabel(createButton("ブラック: OFF", () => {
+    settings.blackModeEnabled = !settings.blackModeEnabled;
+    applyBlackMode();
+    updateBlackModeButton();
+    updateInfo();
+    showSoftToast(settings.blackModeEnabled ? t("ブラックモードをONにしました", "Black mode enabled") : t("ブラックモードをOFFにしました", "Black mode disabled"));
+}), "ブラック: OFF", "Black: OFF"), "UI全体を黒基調にします。デフォルトはOFFです。", "Turn the entire UI dark. Default is off.");
+displayButtons.appendChild(blackModeButton);
 
 const slowMiracleButton = setTooltip(setButtonLabel(createButton("演出ゆっくり: OFF", () => {
     settings.slowMiracleEffects = !settings.slowMiracleEffects;
@@ -2213,12 +2284,13 @@ function setupMobileLayout(): void {
 
 function updateUiLanguage(): void {
     appTitle.innerHTML = isEnglish
-        ? `<div style="font-size:${isMobile ? 30 : 26}px;font-weight:900;color:#26351f;letter-spacing:.03em;">Miracle Ball Lab</div><div style="margin-top:3px;font-size:${isMobile ? 16 : 14}px;font-weight:700;color:#5d6d48;">A lab for observing probability and miracles with falling balls</div>`
-        : `<div style="font-size:${isMobile ? 30 : 26}px;font-weight:900;color:#26351f;letter-spacing:.03em;">ミラクルボールラボ</div><div style="margin-top:3px;font-size:${isMobile ? 16 : 14}px;font-weight:700;color:#5d6d48;">ランダムに落ちる玉で、確率と奇跡を観測する実験場</div>`;
-    appHeaderNote.textContent = isEnglish ? "Rare effects are luck. Ultra speed is easy to miss." : "レア演出は運。超高速だと見逃しやすいです。";
+        ? `<div style="font-size:${isMobile ? 30 : 26}px;font-weight:900;color:${settings.blackModeEnabled ? "#f8fafc" : "#26351f"};letter-spacing:.03em;">MiracleBallLab</div><div style="margin-top:3px;font-size:${isMobile ? 16 : 14}px;font-weight:700;color:${settings.blackModeEnabled ? "#cbd5e1" : "#5d6d48"};">Pachinko-style board. Lotteries run only when balls pass a gate.</div>`
+        : `<div style="font-size:${isMobile ? 30 : 26}px;font-weight:900;color:${settings.blackModeEnabled ? "#f8fafc" : "#26351f"};letter-spacing:.03em;">ミラクルボールラボ</div><div style="margin-top:3px;font-size:${isMobile ? 16 : 14}px;font-weight:700;color:${settings.blackModeEnabled ? "#cbd5e1" : "#5d6d48"};">役物を通過したときだけ抽選するパチンコ風ラボ</div>`;
+    appHeaderNote.textContent = isEnglish ? "Rare effects trigger at gates. Black mode is optional." : "レア演出は役物通過時に抽選。ブラックモードは任意です。";
     for (const item of uiFieldRefs) item.labelEl.textContent = isEnglish ? item.en : item.ja;
     for (const item of bilingualButtons) {
         if (item.button === simpleModeButton) continue;
+        if (item.button === blackModeButton) continue;
         if (item.button === cameraShakeButton) continue;
         if (item.button === slowMiracleButton) continue;
         if (item.button === effectsButton) continue;
@@ -2236,6 +2308,7 @@ function updateUiLanguage(): void {
     updateThemeSelectLabels();
     updateEffectModeSelectLabels();
     updateSimpleModeButton();
+    updateBlackModeButton();
     updateCameraShakeButton();
     updateSlowMiracleButton();
     updateEffectsButton();
@@ -2328,6 +2401,77 @@ function applyWorldModeBodyStyles(): void {
         if (plugin?.isPin) renderObj.fillStyle = palette.accent;
         else if (plugin?.isDivider) renderObj.fillStyle = palette.accent;
         else if (!plugin?.isDrop) renderObj.fillStyle = palette.accent;
+    }
+}
+
+function getUiAccentPaletteByKind(kind: DropKind | null): { panel: string; section: string; fieldBg: string; fieldText: string; border: string; badge: string; badgeText: string; title: string; subtitle: string } | null {
+    if (!kind) return null;
+    const map: Record<string, { panel: string; section: string; fieldBg: string; fieldText: string; border: string; badge: string; badgeText: string; title: string; subtitle: string }> = {
+        poseidonMode: { panel: 'linear-gradient(180deg, rgba(232,246,255,.97) 0%, rgba(192,229,255,.90) 100%)', section: 'linear-gradient(180deg, rgba(235,248,255,.95) 0%, rgba(205,233,255,.88) 100%)', fieldBg: '#f2fbff', fieldText: '#07203c', border: '#79c8ff', badge: 'linear-gradient(180deg,#d7f1ff 0%,#7dc8ff 100%)', badgeText: '#05264b', title: '#08315e', subtitle: '#13548b' },
+        zeusuMode: { panel: 'linear-gradient(180deg, rgba(255,250,222,.97) 0%, rgba(255,239,176,.90) 100%)', section: 'linear-gradient(180deg, rgba(255,251,228,.95) 0%, rgba(255,238,183,.88) 100%)', fieldBg: '#fffbea', fieldText: '#453100', border: '#ffe75a', badge: 'linear-gradient(180deg,#fff3b0 0%,#ffd54a 100%)', badgeText: '#3e2f00', title: '#513b00', subtitle: '#876300' },
+        hadesuMode: { panel: 'linear-gradient(180deg, rgba(26,10,10,.96) 0%, rgba(44,8,8,.92) 100%)', section: 'linear-gradient(180deg, rgba(30,8,8,.95) 0%, rgba(16,4,4,.92) 100%)', fieldBg: '#210808', fieldText: '#ffe7e7', border: '#ff7d7d', badge: 'linear-gradient(180deg,#3b0b0b 0%,#6f1414 100%)', badgeText: '#fff3f3', title: '#fff3f3', subtitle: '#ffb0b0' },
+        heartMode: { panel: 'linear-gradient(180deg, rgba(255,240,248,.97) 0%, rgba(255,215,232,.90) 100%)', section: 'linear-gradient(180deg, rgba(255,242,249,.95) 0%, rgba(255,221,239,.88) 100%)', fieldBg: '#fff6fb', fieldText: '#5c173c', border: '#ff70ba', badge: 'linear-gradient(180deg,#ffd7ec 0%,#ff8cc3 100%)', badgeText: '#5c173c', title: '#8a1d55', subtitle: '#b92c72' },
+        nekochanMode: { panel: 'linear-gradient(180deg, rgba(255,246,234,.97) 0%, rgba(255,228,198,.90) 100%)', section: 'linear-gradient(180deg, rgba(255,247,238,.95) 0%, rgba(255,229,205,.88) 100%)', fieldBg: '#fff8f1', fieldText: '#4a2a11', border: '#ffbf76', badge: 'linear-gradient(180deg,#ffe6c8 0%,#ffb56e 100%)', badgeText: '#4a2a11', title: '#5d3515', subtitle: '#8f5729' },
+        crown: { panel: 'linear-gradient(180deg, rgba(255,247,224,.97) 0%, rgba(255,232,165,.90) 100%)', section: 'linear-gradient(180deg, rgba(255,249,230,.95) 0%, rgba(255,235,178,.88) 100%)', fieldBg: '#fffbee', fieldText: '#413000', border: '#ffd54a', badge: 'linear-gradient(180deg,#fff0a9 0%,#ffd54a 100%)', badgeText: '#3e2f00', title: '#5a4300', subtitle: '#8a6700' },
+        blackSun: { panel: 'linear-gradient(180deg, rgba(16,0,6,.96) 0%, rgba(32,0,12,.92) 100%)', section: 'linear-gradient(180deg, rgba(25,0,10,.95) 0%, rgba(15,0,6,.92) 100%)', fieldBg: '#19030b', fieldText: '#ffeef2', border: '#ff4775', badge: 'linear-gradient(180deg,#5a0018 0%,#aa1238 100%)', badgeText: '#fff5f7', title: '#fff3f5', subtitle: '#ff9db7' },
+        cosmicEgg: { panel: 'linear-gradient(180deg, rgba(237,247,255,.97) 0%, rgba(200,240,255,.90) 100%)', section: 'linear-gradient(180deg, rgba(240,249,255,.95) 0%, rgba(208,244,255,.88) 100%)', fieldBg: '#f2fcff', fieldText: '#06273a', border: '#65e7ff', badge: 'linear-gradient(180deg,#d9f9ff 0%,#72e9ff 100%)', badgeText: '#08314a', title: '#0c3a5a', subtitle: '#16689a' },
+    };
+    return map[kind] ?? null;
+}
+
+function getCurrentUiAccentKind(): DropKind | null {
+    if (activeUiAccentKind) return activeUiAccentKind;
+    if (activeWorldMode === 'poseidon') return 'poseidonMode';
+    if (activeWorldMode === 'zeusu') return 'zeusuMode';
+    if (activeWorldMode === 'hadesu') return 'hadesuMode';
+    if (activeWorldMode === 'heart') return 'heartMode';
+    if (activeWorldMode === 'nekochan') return 'nekochanMode';
+    return null;
+}
+
+function setUiAccent(kind: DropKind | null, durationMs = 0): void {
+    activeUiAccentKind = kind;
+    if (uiAccentTimer !== undefined) {
+        window.clearTimeout(uiAccentTimer);
+        uiAccentTimer = undefined;
+    }
+    if (kind && durationMs > 0) {
+        uiAccentTimer = window.setTimeout(() => {
+            activeUiAccentKind = null;
+            applyTheme();
+            updateUiLanguage();
+        }, durationMs);
+    }
+    applyTheme();
+    updateUiLanguage();
+}
+
+function applyDynamicUiPalette(): void {
+    if (settings.blackModeEnabled) return;
+    const palette = getUiAccentPaletteByKind(getCurrentUiAccentKind());
+    if (!palette) return;
+    info.style.background = palette.panel;
+    info.style.color = palette.fieldText;
+    appHeader.style.background = palette.section;
+    recordHero.style.background = palette.section;
+    controlArea.style.background = palette.section;
+    buttonArea.style.background = palette.section;
+    randomGraphArea.style.background = palette.section;
+    recentMiracleMini.style.background = 'rgba(255,255,255,.84)';
+    recentMiracleMini.style.color = palette.fieldText;
+    activeEffectBadge.style.background = palette.badge;
+    activeEffectBadge.style.color = palette.badgeText;
+    for (const el of Array.from(info.querySelectorAll('input, textarea, select')) as Array<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
+        el.style.background = palette.fieldBg;
+        el.style.color = palette.fieldText;
+        el.style.borderColor = palette.border;
+    }
+    for (const el of Array.from(info.querySelectorAll('button')) as HTMLButtonElement[]) {
+        el.style.borderColor = palette.border;
+        if (!el.style.background || el.style.background.includes('ececec') || el.style.background.includes('f3f8e8') || el.style.background.includes('dceec2')) {
+            el.style.background = palette.badge;
+            el.style.color = palette.badgeText;
+        }
     }
 }
 
@@ -2939,10 +3083,10 @@ function incrementSpecialCreated(kind: DropKind): void {
     else if (kind === "labExplosion") labExplosionCreated++;
 }
 
-function rollSpecialEvent(): SpecialEventDef | null {
+function rollSpecialEventWithScale(extraScale = 1): SpecialEventDef | null {
     const fortune = currentDailyFortune ?? getDailyFortune();
     currentDailyFortune = fortune;
-    const scale = getProbabilityScale() * getPassiveMiracleBoost() * fortune.rateBoost;
+    const scale = getProbabilityScale() * getPassiveMiracleBoost() * fortune.rateBoost * extraScale;
     let threshold = 0;
     const roll = appRandom();
     for (const def of SPECIAL_EVENT_DEFS) {
@@ -2950,6 +3094,10 @@ function rollSpecialEvent(): SpecialEventDef | null {
         if (roll < threshold) return def;
     }
     return null;
+}
+
+function rollSpecialEvent(): SpecialEventDef | null {
+    return rollSpecialEventWithScale(1);
 }
 
 function randomPick(items: string[]): string {
@@ -3506,6 +3654,7 @@ function applyTheme(): void {
     document.body.style.background = theme.body;
     info.style.background = theme.panel;
     if (!activeRareBackgroundKind) gameArea.style.background = theme.game;
+    applyDynamicUiPalette();
 }
 
 function getSilhouetteHint(def: SpecialEventDef): string {
@@ -4071,7 +4220,8 @@ function showRecordsPopup(): void {
 
 function showAboutPopup(): void {
     showPopup("ミラクルボールラボについて", `
-        <p><b>ミラクルボールラボ</b>は、玉を上から落として、ピンに当たりながらどの受け皿に入るかを観測するランダム実験です。</p>
+        <p><b>ミラクルボールラボ</b>は、玉が盤面を落ち、<b>START / 役物 / PREMIUM</b> を通過した瞬間だけ抽選するパチンコ風シミュレーションです。</p>
+        <p>玉を作った瞬間には基本的にレア抽選しません。役物センサーを通過した玉だけが当たり・激アツ・奇跡演出の抽選対象になります。</p>
         <p>通常玉にはたまに<b>個体差</b>が付きます。重い玉、跳ね玉、小粒玉、のんびり玉、早足玉、回転玉、うす玉などがあり、同じ通常玉でも少し違う落ち方をします。</p>
         <ul style="text-align:left;line-height:1.7;">${getNormalTraitSummaryHtml()}</ul>
         <p><b>終了ボタン</b>は、スマホで閉じる前に物理エンジン・描画・タイマーを止めるための安全停止です。ブラウザの仕様上タブ自体を必ず閉じることはできませんが、処理を止めてメモリや発熱を抑えやすくします。</p>
@@ -4087,6 +4237,7 @@ function showAboutPopup(): void {
         <p>特定の奇跡が決まった順番で続くと<b>奇跡同士の連鎖</b>が発生し、専用の連鎖演出とスコアが入ります。実験完了時には短いエンディング演出を挟んで結果画面に進みます。</p>
         <p>背景はデフォルトで favicon.png をスマホ・PCどちらでも実行画面いっぱいに表示します。ピンの初期色は金色です。画面揺れはデフォルトOFFです。</p>
         <p>奇跡図鑑と発生演出には、全種類でアプリ内生成のオリジナルSVG画像を使います。発生時は該当画像と発生名を大きく表示します。</p>
+        <p><b>ブラックモード</b>をONにすると、設定欄・ボタン・盤面背景を黒基調に切り替えます。デフォルトはOFFです。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。SR/SSRで同じ奇跡演出が実行中に再発生した場合は、2回目以降さらに短く閉じます。</p>
         <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
     `);
@@ -4253,6 +4404,13 @@ function calculateGeometry(): Geometry {
 
 function applyBackgroundImage(): void {
     const url = settings.backgroundImage.trim();
+    if (settings.blackModeEnabled) {
+        canvas.style.backgroundImage = "";
+        canvas.style.backgroundColor = "#000";
+        gameArea.style.backgroundImage = "";
+        gameArea.style.background = "#000";
+        return;
+    }
     if (url.length === 0) {
         canvas.style.backgroundImage = "";
         canvas.style.backgroundColor = "rgba(245,245,245,0.88)";
@@ -4358,6 +4516,8 @@ function resetExperiment(startNow = false): void {
     recentMiracleKinds = [];
     unlockedChainRunIds = {};
     rarePinTouchCount = { red: 0, blue: 0, black: 0, rainbow: 0 };
+    pachinkoYakumonoHitCount = { start: 0, center: 0, premium: 0 };
+    pachinkoJackpotCount = 0;
     tutorialMissionProgress = {};
     guideModeActive = false;
     guideModeStartedAt = 0;
@@ -4391,9 +4551,12 @@ function resetExperiment(startNow = false): void {
     clearMiracleOverlayNow();
     canvas.style.transform = "translate(0,0)";
     activeWorldMode = null;
+    activeUiAccentKind = null;
+    if (uiAccentTimer !== undefined) { window.clearTimeout(uiAccentTimer); uiAccentTimer = undefined; }
+    currentPachinkoNailPattern = pickRandomPachinkoNailPattern();
     activeRareBackgroundKind = null;
 
-    Composite.add(engine.world, [...createWallsAndFloor(), ...createPins(), ...createDividers()]);
+    Composite.add(engine.world, [...createWallsAndFloor(), ...createPins(), ...createDividers(), ...createPachinkoYakumonoSensors()]);
     applyWorldModeBodyStyles();
     if (startNow) {
         scheduleFirstRunShowcase();
@@ -4403,8 +4566,41 @@ function resetExperiment(startNow = false): void {
         Runner.stop(runner);
     }
 
+    applyBlackMode();
     updateSimpleModeButton();
+    updateBlackModeButton();
     updateInfo();
+}
+
+function applyBlackMode(): void {
+    document.body.classList.toggle("miracle-black-mode", settings.blackModeEnabled);
+    if (settings.blackModeEnabled) {
+        appRoot.style.background = "#020617";
+        info.style.background = "linear-gradient(180deg, rgba(7,12,24,.98) 0%, rgba(10,18,32,.96) 100%)";
+        info.style.color = "#f8fafc";
+        gameArea.style.background = "#020617";
+        canvas.style.backgroundColor = "#020617";
+        activeEffectBadge.style.background = "rgba(7,12,24,.86)";
+        recentMiracleMini.style.background = "rgba(7,12,24,.92)";
+        recentMiracleMini.style.color = "#f8fafc";
+    } else {
+        appRoot.style.background = "";
+        info.style.background = "linear-gradient(180deg,rgba(255,255,255,.90) 0%,rgba(244,247,252,.90) 100%)";
+        info.style.color = "#172033";
+        recentMiracleMini.style.background = "rgba(255,255,255,.78)";
+        recentMiracleMini.style.color = "#172033";
+        applyBackgroundImage();
+    }
+    applyTheme();
+    updateUiLanguage();
+}
+
+function updateBlackModeButton(): void {
+    const uiAccent = getUiAccentPaletteByKind(getCurrentUiAccentKind());
+    blackModeButton.textContent = settings.blackModeEnabled ? t("ブラック: ON", "Black: ON") : t("ブラック: OFF", "Black: OFF");
+    blackModeButton.style.background = settings.blackModeEnabled ? "linear-gradient(180deg,#000 0%,#171717 100%)" : (uiAccent?.badge ?? "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)");
+    blackModeButton.style.color = settings.blackModeEnabled ? "#f8fafc" : (uiAccent?.badgeText ?? "#444444");
+    blackModeButton.style.borderColor = settings.blackModeEnabled ? "#64748b" : (uiAccent?.border ?? "rgba(70,80,110,.28)");
 }
 
 function updateSimpleModeButton(): void {
@@ -4426,8 +4622,10 @@ function updateSlowMiracleButton(): void {
 }
 
 function paintToggleButton(button: HTMLButtonElement, enabled: boolean, onColor = "linear-gradient(180deg, #f3f8e8 0%, #dceec2 100%)"): void {
-    button.style.background = enabled ? onColor : "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)";
-    button.style.color = enabled ? "#26351f" : "#444444";
+    const uiAccent = getUiAccentPaletteByKind(getCurrentUiAccentKind());
+    button.style.background = enabled ? (uiAccent?.badge ?? onColor) : (settings.blackModeEnabled ? "linear-gradient(180deg,#172033 0%, #0f172a 100%)" : "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)");
+    button.style.color = enabled ? (uiAccent?.badgeText ?? "#26351f") : (settings.blackModeEnabled ? "#f8fafc" : "#444444");
+    button.style.borderColor = settings.blackModeEnabled ? "#64748b" : (uiAccent?.border ?? "rgba(70,80,110,.28)");
 }
 
 function updateEffectsButton(): void {
@@ -5168,7 +5366,7 @@ function generateResearchMemoText(): string {
     const mood = imbalance > 18 ? "大きな偏りがあり、盤面がかなり主張した回でした。" : imbalance > 10 ? "少し偏りがあり、中央か端に流れが寄った回でした。" : "分布は比較的落ち着いており、安定した観測になりました。";
     const miracleLine = best ? `今回もっとも印象的だった奇跡は「${best.label}」です。` : "今回は大きな奇跡は出ませんでしたが、通常観測として記録する価値があります。";
     const omenLine = lastOmenText ? `途中で「${lastOmenText}」という予兆が観測されました。` : "今回は目立った奇跡予兆は観測されませんでした。";
-    return `今回の研究では ${finishedCount.toLocaleString()} 個のボールを処理しました。所要時間は ${elapsed}、捨て区間は ${discardedCount.toLocaleString()} 個（${discardRate.toFixed(2)}%）です。もっとも多かった受け皿は「${topIndex >= 0 ? labels[topIndex] : "-"}」で ${maxCount.toLocaleString()} 回でした。${mood}\n${miracleLine}\n${omenLine}\nレアピン接触記録は ${rarePinSummary} です。奇跡図鑑は ${discoveredCount} / ${SPECIAL_EVENT_DEFS.length} 種類まで解放されています。`;
+    return `今回の研究では ${finishedCount.toLocaleString()} 個のボールを処理しました。所要時間は ${elapsed}、捨て区間は ${discardedCount.toLocaleString()} 個（${discardRate.toFixed(2)}%）です。もっとも多かった受け皿は「${topIndex >= 0 ? labels[topIndex] : "-"}」で ${maxCount.toLocaleString()} 回でした。${mood}\n${miracleLine}\n${omenLine}\nレアピン接触記録は ${rarePinSummary} です。役物通過は START:${pachinkoYakumonoHitCount.start} / 役物:${pachinkoYakumonoHitCount.center} / PREMIUM:${pachinkoYakumonoHitCount.premium}、当選は ${pachinkoJackpotCount} 回です。奇跡図鑑は ${discoveredCount} / ${SPECIAL_EVENT_DEFS.length} 種類まで解放されています。`;
 }
 
 function generateResearchMemoHtml(): string {
@@ -5211,40 +5409,99 @@ function terminateExperimentSafely(): void {
     showSoftToast(t("安全停止しました", "Safely stopped"));
 }
 
+function pickRandomPachinkoNailPattern(): string {
+    const patterns = ['standard', 'wave', 'hourglass', 'stairs', 'crown', 'diamond', 'zigzag', 'spiral', 'heart'];
+    return patterns[Math.floor(appRandom() * patterns.length)] ?? 'standard';
+}
+
+function getPachinkoPinOffset(pattern: string, row: number, col: number, rowCount: number, colCount: number, baseX: number, y: number): { x: number; y: number } {
+    const centerX = geometry.width / 2;
+    const rowNorm = rowCount <= 1 ? 0 : row / (rowCount - 1);
+    const colNorm = colCount <= 1 ? 0 : (col / (colCount - 1)) * 2 - 1;
+    let dx = 0;
+    let dy = 0;
+    const swing = geometry.binWidth * 0.24;
+    if (pattern === 'wave') {
+        dx += Math.sin(row * 0.95 + col * 0.75) * geometry.binWidth * 0.18;
+        dy += Math.cos(col * 0.62 + row * 0.4) * 5 * geometry.scale;
+    } else if (pattern === 'hourglass') {
+        const squeeze = 1 - Math.abs(rowNorm * 2 - 1);
+        dx += -Math.sign(baseX - centerX || 1) * squeeze * swing;
+    } else if (pattern === 'stairs') {
+        dx += ((row % 4) - 1.5) * geometry.binWidth * 0.10 + (col % 2 === 0 ? 1 : -1) * geometry.binWidth * 0.06;
+        dy += (col % 3 - 1) * 3.6 * geometry.scale;
+    } else if (pattern === 'crown') {
+        dx += Math.sin(colNorm * Math.PI * 2.5) * geometry.binWidth * 0.16;
+        if (row < Math.max(2, Math.floor(rowCount * 0.34))) dy -= Math.max(0, 1 - Math.abs(colNorm) * 1.7) * 16 * geometry.scale;
+    } else if (pattern === 'diamond') {
+        dx += colNorm * Math.abs(rowNorm * 2 - 1) * geometry.binWidth * 0.28;
+    } else if (pattern === 'zigzag') {
+        dx += (row % 2 === 0 ? 1 : -1) * Math.abs(colNorm) * geometry.binWidth * 0.22;
+    } else if (pattern === 'spiral') {
+        dx += Math.sin(row * 0.48) * colNorm * geometry.binWidth * 0.30 + Math.cos(col * 0.7) * geometry.binWidth * 0.08;
+        dy += Math.sin(row * 0.9 + col * 0.4) * 4.5 * geometry.scale;
+    } else if (pattern === 'heart') {
+        const heartPull = Math.sin(rowNorm * Math.PI) * geometry.binWidth * 0.18;
+        dx += -Math.sign(colNorm || 1) * heartPull;
+        if (rowNorm < 0.45) dy -= Math.max(0, 0.5 - Math.abs(colNorm)) * 10 * geometry.scale;
+        if (rowNorm > 0.55) dy += Math.max(0, 1 - Math.abs(colNorm) * 1.5) * 8 * geometry.scale;
+    }
+    return {
+        x: clamp(baseX + dx, geometry.wallWidth + geometry.pinRadius * 2.2, geometry.width - geometry.wallWidth - geometry.pinRadius * 2.2),
+        y: y + dy,
+    };
+}
+
+function createPachinkoNailGate(cx: number, cy: number, spread: number, angleOpen: number, length: number): Matter.Body[] {
+    const fillStyle = 'rgba(120,130,152,0.96)';
+    const strokeStyle = 'rgba(255,255,255,0.82)';
+    const left = Bodies.rectangle(cx - spread / 2, cy, Math.max(5 * geometry.scale, 4), length, { isStatic: true, angle: -angleOpen, render: { fillStyle, strokeStyle, lineWidth: Math.max(1.2, 1.5 * geometry.scale) } as any });
+    const right = Bodies.rectangle(cx + spread / 2, cy, Math.max(5 * geometry.scale, 4), length, { isStatic: true, angle: angleOpen, render: { fillStyle, strokeStyle, lineWidth: Math.max(1.2, 1.5 * geometry.scale) } as any });
+    (left as any).plugin = { isPin: true, baseX: left.position.x, baseY: left.position.y, wiggleFrames: 0, nailDecor: true };
+    (right as any).plugin = { isPin: true, baseX: right.position.x, baseY: right.position.y, wiggleFrames: 0, nailDecor: true };
+    return [left, right];
+}
+
 function createPins(): Matter.Body[] {
     const pins: Matter.Body[] = [];
     const pinStartY = clamp(70 * geometry.scale, 40, 120);
     const pinEndY = geometry.groundTop - geometry.dividerHeight - clamp(36 * geometry.scale, 20, 70);
     const spacingY = settings.pinRows > 1 ? (pinEndY - pinStartY) / (settings.pinRows - 1) : 60 * geometry.scale;
+    const pattern = currentPachinkoNailPattern || 'standard';
 
     for (let row = 0; row < settings.pinRows; row++) {
         const y = pinStartY + row * spacingY;
-        if (row % 2 === 0) {
-            for (let col = 0; col < geometry.totalBinCount; col++) {
-                const x = geometry.binLeft + geometry.binWidth / 2 + col * geometry.binWidth;
-                {
-                    const rarePin = rollRarePin();
-                    const pin = Bodies.circle(x, y, geometry.pinRadius, { isStatic: true, render: { fillStyle: rarePin?.fillStyle ?? "#d4af37", strokeStyle: rarePin?.strokeStyle ?? "#fff2a8", lineWidth: Math.max(1, (rarePin ? 2.8 : 1.5) * geometry.scale) } });
-                    (pin as any).plugin = { isPin: true, baseX: x, baseY: y, wiggleFrames: 0, rarePinKind: rarePin?.kind, rarePinLabel: rarePin?.label };
-                    pins.push(pin);
-                }
-            }
-        } else {
-            for (let col = 1; col < geometry.totalBinCount; col++) {
-                const x = geometry.binLeft + col * geometry.binWidth;
-                {
-                    const rarePin = rollRarePin();
-                    const pin = Bodies.circle(x, y, geometry.pinRadius, { isStatic: true, render: { fillStyle: rarePin?.fillStyle ?? "#d4af37", strokeStyle: rarePin?.strokeStyle ?? "#fff2a8", lineWidth: Math.max(1, (rarePin ? 2.8 : 1.5) * geometry.scale) } });
-                    (pin as any).plugin = { isPin: true, baseX: x, baseY: y, wiggleFrames: 0, rarePinKind: rarePin?.kind, rarePinLabel: rarePin?.label };
-                    pins.push(pin);
-                }
-            }
+        const baseEven = row % 2 === 0;
+        const baseColCount = baseEven ? geometry.totalBinCount : Math.max(geometry.totalBinCount - 1, 1);
+        for (let col = 0; col < baseColCount; col++) {
+            const actualCol = baseEven ? col : col + 1;
+            const baseX = baseEven
+                ? geometry.binLeft + geometry.binWidth / 2 + actualCol * geometry.binWidth
+                : geometry.binLeft + actualCol * geometry.binWidth;
+            const pos = getPachinkoPinOffset(pattern, row, col, settings.pinRows, baseColCount, baseX, y);
+            const rarePin = rollRarePin();
+            const pin = Bodies.circle(pos.x, pos.y, geometry.pinRadius, {
+                isStatic: true,
+                render: {
+                    fillStyle: rarePin?.fillStyle ?? '#d4af37',
+                    strokeStyle: rarePin?.strokeStyle ?? '#fff2a8',
+                    lineWidth: Math.max(1, (rarePin ? 2.8 : 1.5) * geometry.scale),
+                } as any,
+            });
+            (pin as any).plugin = { isPin: true, baseX: pos.x, baseY: pos.y, wiggleFrames: 0, rarePinKind: rarePin?.kind, rarePinLabel: rarePin?.label };
+            pins.push(pin);
         }
     }
 
-    for (const pin of pins) {
-        const plugin = (pin as any).plugin ?? {};
-        (pin as any).plugin = { isPin: true, baseX: pin.position.x, baseY: pin.position.y, wiggleFrames: 0, ...plugin };
+    const nailGateCount = 4 + Math.floor(appRandom() * 5);
+    for (let i = 0; i < nailGateCount; i++) {
+        const y = pinStartY + ((i + 1) / (nailGateCount + 1)) * (pinEndY - pinStartY);
+        const sway = Math.sin(i * 1.7 + pattern.length * 0.31);
+        const x = geometry.width / 2 + sway * geometry.binWidth * (1.1 + (i % 3) * 0.45);
+        const spread = clamp(geometry.binWidth * (0.8 + (i % 3) * 0.2), 26 * geometry.scale, 74 * geometry.scale);
+        const angle = (0.28 + ((i + pattern.length) % 4) * 0.08) * (i % 2 === 0 ? 1 : -1);
+        const length = clamp(geometry.binWidth * (0.32 + (i % 2) * 0.10), 22 * geometry.scale, 46 * geometry.scale);
+        pins.push(...createPachinkoNailGate(x, y, spread, angle, length));
     }
     return pins;
 }
@@ -5258,6 +5515,28 @@ function createDividers(): Matter.Body[] {
     return dividers;
 }
 
+function createPachinkoYakumonoSensors(): Matter.Body[] {
+    return PACHINKO_YAKUMONO_DEFS.map((def) => {
+        const width = clamp(geometry.width * def.widthRatio, 82 * geometry.scale, 260 * geometry.scale);
+        const height = clamp(def.height * geometry.scale, 12, 32);
+        const body = Bodies.rectangle(geometry.width * def.xRatio, geometry.height * def.yRatio, width, height, {
+            isStatic: true,
+            isSensor: true,
+            render: {
+                fillStyle: "rgba(255,255,255,0.01)",
+                strokeStyle: "rgba(255,255,255,0.01)",
+                lineWidth: 1,
+            } as any,
+        });
+        (body as any).plugin = { isYakumono: true, yakumonoKind: def.kind, yakumonoLabel: def.label, oddsScale: def.oddsScale, score: def.score, color: def.color };
+        return body;
+    });
+}
+
+function getPachinkoYakumonoDef(kind: PachinkoYakumonoKind): PachinkoYakumonoDef {
+    return PACHINKO_YAKUMONO_DEFS.find((x) => x.kind === kind) ?? PACHINKO_YAKUMONO_DEFS[0];
+}
+
 function createDropPlugin(kind: DropKind, x: number, y: number, radius: number, extras: Record<string, unknown> = {}): Record<string, unknown> {
     return {
         isDrop: true,
@@ -5269,6 +5548,7 @@ function createDropPlugin(kind: DropKind, x: number, y: number, radius: number, 
         bornAt: performance.now(),
         hardExpireMs: kind === "giant" ? 9000 : kind === "shape" ? 16000 : 15000,
         originalRadius: radius,
+        passedYakumonoIds: {},
         ...extras,
     };
 }
@@ -5450,28 +5730,14 @@ function createDrop(): Matter.Body {
         density = 0.0028;
         giantCreated++;
     } else {
-        const special = rollSpecialEvent();
-        if (special) {
-            kind = special.kind;
-            radius = Math.max(geometry.ballRadius * special.radiusScale, isMobile ? 22 : 20 * geometry.scale);
-            fillStyle = special.fillStyle;
-            symbol = special.symbol;
-            label = special.label;
-            restitution = special.kind === "blackSun" ? 0.9 : 0.98;
-            density = special.kind === "labExplosion" ? 0.0019 : 0.0013;
-            isHeart = special.kind === "heart";
-            incrementSpecialCreated(special.kind);
-            repeatedMiracleRunCounts[special.kind] = (repeatedMiracleRunCounts[special.kind] ?? 0) + 1;
-            recordSpecialDiscovery(special);
-            showMiracle(special.kind, special.symbol, `[${special.rank}] ${formatProbability(special.denominator)}`, buildWeirdMiracleText(special));
-        } else {
-            const shapeRoll = appRandom();
-            if (shapeRoll < SHAPE_RATE * getProbabilityScale()) { kind = "shape"; radius = geometry.ballRadius * clamp(0.85 + appRandom() * 0.35, 0.85, 1.2); fillStyle = randomColor(); isShape = true; shapeCreated++; }
-            else {
-                const rareRoll = appRandom();
-                if (rareRoll < RAINBOW_RATE * getProbabilityScale()) { kind = "rainbow"; radius = geometry.ballRadius * 1.55; fillStyle = "hsl(295, 100%, 70%)"; restitution = 1.0; density = 0.0016; rainbowCreated++; }
-                else if (rareRoll < (RAINBOW_RATE + GOLD_RATE) * getProbabilityScale()) { kind = "gold"; radius = geometry.ballRadius * 1.3; fillStyle = "#ffd700"; restitution = 0.92; density = 0.0014; goldCreated++; }
-            }
+        // パチンコ仕様: 玉生成時点では基本的に通常玉です。
+        // レア演出・特殊玉化の抽選は、役物センサーを通過した瞬間だけ行います。
+        const shapeRoll = appRandom();
+        if (shapeRoll < SHAPE_RATE * 0.18 * getProbabilityScale()) { kind = "shape"; radius = geometry.ballRadius * clamp(0.85 + appRandom() * 0.35, 0.85, 1.2); fillStyle = randomColor(); isShape = true; shapeCreated++; }
+        else {
+            const rareRoll = appRandom();
+            if (rareRoll < RAINBOW_RATE * 0.18 * getProbabilityScale()) { kind = "rainbow"; radius = geometry.ballRadius * 1.55; fillStyle = "hsl(295, 100%, 70%)"; restitution = 1.0; density = 0.0016; rainbowCreated++; }
+            else if (rareRoll < (RAINBOW_RATE + GOLD_RATE) * 0.18 * getProbabilityScale()) { kind = "gold"; radius = geometry.ballRadius * 1.3; fillStyle = "#ffd700"; restitution = 0.92; density = 0.0014; goldCreated++; }
         }
     }
     if (kind === "normal" && settings.normalBallTraitsEnabled) {
@@ -5962,48 +6228,63 @@ function createRareSequence(flavor: RareSoundFlavor): Array<{ note: string; dura
     return [{ note: "G5", duration: "8n", at: 0 }];
 }
 
-async function playLocalRareAudio(flavor: RareSoundFlavor): Promise<boolean> {
+async function playLocalRareAudio(flavor: RareSoundFlavor, repeatCount = 1): Promise<boolean> {
     const candidates = flavor === "god" ? LOCAL_GOD_AUDIO_FILES : LOCAL_RARE_AUDIO_FILES;
     if (!candidates.length) return false;
-    const src = candidates[Math.floor(Math.random() * candidates.length)];
-    const audio = new Audio(src);
-    audio.preload = "auto";
-    audio.volume = flavor === "god" ? 0.95 : 0.85;
-    try {
-        await audio.play();
-        return true;
-    } catch {
-        return false;
+    let played = false;
+    for (let i = 0; i < repeatCount; i++) {
+        const src = candidates[Math.floor(Math.random() * candidates.length)];
+        const audio = new Audio(src);
+        audio.preload = 'auto';
+        audio.volume = flavor === 'god' ? 0.95 : 0.85;
+        try {
+            await audio.play();
+            played = true;
+            await new Promise<void>((resolve) => {
+                const fallbackMs = flavor === 'god' ? 1850 : flavor === 'ex' ? 1450 : 1050;
+                const timer = window.setTimeout(() => resolve(), fallbackMs);
+                audio.addEventListener('ended', () => { window.clearTimeout(timer); resolve(); }, { once: true });
+                audio.addEventListener('error', () => { window.clearTimeout(timer); resolve(); }, { once: true });
+            });
+        } catch {
+            // synth fallback only
+        }
     }
+    return played;
 }
 
 function playSpecialSound(kind: DropKind): void {
     if (!soundEnabled || !toneReady || settings.simpleMode) return;
     try {
         const flavor = getRareSoundFlavor(kind);
-        void playLocalRareAudio(flavor);
+        const repeatCount = flavor === "god" || flavor === "ex" ? 3 : 1;
+        void playLocalRareAudio(flavor, repeatCount);
         const synth = new Tone.PolySynth(Tone.Synth, {
             oscillator: { type: flavor === "god" ? "square8" : flavor === "ex" ? "sawtooth" : "triangle" },
             envelope: { attack: 0.005, decay: 0.14, sustain: 0.18, release: 0.35 },
         }).toDestination();
         synth.volume.value = getSoundVolume(flavor === "god" ? -5 : flavor === "ex" ? -7 : -9);
         const now = Tone.now();
-        if (flavor === "god" || flavor === "ex") {
-            const bass = new Tone.MembraneSynth({ pitchDecay: 0.08, octaves: 4, envelope: { attack: 0.001, decay: 0.38, sustain: 0.02, release: 0.5 } }).toDestination();
-            bass.volume.value = getSoundVolume(flavor === "god" ? -7 : -11);
-            bass.triggerAttackRelease(flavor === "god" ? "C2" : "D2", "8n", now);
-            window.setTimeout(() => bass.dispose(), 1200);
+        const cycleLength = flavor === "god" ? 1.55 : flavor === "ex" ? 1.12 : 0.52;
+        for (let cycle = 0; cycle < repeatCount; cycle++) {
+            const cycleAt = now + cycle * cycleLength;
+            if (flavor === "god" || flavor === "ex") {
+                const bass = new Tone.MembraneSynth({ pitchDecay: 0.08, octaves: 4, envelope: { attack: 0.001, decay: 0.38, sustain: 0.02, release: 0.5 } }).toDestination();
+                bass.volume.value = getSoundVolume(flavor === "god" ? -7 : -11);
+                bass.triggerAttackRelease(flavor === "god" ? "C2" : "D2", "8n", cycleAt);
+                window.setTimeout(() => bass.dispose(), Math.round((cycleLength + 0.75) * 1000));
+            }
+            const sequence = createRareSequence(flavor);
+            for (const step of sequence) synth.triggerAttackRelease(step.note, step.duration, cycleAt + step.at);
+            if (kind === "giant") synth.triggerAttackRelease("C2", "8n", cycleAt);
+            if (kind === "blackSun" || kind === "cosmicEgg" || kind === "labExplosion") {
+                const noise = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.01, decay: 0.28, sustain: 0 } }).toDestination();
+                noise.volume.value = -12;
+                noise.triggerAttackRelease("8n", cycleAt + 0.02);
+                window.setTimeout(() => noise.dispose(), Math.round((cycleLength + 0.4) * 1000));
+            }
         }
-        const sequence = createRareSequence(flavor);
-        for (const step of sequence) synth.triggerAttackRelease(step.note, step.duration, now + step.at);
-        if (kind === "giant") synth.triggerAttackRelease("C2", "8n", now);
-        if (kind === "blackSun" || kind === "cosmicEgg" || kind === "labExplosion") {
-            const noise = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.01, decay: 0.28, sustain: 0 } }).toDestination();
-            noise.volume.value = -12;
-            noise.triggerAttackRelease("8n", now + 0.02);
-            window.setTimeout(() => noise.dispose(), 700);
-        }
-        window.setTimeout(() => synth.dispose(), 1800);
+        window.setTimeout(() => synth.dispose(), Math.round((repeatCount * cycleLength + 1.0) * 1000));
     } catch {
         // 音は補助機能なので失敗しても止めない
     }
@@ -6121,6 +6402,7 @@ function updateInfo(): void {
         <div>${t("デバイス", "Device")}: <b>${isMobile ? t("スマホ向け", "Mobile") : t("PC向け", "Desktop")}</b></div>
         <div>${t("ブラウザ", "Browser")}: <b>${browserName}</b></div>
         <div>${t("実行回数", "Progress")}: <b>${finishedCount.toLocaleString()}</b> / ${settings.targetCount.toLocaleString()}</div>
+        <div>${t("役物通過", "Gate hits")}: <b>${Object.values(pachinkoYakumonoHitCount).reduce((a, b) => a + b, 0).toLocaleString()}</b> / ${t("当選", "Jackpots")}: <b>${pachinkoJackpotCount.toLocaleString()}</b></div>
         <div>${t("画面上の玉", "Balls on screen")}: <b>${activeDropCount}</b></div>
         <div>${t("速度", "Speed")}: <b>${getSpeedDisplayLabel()}</b></div>
         <div>${t("確率モード", "Probability mode")}: <b>${isEnglish ? ({normal:"Normal",festival:"Festival",hard:"Hard",hell:"Hell"} as any)[settings.probabilityMode] : getProbabilityModeLabel()}</b></div>
@@ -6692,6 +6974,78 @@ function drawSpecialGlows(context: CanvasRenderingContext2D): void {
     context.restore();
 }
 
+function drawPachinkoMachine(context: CanvasRenderingContext2D): void {
+    const time = performance.now() / 1000;
+    context.save();
+    context.globalCompositeOperation = "destination-over";
+    const framePad = Math.max(geometry.wallWidth * 0.38, 8 * geometry.scale);
+    const panelGradient = context.createLinearGradient(0, 0, 0, geometry.height);
+    panelGradient.addColorStop(0, settings.blackModeEnabled ? "rgba(0,0,0,.94)" : "rgba(68,10,20,.86)");
+    panelGradient.addColorStop(0.55, settings.blackModeEnabled ? "rgba(10,10,10,.76)" : "rgba(22,18,24,.46)");
+    panelGradient.addColorStop(1, settings.blackModeEnabled ? "rgba(0,0,0,.98)" : "rgba(102,19,32,.82)");
+    context.fillStyle = panelGradient;
+    context.fillRect(0, 0, geometry.width, geometry.height);
+
+    context.strokeStyle = settings.blackModeEnabled ? "rgba(255,255,255,.22)" : "rgba(255,214,96,.75)";
+    context.lineWidth = Math.max(8 * geometry.scale, 4);
+    context.strokeRect(framePad, framePad, geometry.width - framePad * 2, geometry.height - geometry.groundHeight - framePad * 1.4);
+
+    const cx = geometry.width / 2;
+    const cy = geometry.height * 0.43;
+    const ringRadius = Math.min(geometry.width, geometry.height) * 0.18;
+    context.beginPath();
+    context.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+    context.strokeStyle = settings.blackModeEnabled ? "rgba(255,255,255,.30)" : "rgba(255,230,130,.82)";
+    context.lineWidth = Math.max(10 * geometry.scale, 5);
+    context.stroke();
+    context.beginPath();
+    context.arc(cx, cy, ringRadius * 0.62 + Math.sin(time * 2) * 3 * geometry.scale, 0, Math.PI * 2);
+    context.strokeStyle = "rgba(255,255,255,.18)";
+    context.lineWidth = Math.max(4 * geometry.scale, 2);
+    context.stroke();
+
+    for (const def of PACHINKO_YAKUMONO_DEFS) {
+        const x = geometry.width * def.xRatio;
+        const y = geometry.height * def.yRatio;
+        const w = clamp(geometry.width * def.widthRatio, 82 * geometry.scale, 260 * geometry.scale);
+        const h = clamp(def.height * geometry.scale, 12, 32);
+        const glow = kindYakumonoAlpha(def.kind);
+        context.fillStyle = `rgba(${hexToRgbTriplet(def.color, "250,204,21")},${0.24 + glow * 0.32})`;
+        roundRect(context, x - w / 2, y - h / 2, w, h, h / 2);
+        context.fill();
+        context.strokeStyle = `rgba(${hexToRgbTriplet(def.color, "250,204,21")},.92)`;
+        context.lineWidth = Math.max(2 * geometry.scale, 1);
+        context.stroke();
+        context.font = `900 ${Math.round(clamp(15 * geometry.scale, 11, 24))}px ${ROUNDED_UI_FONT}`;
+        context.fillStyle = settings.blackModeEnabled ? "#f8fafc" : "#fff7cc";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(def.label, x, y);
+    }
+
+    context.font = `900 ${Math.round(clamp(18 * geometry.scale, 12, 28))}px ${ROUNDED_UI_FONT}`;
+    context.fillStyle = settings.blackModeEnabled ? "rgba(255,255,255,.72)" : "rgba(255,239,200,.86)";
+    context.textAlign = "center";
+    context.fillText(`MIRACLE BALL LAB / ${currentPachinkoNailPattern.toUpperCase()}`, geometry.width / 2, Math.max(26 * geometry.scale, 20));
+    context.restore();
+}
+
+function kindYakumonoAlpha(kind: PachinkoYakumonoKind): number {
+    const count = pachinkoYakumonoHitCount[kind] ?? 0;
+    return count > 0 ? 0.5 + Math.sin(performance.now() / 140) * 0.2 : 0;
+}
+
+function roundRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
+    const r = Math.min(radius, width / 2, height / 2);
+    context.beginPath();
+    context.moveTo(x + r, y);
+    context.arcTo(x + width, y, x + width, y + height, r);
+    context.arcTo(x + width, y + height, x, y + height, r);
+    context.arcTo(x, y + height, x, y, r);
+    context.arcTo(x, y, x + width, y, r);
+    context.closePath();
+}
+
 function hexToRgbTriplet(hex: string, fallback: string): string {
     const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
     if (!m) return fallback;
@@ -6702,6 +7056,7 @@ function hexToRgbTriplet(hex: string, fallback: string): string {
 Events.on(render, "afterRender", () => {
     const context = render.context;
     context.save();
+    drawPachinkoMachine(context);
     drawTapRipples(context);
     drawSpecialGlows(context);
     drawTimeBallSkins(context);
@@ -6789,6 +7144,60 @@ Events.on(render, "afterRender", () => {
 });
 
 
+function promoteDropToPachinkoSpecial(drop: Matter.Body, special: SpecialEventDef): void {
+    const plugin = (drop as any).plugin ?? {};
+    plugin.kind = special.kind;
+    plugin.symbol = special.symbol;
+    plugin.shapeName = special.label;
+    plugin.pachinkoJackpot = true;
+    plugin.pachinkoRank = special.rank;
+    plugin.originalRadius = Math.max(plugin.originalRadius ?? geometry.ballRadius, geometry.ballRadius * special.radiusScale);
+    (drop as any).plugin = plugin;
+    drop.render.fillStyle = special.fillStyle;
+    drop.render.strokeStyle = special.rank === "GOD" ? "#ffffff" : special.rank === "EX" ? "#ff0044" : "#fff7cc";
+    drop.render.lineWidth = Math.max(drop.render.lineWidth ?? 1, (special.rank === "GOD" ? 6 : special.rank === "EX" ? 5 : 4) * geometry.scale);
+    Body.scale(drop, 1.08, 1.08);
+    Body.setVelocity(drop, { x: drop.velocity.x + (appRandom() - 0.5) * 5 * geometry.scale, y: Math.min(drop.velocity.y, -4.2 * geometry.scale) });
+    Body.setAngularVelocity(drop, (appRandom() - 0.5) * 0.8);
+}
+
+function handlePachinkoYakumonoPassage(yakumono: Matter.Body, drop: Matter.Body): void {
+    const yakumonoPlugin = (yakumono as any).plugin;
+    const dropPlugin = (drop as any).plugin;
+    if (!yakumonoPlugin?.isYakumono || !dropPlugin?.isDrop) return;
+
+    const kind = yakumonoPlugin.yakumonoKind as PachinkoYakumonoKind;
+    dropPlugin.passedYakumonoIds = dropPlugin.passedYakumonoIds ?? {};
+    if (dropPlugin.passedYakumonoIds[kind]) return;
+    dropPlugin.passedYakumonoIds[kind] = true;
+
+    const def = getPachinkoYakumonoDef(kind);
+    pachinkoYakumonoHitCount[kind] = (pachinkoYakumonoHitCount[kind] ?? 0) + 1;
+    addScore(def.score, `PACHINKO ${def.label}`, drop.position.x, drop.position.y - 24 * geometry.scale);
+    addFloatingText(`${def.label} 通過`, drop.position.x, drop.position.y - 18 * geometry.scale, def.color);
+
+    const special = rollSpecialEventWithScale(def.oddsScale);
+    if (!special) {
+        if (kind !== "start" && appRandom() < 0.22) {
+            maybeTriggerMiracleOmen(true);
+            triggerCameraShake(4 * geometry.scale, 150);
+        }
+        return;
+    }
+
+    pachinkoJackpotCount++;
+    promoteDropToPachinkoSpecial(drop, special);
+    dropPlugin.specialSoundHandled = true;
+    if (special.rank === "GOD") setUiAccent(special.kind, 0);
+    else if (special.rank === "EX") setUiAccent(special.kind, 12000);
+    incrementSpecialCreated(special.kind);
+    repeatedMiracleRunCounts[special.kind] = (repeatedMiracleRunCounts[special.kind] ?? 0) + 1;
+    recordSpecialDiscovery(special);
+    showMiracle(special.kind, special.symbol, `[${special.rank}] ${def.label}通過 ${formatProbability(special.denominator)}`, buildWeirdMiracleText(special));
+    maybeShowCommentary(`実況「${def.label}通過で ${special.label} に当選しました」`, true);
+    triggerCameraShake(special.rank === "GOD" ? 42 * geometry.scale : special.rank === "EX" ? 30 * geometry.scale : 18 * geometry.scale, special.rank === "GOD" ? 1100 : 520);
+}
+
 function handleRarePinCollision(pin: Matter.Body, drop: Matter.Body): void {
     const pinPlugin = (pin as any).plugin;
     const dropPlugin = (drop as any).plugin;
@@ -6826,6 +7235,8 @@ Events.on(engine, "collisionStart", (event) => {
         const b = pair.bodyB;
         const ap = (a as any).plugin;
         const bp = (b as any).plugin;
+        if (ap?.isYakumono && bp?.isDrop) handlePachinkoYakumonoPassage(a, b);
+        else if (bp?.isYakumono && ap?.isDrop) handlePachinkoYakumonoPassage(b, a);
         if (ap?.isPin && bp?.isDrop) handleRarePinCollision(a, b);
         else if (bp?.isPin && ap?.isDrop) handleRarePinCollision(b, a);
     }
@@ -6927,7 +7338,7 @@ Events.on(engine, "afterUpdate", () => {
 
         if (body.position.y > geometry.ballCountY) {
             const kind = (plugin.kind ?? "normal") as DropKind;
-            if (kind !== "normal") playSpecialSound(kind);
+            if (kind !== "normal" && !plugin.specialSoundHandled && !plugin.pachinkoJackpot) playSpecialSound(kind);
             const binIndex = getBinIndex(body.position.x);
             finishedCount++;
             if (targetReachedTime === null && finishedCount >= settings.targetCount) targetReachedTime = Date.now();
