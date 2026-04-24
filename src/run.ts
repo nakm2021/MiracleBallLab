@@ -256,6 +256,7 @@ const SHOOTING_STAR_RATE = 0.00001;// 1/100,000
 const HEART_RATE = 0.000001;       // 1/1,000,000
 const BLACK_SUN_RATE = 0.0000001;  // 1/10,000,000
 const COSMIC_EGG_RATE = 0.000000000001; // 1/1,000,000,000,000
+const SWORD_IMPACT_RATE = 0.0000002; // 1/5,000,000
 
 const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v3";
 const SECRET_KEY_SEQUENCE = "miracle";
@@ -382,6 +383,7 @@ const BASE_SPECIAL_EVENT_DEFS: SpecialEventDef[] = [
     { kind: "lifeQuoteMode", label: "人生名言ボイス", rank: "GOD", rate: 0.000000001, denominator: 1_000_000_000, symbol: "声", emoji: "声", fillStyle: "#ff9ed4", radiusScale: 2.15, soundMode: "miracle" },
     { kind: "blackSun", label: "黒い太陽", rank: "EX", rate: BLACK_SUN_RATE, denominator: 10_000_000, symbol: "黒", emoji: "黒", fillStyle: "#050505", radiusScale: 2.2, soundMode: "black" },
     { kind: "timeRift", label: "時空の裂け目", rank: "EX", rate: 0.0000005, denominator: 2_000_000, symbol: "裂", emoji: "裂", fillStyle: "#622aff", radiusScale: 2.05, soundMode: "cosmic" },
+    { kind: "swordImpact", label: "剣の衝撃", rank: "EX", rate: SWORD_IMPACT_RATE, denominator: 5_000_000, symbol: "斬", emoji: "⚔️", fillStyle: "#e7f6ff", radiusScale: 2.2, soundMode: "cosmic" },
     { kind: "obsidianKing", label: "黒曜王", rank: "EX", rate: 0.0000005, denominator: 2_000_000, symbol: "王", emoji: "王", fillStyle: "#1f1626", radiusScale: 2.18, soundMode: "black" },
 
     { kind: "crystalDragon", label: "水晶ドラゴン", rank: "UR", rate: 0.000001, denominator: 1_000_000, symbol: "竜", emoji: "竜", fillStyle: "#72f1ff", radiusScale: 2.0, soundMode: "cosmic" },
@@ -2226,6 +2228,11 @@ function findSpecialDef(kind: DropKind): SpecialEventDef | undefined {
     return SPECIAL_EVENT_DEFS.find((x) => x.kind === kind);
 }
 
+function shouldForceMiracleEffects(def?: SpecialEventDef): boolean {
+    // 設定の「演出」がOFFでも、UR以上は見逃すともったいないので強制表示します。
+    return !!def && (def.rank === "UR" || def.rank === "EX" || def.rank === "GOD");
+}
+
 function getWorldModeByKind(kind: DropKind): WorldMode {
     if (kind === "poseidonMode") return "poseidon";
     if (kind === "zeusuMode") return "zeusu";
@@ -3514,6 +3521,7 @@ function applyRareBackground(kind: DropKind): void {
         silverUfo: "radial-gradient(circle at 50% 18%, rgba(120,220,255,.30), rgba(4,8,16,.98))",
         blackSun: "radial-gradient(circle at 50% 18%, rgba(255,0,68,.22), rgba(0,0,0,.99))",
         timeRift: "radial-gradient(circle at 50% 18%, rgba(98,42,255,.38), rgba(3,4,12,.99))",
+        swordImpact: "radial-gradient(circle at 50% 18%, rgba(226,245,255,.42), rgba(5,12,22,.99))",
         heart: "radial-gradient(circle at 50% 18%, rgba(255,105,180,.28), rgba(18,8,16,.98))",
         labExplosion: "radial-gradient(circle at 50% 18%, rgba(255,120,48,.36), rgba(20,8,6,.98))",
         cosmicEgg: "radial-gradient(circle at 50% 18%, rgba(0,229,255,.28), rgba(28,0,56,.98))",
@@ -3624,6 +3632,36 @@ function triggerScreenFlash(mode: "normal" | "miracle" | "black" | "cosmic" = "m
     window.setTimeout(() => { flashOverlay.style.display = "none"; }, 760);
 }
 
+
+function triggerSwordImpactEffect(): void {
+    if (settings.simpleMode) return;
+
+    const layer = document.createElement("div");
+    layer.style.position = "fixed";
+    layer.style.inset = "0";
+    layer.style.zIndex = "9997";
+    layer.style.pointerEvents = "none";
+    layer.style.overflow = "hidden";
+    layer.style.background = "radial-gradient(circle at 50% 50%, rgba(255,255,255,.20), rgba(30,80,160,.12) 32%, rgba(0,0,0,.62) 100%)";
+    layer.innerHTML = `
+        <style>
+            @keyframes sword-impact-fade{0%{opacity:0}8%{opacity:1}100%{opacity:0}}
+            @keyframes sword-impact-slash-a{0%{transform:translate(-115vw,35vh) rotate(-18deg) scaleX(.25);filter:blur(10px);opacity:0}18%{opacity:1;filter:blur(0)}48%{transform:translate(24vw,-20vh) rotate(-18deg) scaleX(1.25);opacity:1}100%{transform:translate(125vw,-78vh) rotate(-18deg) scaleX(1.6);opacity:0}}
+            @keyframes sword-impact-slash-b{0%{transform:translate(110vw,50vh) rotate(20deg) scaleX(.25);filter:blur(10px);opacity:0}22%{opacity:1;filter:blur(0)}52%{transform:translate(-18vw,-14vh) rotate(20deg) scaleX(1.16);opacity:1}100%{transform:translate(-125vw,-64vh) rotate(20deg) scaleX(1.5);opacity:0}}
+            @keyframes sword-impact-ring{0%{transform:translate(-50%,-50%) scale(.15);opacity:.95;border-width:16px}100%{transform:translate(-50%,-50%) scale(2.9);opacity:0;border-width:1px}}
+            @keyframes sword-impact-title{0%{transform:translate(-50%,-50%) scale(.55);opacity:0;letter-spacing:.15em}18%{transform:translate(-50%,-50%) scale(1.18);opacity:1}52%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(-50%,-58%) scale(.94);opacity:0;letter-spacing:.45em}}
+            @keyframes sword-impact-sparks{0%{transform:translate(-50%,-50%) rotate(0deg) scale(.25);opacity:0}18%{opacity:1}100%{transform:translate(-50%,-50%) rotate(220deg) scale(1.7);opacity:0}}
+        </style>
+        <div style="position:absolute;left:50%;top:50%;width:min(76vmin,760px);height:min(76vmin,760px);border:12px solid rgba(220,246,255,.92);border-radius:999px;box-shadow:0 0 44px rgba(170,230,255,.95), inset 0 0 34px rgba(255,255,255,.78);animation:sword-impact-ring 1200ms ease-out forwards;"></div>
+        <div style="position:absolute;left:0;top:50%;width:145vw;height:clamp(18px,4.8vw,52px);background:linear-gradient(90deg, transparent, rgba(255,255,255,.98) 18%, rgba(100,220,255,.95) 50%, rgba(255,255,255,.98) 82%, transparent);box-shadow:0 0 30px rgba(180,240,255,.95),0 0 80px rgba(100,180,255,.8);animation:sword-impact-slash-a 980ms cubic-bezier(.16,1,.3,1) forwards;"></div>
+        <div style="position:absolute;left:0;top:51%;width:145vw;height:clamp(14px,3.8vw,42px);background:linear-gradient(90deg, transparent, rgba(255,255,255,.95) 20%, rgba(255,230,140,.94) 50%, rgba(255,255,255,.95) 80%, transparent);box-shadow:0 0 26px rgba(255,248,200,.9),0 0 70px rgba(255,210,80,.65);animation:sword-impact-slash-b 1040ms cubic-bezier(.16,1,.3,1) forwards 80ms;"></div>
+        <div style="position:absolute;left:50%;top:50%;font-size:clamp(46px,13vw,150px);font-weight:1000;color:#f8fdff;text-shadow:0 0 12px #ffffff,0 0 34px #7dd3fc,0 12px 34px rgba(0,0,0,.75);animation:sword-impact-title 1420ms ease-out forwards;white-space:nowrap;">斬撃衝突</div>
+        <div style="position:absolute;left:50%;top:50%;width:min(74vmin,740px);height:min(74vmin,740px);background:repeating-conic-gradient(from 0deg, rgba(255,255,255,.9) 0 4deg, transparent 4deg 16deg);clip-path:circle(50%);mix-blend-mode:screen;animation:sword-impact-sparks 1260ms ease-out forwards;"></div>
+    `;
+    layer.style.animation = "sword-impact-fade 1500ms ease-out forwards";
+    document.body.appendChild(layer);
+    window.setTimeout(() => layer.remove(), 1600);
+}
 
 function closeHelpPopup(): void {
     helpOverlay.style.display = "none";
@@ -4095,8 +4133,8 @@ function getEffectModeLabel(): string {
     return labels[settings.effectMode] ?? labels.normal;
 }
 
-function getEffectIntensity(): number {
-    if (!settings.effectsEnabled || settings.simpleMode) return 0;
+function getEffectIntensity(force = false): number {
+    if ((!settings.effectsEnabled && !force) || settings.simpleMode) return 0;
     if (settings.effectMode === "quiet") return 0.55;
     if (settings.effectMode === "flashy") return 1.45;
     if (settings.effectMode === "recording") return 1.2;
@@ -4814,10 +4852,10 @@ function maybeShowCommentary(text?: string, force = false): void {
     }, COMMENTARY_DISPLAY_MS + 300);
 }
 
-function triggerCameraShake(power: number, durationMs: number): void {
-    if (!settings.effectsEnabled || settings.simpleMode) return;
+function triggerCameraShake(power: number, durationMs: number, force = false): void {
+    if ((!settings.effectsEnabled && !force) || settings.simpleMode) return;
     if (!settings.cameraShakeEnabled) return;
-    const intensity = getEffectIntensity();
+    const intensity = getEffectIntensity(force);
     shakePower = Math.max(shakePower, power * intensity);
     shakeUntil = Math.max(shakeUntil, Date.now() + durationMs);
 }
@@ -4973,8 +5011,10 @@ function speakLifeQuoteEvent(): void {
 
 function showMiracle(kind: DropKind, symbol: string, probabilityText: string, feelingText: string): void {
     const def = findSpecialDef(kind);
+    const forceRareEffect = shouldForceMiracleEffects(def);
+    const shouldPlayEffects = settings.effectsEnabled || forceRareEffect;
     if (def) {
-        if (settings.effectsEnabled) pauseForMiracle(def);
+        if (shouldPlayEffects) pauseForMiracle(def);
         updateMiracleCombo();
         addMiracleLog(def);
         recordMiracleForChains(def.kind);
@@ -4983,14 +5023,15 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
         if (kind === "lifeQuoteMode") speakLifeQuoteEvent();
         else setSubtitle(subtitle);
         saveMiracleClip(def, subtitle);
-        if (settings.effectsEnabled) applyRareBackground(kind);
+        if (shouldPlayEffects) applyRareBackground(kind);
         updateRecentMiracleMini();
         updateStatusMiniOverlays();
     }
-    if (!settings.effectsEnabled) return;
+    if (!shouldPlayEffects) return;
     triggerScreenFlash(def?.soundMode ?? "miracle");
     vibrateOnMobile(def?.rank === "GOD" ? [90, 50, 160, 60, 220] : def?.rank === "EX" ? [70, 40, 120, 40, 140] : [55, 28, 80]);
-    triggerCameraShake(def?.rank === "GOD" ? 46 * geometry.scale : def?.rank === "EX" ? 34 * geometry.scale : 18 * geometry.scale, def?.rank === "GOD" ? 1200 : def?.rank === "EX" ? 760 : 420);
+    triggerCameraShake(def?.rank === "GOD" ? 46 * geometry.scale : def?.rank === "EX" ? 34 * geometry.scale : 18 * geometry.scale, def?.rank === "GOD" ? 1200 : def?.rank === "EX" ? 760 : 420, forceRareEffect);
+    if (kind === "swordImpact") triggerSwordImpactEffect();
     if (settings.simpleMode) return;
     const repeatedInRun = !!def && (repeatedMiracleRunCounts[def.kind] ?? 0) >= 2;
     const overlayDurationMs = getMiraclePauseDuration(def, repeatedInRun);
@@ -5011,7 +5052,7 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     }
     miracleOverlay.style.display = "flex";
     void playAnimeMiracleEffect(def);
-    fireConfetti(kind === "blackSun" ? "black" : kind === "cosmicEgg" ? "cosmic" : "miracle");
+    fireConfetti(kind === "blackSun" ? "black" : kind === "cosmicEgg" ? "cosmic" : "miracle", forceRareEffect);
     playSpecialSound(kind);
     startMiracleOverlayTimer(overlayDurationMs + 120);
 }
@@ -5174,12 +5215,12 @@ async function ensureConfetti(): Promise<boolean> {
     return true;
 }
 
-async function fireConfetti(mode: "normal" | "miracle" | "black" | "cosmic" = "normal"): Promise<void> {
-    if (!settings.effectsEnabled || settings.simpleMode || !confettiEnabled) return;
+async function fireConfetti(mode: "normal" | "miracle" | "black" | "cosmic" = "normal", force = false): Promise<void> {
+    if ((!settings.effectsEnabled && !force) || settings.simpleMode || !confettiEnabled) return;
     const ok = await ensureConfetti();
     if (!ok) return;
     const colors = mode === "cosmic" ? ["#240038", "#7c3cff", "#ffffff", "#00e5ff", "#ffd700"] : mode === "black" ? ["#000000", "#ff0044", "#ffffff"] : mode === "miracle" ? ["#ffd700", "#ff69b4", "#78e7ff", "#ffffff"] : undefined;
-    const intensity = getEffectIntensity();
+    const intensity = getEffectIntensity(force);
     const mainCount = Math.round((mode === "cosmic" ? 420 : mode === "normal" ? 90 : 220) * intensity);
     const sideCount = Math.round((mode === "cosmic" ? 220 : mode === "normal" ? 50 : 120) * intensity);
     confetti({ particleCount: mainCount, spread: mode === "normal" ? 70 : 140, origin: { y: 0.55 }, colors });
