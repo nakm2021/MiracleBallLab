@@ -327,6 +327,8 @@ const browserName = getBrowserName();
 const isMobile = isMobileDevice();
 const uiFontPx = isMobile ? 25 : 20;
 const uiButtonFontPx = isMobile ? 26 : 20;
+const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
+const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
 
 let settings: Settings = {
     targetCount: 50000,
@@ -334,9 +336,9 @@ let settings: Settings = {
     binCount: isMobile ? 6 : 8,
     pinRows: isMobile ? 6 : 7,
     labelText: isMobile ? "１\n２\n３\n４\n５\n６" : "１\n２\n３\n４\n５\n６\n７\n８",
-    backgroundImage: "",
+    backgroundImage: DEFAULT_BACKGROUND_IMAGE_URL,
     simpleMode: false,
-    cameraShakeEnabled: true,
+    cameraShakeEnabled: false,
     probabilityMode: "normal",
 };
 
@@ -488,7 +490,7 @@ document.documentElement.style.overscrollBehavior = "none";
 document.body.style.margin = "0";
 document.body.style.padding = "0";
 document.body.style.background = "linear-gradient(180deg, #eef3ff 0%, #f7f4ef 100%)";
-document.body.style.fontFamily = `"Segoe UI", "Noto Sans JP", sans-serif`;
+document.body.style.fontFamily = ROUNDED_UI_FONT;
 document.body.style.overflow = "hidden";
 document.body.style.overflowX = "hidden";
 document.body.style.width = "100%";
@@ -506,14 +508,15 @@ const globalStyle = document.createElement("style");
 globalStyle.textContent = `
   *, *::before, *::after { box-sizing: border-box; }
   html, body { max-width: 100%; overflow: hidden; }
-  body { overscroll-behavior-x: none; }
+  body { overscroll-behavior-x: none; font-family: "M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif; }
+  button, input, textarea, select, pre, code { font-family: inherit; }
   #miracle-horizontal-guard { width: 100%; max-width: 100%; overflow-x: hidden; }
 `;
 document.head.appendChild(globalStyle);
 
 const bootStartedAt = Date.now();
 const bootMinimumDurationMs = 2000;
-const faviconUrl = `${import.meta.env.BASE_URL}favicon.png`;
+const faviconUrl = DEFAULT_BACKGROUND_IMAGE_URL;
 
 function preloadImage(src: string): Promise<void> {
     return new Promise((resolve) => {
@@ -803,6 +806,7 @@ function createInput(value: string, type = "text"): HTMLInputElement {
     input.style.background = "#ffffff";
     input.style.fontSize = `${uiFontPx}px`;
     input.style.outline = "none";
+    input.style.fontFamily = ROUNDED_UI_FONT;
     return input;
 }
 
@@ -819,6 +823,7 @@ function createTextarea(value: string): HTMLTextAreaElement {
     textarea.style.fontSize = `${uiFontPx}px`;
     textarea.style.outline = "none";
     textarea.style.resize = "vertical";
+    textarea.style.fontFamily = ROUNDED_UI_FONT;
     return textarea;
 }
 
@@ -836,6 +841,7 @@ function createButton(text: string, onClick: () => void): HTMLButtonElement {
     button.style.cursor = "pointer";
     button.style.maxWidth = "100%";
     button.style.whiteSpace = "nowrap";
+    button.style.fontFamily = ROUNDED_UI_FONT;
     if (isMobile) {
         button.style.flex = "1 1 auto";
         button.style.minWidth = "0";
@@ -1526,11 +1532,63 @@ function getMiracleFeatureText(def: SpecialEventDef): string {
     return `${prefix}は、数を回しているとふっと混ざる、うれしい日常型レアです。`;
 }
 
+function escapeSvgText(text: string): string {
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+function isCatMiracle(def: SpecialEventDef): boolean {
+    return /猫|ねこ|neko|cat/i.test(`${def.kind} ${def.label} ${def.symbol} ${def.emoji}`);
+}
+
+function createOriginalCatMiracleSvg(def: SpecialEventDef): string {
+    const rank = escapeSvgText(def.rank);
+    const label = escapeSvgText(def.label);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+        <defs>
+            <radialGradient id="bg" cx="36%" cy="22%">
+                <stop offset="0%" stop-color="#fff7db"/>
+                <stop offset="55%" stop-color="#ffb36b"/>
+                <stop offset="100%" stop-color="#7c2d12"/>
+            </radialGradient>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="12" stdDeviation="8" flood-color="#000000" flood-opacity=".32"/>
+            </filter>
+        </defs>
+        <rect width="320" height="320" rx="44" fill="#111827"/>
+        <circle cx="58" cy="62" r="28" fill="#ffe8a3" opacity=".95"/>
+        <circle cx="258" cy="80" r="8" fill="#ffffff" opacity=".65"/>
+        <circle cx="282" cy="112" r="5" fill="#ffffff" opacity=".5"/>
+        <g filter="url(#shadow)">
+            <path d="M83 122 L111 58 L147 110 Q160 104 174 110 L211 58 L238 122 Q260 151 253 194 Q243 258 160 263 Q77 258 67 194 Q60 151 83 122 Z" fill="url(#bg)" stroke="#fff1c7" stroke-width="8" stroke-linejoin="round"/>
+            <path d="M103 118 L113 88 L132 116" fill="#7c2d12" opacity=".38"/>
+            <path d="M188 116 L207 88 L217 118" fill="#7c2d12" opacity=".38"/>
+            <ellipse cx="126" cy="168" rx="18" ry="23" fill="#18202f"/>
+            <ellipse cx="194" cy="168" rx="18" ry="23" fill="#18202f"/>
+            <circle cx="132" cy="160" r="5" fill="#ffffff"/>
+            <circle cx="200" cy="160" r="5" fill="#ffffff"/>
+            <path d="M160 183 C151 183 146 190 153 196 C157 199 163 199 167 196 C174 190 169 183 160 183 Z" fill="#7c2d12"/>
+            <path d="M160 198 C150 213 132 211 126 201" fill="none" stroke="#7c2d12" stroke-width="6" stroke-linecap="round"/>
+            <path d="M160 198 C170 213 188 211 194 201" fill="none" stroke="#7c2d12" stroke-width="6" stroke-linecap="round"/>
+            <path d="M96 185 H57 M101 203 H59 M224 185 H263 M219 203 H261" stroke="#fff1c7" stroke-width="6" stroke-linecap="round" opacity=".9"/>
+            <path d="M95 239 Q126 272 159 244 Q193 272 225 239" fill="none" stroke="#fff1c7" stroke-width="7" stroke-linecap="round" opacity=".9"/>
+        </g>
+        <text x="160" y="45" text-anchor="middle" font-size="30" font-family="M PLUS Rounded 1c, Zen Maru Gothic, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${rank}</text>
+        <text x="160" y="303" text-anchor="middle" font-size="22" font-family="M PLUS Rounded 1c, Zen Maru Gothic, Noto Sans JP, sans-serif" font-weight="900" fill="#fff7ed">${label}</text>
+    </svg>`;
+}
+
 function createMiracleImageDataUri(def: SpecialEventDef): string {
+    if (isCatMiracle(def)) {
+        return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(createOriginalCatMiracleSvg(def))}`;
+    }
     const bg = def.fillStyle;
-    const symbol = def.symbol || "奇";
-    const rank = def.rank;
-    const emoji = def.emoji || def.symbol || "✨";
+    const symbol = escapeSvgText(def.symbol || "奇");
+    const rank = escapeSvgText(def.rank);
+    const emoji = escapeSvgText(def.emoji || def.symbol || "✨");
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
         <defs>
             <radialGradient id="g" cx="30%" cy="25%">
@@ -1541,9 +1599,9 @@ function createMiracleImageDataUri(def: SpecialEventDef): string {
         </defs>
         <rect width="320" height="320" rx="42" fill="#0f172a"/>
         <circle cx="160" cy="132" r="92" fill="url(#g)" stroke="rgba(255,255,255,.65)" stroke-width="10"/>
-        <text x="160" y="155" text-anchor="middle" font-size="96" font-family="Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#ffffff">${symbol}</text>
-        <text x="160" y="58" text-anchor="middle" font-size="30" font-family="Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${rank}</text>
-        <text x="160" y="280" text-anchor="middle" font-size="44" font-family="Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${emoji}</text>
+        <text x="160" y="155" text-anchor="middle" font-size="96" font-family="M PLUS Rounded 1c, Zen Maru Gothic, Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#ffffff">${symbol}</text>
+        <text x="160" y="58" text-anchor="middle" font-size="30" font-family="M PLUS Rounded 1c, Zen Maru Gothic, Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${rank}</text>
+        <text x="160" y="280" text-anchor="middle" font-size="44" font-family="M PLUS Rounded 1c, Zen Maru Gothic, Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${emoji}</text>
     </svg>`;
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
@@ -1607,8 +1665,8 @@ function setupMobileLayout(): void {
     mobileSettingsOverlay.style.display = "none";
     mobileSettingsOverlay.style.alignItems = "stretch";
     mobileSettingsOverlay.style.justifyContent = "center";
-    mobileSettingsOverlay.style.background = "rgba(5,8,18,.38)";
-    mobileSettingsOverlay.style.backdropFilter = "blur(2px)";
+    mobileSettingsOverlay.style.background = "rgba(5,8,18,.18)";
+    mobileSettingsOverlay.style.backdropFilter = "blur(1px)";
     mobileSettingsOverlay.style.zIndex = "140";
     mobileSettingsOverlay.style.padding = "0";
     document.body.appendChild(mobileSettingsOverlay);
@@ -1620,8 +1678,8 @@ function setupMobileLayout(): void {
     mobileSettingsPanel.style.width = "100%";
     mobileSettingsPanel.style.height = "100dvh";
     mobileSettingsPanel.style.maxHeight = "100dvh";
-    mobileSettingsPanel.style.background = "linear-gradient(180deg,rgba(251,253,255,.88) 0%,rgba(239,244,255,.78) 100%)";
-    mobileSettingsPanel.style.backdropFilter = "blur(14px) saturate(1.18)";
+    mobileSettingsPanel.style.background = "linear-gradient(180deg,rgba(251,253,255,.62) 0%,rgba(239,244,255,.48) 100%)";
+    mobileSettingsPanel.style.backdropFilter = "blur(8px) saturate(1.08)";
     mobileSettingsPanel.style.borderTopLeftRadius = "0";
     mobileSettingsPanel.style.borderTopRightRadius = "0";
     mobileSettingsPanel.style.boxShadow = "0 -12px 40px rgba(0,0,0,.28)";
@@ -1642,7 +1700,7 @@ function setupMobileLayout(): void {
     closeRow.style.top = "0";
     closeRow.style.zIndex = "5";
     closeRow.style.padding = "max(10px, env(safe-area-inset-top)) 0 10px 0";
-    closeRow.style.background = "linear-gradient(180deg,rgba(251,253,255,.96),rgba(251,253,255,.84))";
+    closeRow.style.background = "linear-gradient(180deg,rgba(251,253,255,.72),rgba(251,253,255,.54))";
     closeRow.style.backdropFilter = "blur(14px)";
     closeRow.style.borderBottom = "1px solid rgba(80,90,120,.18)";
     closeRow.innerHTML = `<div style="font-size:22px;font-weight:900;color:#243018;">${t("設定", "Settings")}</div>`;
@@ -2833,6 +2891,8 @@ function showAboutPopup(): void {
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
         <p>100,000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
         <p>奇跡ログ、今日の運勢・奇跡率、研究レベル、奇跡合成・派生、スクリーンショット保存、秘密操作を追加しています。</p>
+        <p>背景はデフォルトで favicon.png を盤面にぴったり表示します。スマホでは画像が見切れにくいよう contain 表示にしています。画面揺れはデフォルトOFFです。</p>
+        <p>奇跡図鑑と発生演出には、アプリ内で生成したオリジナルSVG画像を使います。猫系の奇跡は猫画像が大きく出る専用演出です。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。SR/SSRで同じ奇跡演出が実行中に再発生した場合は、2回目以降さらに短く閉じます。</p>
         <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
     `);
@@ -2991,11 +3051,18 @@ function applyBackgroundImage(): void {
         gameArea.style.background = "radial-gradient(circle at 50% 0%, #ffffff 0%, #edf3ff 46%, #dfe7f5 100%)";
         return;
     }
+    const isDefaultFavicon = url === DEFAULT_BACKGROUND_IMAGE_URL || /\/favicon\.png(?:$|[?#])/i.test(url);
     canvas.style.backgroundImage = `url("${url}")`;
-    canvas.style.backgroundColor = "rgba(17,24,39,0.35)";
-    gameArea.style.background = "#111827";
-    gameArea.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.25)), url("${url}")`;
-    gameArea.style.backgroundSize = "cover";
+    canvas.style.backgroundRepeat = "no-repeat";
+    canvas.style.backgroundPosition = "center";
+    canvas.style.backgroundSize = isDefaultFavicon ? (isMobile ? "contain" : "min(72%, 520px) auto") : "cover";
+    canvas.style.backgroundColor = isDefaultFavicon ? "rgba(245,250,239,0.92)" : "rgba(17,24,39,0.35)";
+    gameArea.style.background = isDefaultFavicon ? "radial-gradient(circle at 50% 36%, rgba(255,255,255,.90) 0%, rgba(225,239,198,.88) 42%, rgba(26,36,25,.92) 100%)" : "#111827";
+    gameArea.style.backgroundImage = isDefaultFavicon
+        ? `linear-gradient(rgba(255,255,255,0.12), rgba(255,255,255,0.12)), url("${url}")`
+        : `linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.25)), url("${url}")`;
+    gameArea.style.backgroundRepeat = "no-repeat";
+    gameArea.style.backgroundSize = isDefaultFavicon ? "contain" : "cover";
     gameArea.style.backgroundPosition = "center";
 }
 
@@ -3505,12 +3572,17 @@ function showFullScreenCelebration(count: number): void {
 
 function getMiracleIconHtml(kind: DropKind, fallbackSymbol: string): string {
     const def = findSpecialDef(kind);
-    const label = def?.symbol || fallbackSymbol || "奇";
+    if (def) {
+        const imageSize = isCatMiracle(def) ? "clamp(210px,68vw,420px)" : "clamp(150px,42vw,280px)";
+        const boomText = isCatMiracle(def) ? `<div style="margin-top:10px;font-size:clamp(28px,8vw,72px);font-weight:1000;color:#fff7ed;text-shadow:0 8px 26px rgba(0,0,0,.72);letter-spacing:.06em;">ねこ、どーん！</div>` : "";
+        return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <img src="${createMiracleImageDataUri(def)}" alt="${escapeSvgText(def.label)}" style="width:${imageSize};height:${imageSize};border-radius:clamp(28px,8vw,64px);object-fit:contain;background:rgba(15,23,42,.84);box-shadow:0 26px 80px rgba(0,0,0,.58),0 0 0 clamp(6px,1.2vw,12px) rgba(255,255,255,.18);filter:drop-shadow(0 18px 28px rgba(0,0,0,.42));" />
+            ${boomText}
+        </div>`;
+    }
+    const label = fallbackSymbol || "奇";
     const colors = getSpecialIconColors(kind);
     const common = `display:inline-flex;align-items:center;justify-content:center;width:clamp(120px,34vw,230px);height:clamp(120px,34vw,230px);border-radius:999px;border:clamp(5px,1.2vw,10px) solid ${colors.stroke};background:radial-gradient(circle at 30% 25%, #fff 0%, ${colors.main} 36%, ${colors.sub} 100%);box-shadow:0 0 0 clamp(5px,1vw,14px) rgba(255,255,255,.18),0 0 60px ${colors.main};color:${colors.text};font-weight:1000;font-size:clamp(50px,14vw,118px);text-shadow:0 3px 0 rgba(0,0,0,.25);line-height:1;`;
-    if (kind === "crown" || kind === "meteorCrown") {
-        return `<div style="font-size:clamp(94px,27vw,210px);line-height:.86;filter:drop-shadow(0 14px 22px rgba(0,0,0,.45));">👑</div><div style="margin-top:-28px;font-size:clamp(46px,13vw,110px);font-weight:1000;color:#fff;text-shadow:0 6px 18px rgba(0,0,0,.65);">${kind === "meteorCrown" ? "冠" : "王"}</div>`;
-    }
     return `<div style="${common}">${label}</div>`;
 }
 
