@@ -78,6 +78,9 @@ type MiracleClip = {
 type ThemeMode = "lab" | "space" | "sunset" | "retro" | "midnight";
 type EffectMode = "quiet" | "normal" | "flashy" | "recording";
 type WorldMode = "poseidon" | "zeusu" | "hadesu" | "heart" | "nekochan" | null;
+type TimeBallTheme = "morning" | "day" | "evening" | "night" | "midnight";
+type TimeBallSkin = "normal" | "gloss" | "drop" | "spark" | "star" | "moon" | "darkShard" | "swordShard" | "coin" | "heart" | "crown";
+
 
 type SavedRecords = {
     totalRuns: number;
@@ -134,6 +137,7 @@ type Settings = {
     commentaryEnabled: boolean;
     boardAnomalyEnabled: boolean;
     normalBallTraitsEnabled: boolean;
+    timeBallSkinsEnabled: boolean;
     mobileCompactMode: boolean;
     showRecentMiracles: boolean;
     effectMode: EffectMode;
@@ -438,6 +442,7 @@ let settings: Settings = {
     commentaryEnabled: true,
     boardAnomalyEnabled: true,
     normalBallTraitsEnabled: true,
+    timeBallSkinsEnabled: true,
     mobileCompactMode: false,
     showRecentMiracles: false,
     effectMode: "normal",
@@ -1380,6 +1385,14 @@ const normalTraitButton = setTooltip(setButtonLabel(createButton("個体差: ON"
 }), "個体差: ON", "Traits: ON"), "通常玉の重い玉・跳ね玉などをON/OFFします。デフォルトはONです。", "Toggle normal ball traits. Default is on.");
 displayButtons.appendChild(normalTraitButton);
 
+const timeBallSkinButton = setTooltip(setButtonLabel(createButton("時間帯玉: ON", () => {
+    settings.timeBallSkinsEnabled = !settings.timeBallSkinsEnabled;
+    updateTimeBallSkinButton();
+    updateStatusMiniOverlays();
+    showSoftToast(settings.timeBallSkinsEnabled ? t("時間帯で玉の見た目を変えます", "Time ball skins enabled") : t("時間帯玉をOFFにしました", "Time ball skins disabled"));
+}), "時間帯玉: ON", "Time skins: ON"), "時刻や曜日で通常玉の見た目だけを変えます。物理挙動は変わりません。デフォルトはONです。", "Change only normal-ball appearance by time/day. Physics does not change. Default is on.");
+displayButtons.appendChild(timeBallSkinButton);
+
 const mobileCompactButton = setTooltip(setButtonLabel(createButton("スマホ簡易: OFF", () => {
     settings.mobileCompactMode = !settings.mobileCompactMode;
     updateMobileCompactButton();
@@ -2181,6 +2194,7 @@ function updateUiLanguage(): void {
     updateCommentaryButton();
     updateBoardAnomalyButton();
     updateNormalTraitButton();
+    updateTimeBallSkinButton();
     updateMobileCompactButton();
     updateRecentMiracleDisplayButton();
     updateSoundButton();
@@ -4116,6 +4130,11 @@ function updateNormalTraitButton(): void {
     paintToggleButton(normalTraitButton, settings.normalBallTraitsEnabled);
 }
 
+function updateTimeBallSkinButton(): void {
+    timeBallSkinButton.textContent = settings.timeBallSkinsEnabled ? t("時間帯玉: ON", "Time skins: ON") : t("時間帯玉: OFF", "Time skins: OFF");
+    paintToggleButton(timeBallSkinButton, settings.timeBallSkinsEnabled, "linear-gradient(180deg, #eef2ff 0%, #c7d2fe 100%)");
+}
+
 function updateMobileCompactButton(): void {
     mobileCompactButton.textContent = settings.mobileCompactMode ? t("スマホ簡易: ON", "Compact: ON") : t("スマホ簡易: OFF", "Compact: OFF");
     paintToggleButton(mobileCompactButton, settings.mobileCompactMode);
@@ -4203,6 +4222,7 @@ function updateRecentMiracleMini(): void {
 function updateStatusMiniOverlays(): void {
     const labels: string[] = [];
     if (!settings.effectsEnabled) labels.push(t("演出OFF", "Effects OFF"));
+    if (settings.timeBallSkinsEnabled) labels.push(getTimeBallThemeLabel(getCurrentTimeBallTheme()));
     labels.push(`${t("演出", "Mode")}: ${getEffectModeLabel()}`);
     if (anomalyUntil && anomalyMode !== "none") {
         const remain = Math.max(0, (anomalyUntil - Date.now()) / 1000);
@@ -4629,6 +4649,75 @@ function explodeStuckDrop(body: Matter.Body): void {
     for (let i = 0; i < fragmentCount; i++) Composite.add(engine.world, createTinyFragment(body.position.x + (appRandom() - 0.5) * originalRadius, body.position.y + (appRandom() - 0.5) * originalRadius, originalRadius, color));
 }
 
+function getCurrentTimeBallTheme(date = new Date()): TimeBallTheme {
+    const hour = date.getHours();
+    if (hour >= 5 && hour <= 10) return "morning";
+    if (hour >= 11 && hour <= 16) return "day";
+    if (hour >= 17 && hour <= 19) return "evening";
+    if (hour >= 20 && hour <= 23) return "night";
+    return "midnight";
+}
+
+function getTimeBallThemeLabel(theme: TimeBallTheme): string {
+    if (theme === "morning") return t("朝露観測モード", "Morning dew mode");
+    if (theme === "day") return t("通常観測モード", "Standard observation mode");
+    if (theme === "evening") return t("夕焼け反応モード", "Sunset reaction mode");
+    if (theme === "night") return t("星夜観測モード", "Starry night mode");
+    return t("深夜異常観測モード", "Midnight anomaly mode");
+}
+
+function getTimeBallSkinLabel(skin: TimeBallSkin): string {
+    if (skin === "drop") return t("朝露のしずく", "Morning drop");
+    if (skin === "gloss") return t("光沢サンプル球", "Gloss sample");
+    if (skin === "spark") return t("薄暮の火種", "Sunset spark");
+    if (skin === "star") return t("夜空の星片", "Star fragment");
+    if (skin === "moon") return t("月影サンプル", "Moon sample");
+    if (skin === "darkShard") return t("黒い欠片", "Dark shard");
+    if (skin === "swordShard") return t("剣の破片", "Sword shard");
+    if (skin === "coin") return t("金曜のコイン", "Friday coin");
+    if (skin === "heart") return t("日曜のハート", "Sunday heart");
+    if (skin === "crown") return t("土曜の小さな王冠", "Saturday crown");
+    return t("通常玉", "Normal ball");
+}
+
+function chooseTimeBallSkin(): TimeBallSkin {
+    if (!settings.timeBallSkinsEnabled) return "normal";
+    const now = new Date();
+    const theme = getCurrentTimeBallTheme(now);
+    const day = now.getDay();
+    const roll = appRandom();
+
+    if (day === 6 && roll < 0.05) return "crown";
+    if (day === 0 && roll < 0.05) return "heart";
+    if (day === 5 && roll < 0.05) return "coin";
+
+    if (theme === "morning") return roll < 0.20 ? "drop" : "normal";
+    if (theme === "day") return roll < 0.05 ? "gloss" : "normal";
+    if (theme === "evening") return roll < 0.20 ? "spark" : "normal";
+    if (theme === "night") {
+        if (roll < 0.15) return "star";
+        if (roll < 0.20) return "moon";
+        return "normal";
+    }
+    if (roll < 0.20) return "darkShard";
+    if (roll < 0.25) return "swordShard";
+    return "normal";
+}
+
+function getTimeBallSkinFillStyle(skin: TimeBallSkin, fallback: string): string {
+    if (skin === "drop") return "#8ee7ff";
+    if (skin === "gloss") return fallback;
+    if (skin === "spark") return "#ff9f43";
+    if (skin === "star") return "#fff176";
+    if (skin === "moon") return "#dbeafe";
+    if (skin === "darkShard") return "#111827";
+    if (skin === "swordShard") return "#dff7ff";
+    if (skin === "coin") return "#f6c945";
+    if (skin === "heart") return "#ff7ab6";
+    if (skin === "crown") return "#ffd54a";
+    return fallback;
+}
+
 function createDrop(): Matter.Body {
     const visibleLeft = geometry.binLeft + geometry.visibleStart * geometry.binWidth;
     const visibleRight = geometry.binLeft + (geometry.visibleStart + settings.binCount) * geometry.binWidth;
@@ -4646,6 +4735,7 @@ function createDrop(): Matter.Body {
     let symbol = "";
     let label = "";
     let normalTrait: NormalBallTraitDef | null = null;
+    let timeBallSkin: TimeBallSkin = "normal";
 
     if (activeWorldMode === "poseidon") {
         fillStyle = ["#2a6dff", "#00a8ff", "#67d1ff"][Math.floor(appRandom() * 3)] ?? "#2a6dff";
@@ -4705,7 +4795,16 @@ function createDrop(): Matter.Body {
             density = normalTrait.density;
         }
     }
+    if (kind === "normal") {
+        timeBallSkin = chooseTimeBallSkin();
+        fillStyle = getTimeBallSkinFillStyle(timeBallSkin, fillStyle);
+    }
+
     const renderOptions: any = { fillStyle, strokeStyle: normalTrait?.strokeStyle ?? "rgba(255,255,255,0.85)", lineWidth: kind === "normal" ? (normalTrait ? 2.5 * geometry.scale : 1 * geometry.scale) : 3 * geometry.scale };
+    if (kind === "normal" && timeBallSkin !== "normal") {
+        renderOptions.fillStyle = "rgba(255,255,255,0.10)";
+        renderOptions.strokeStyle = "rgba(255,255,255,0.32)";
+    }
     if (normalTrait?.kind === "ghost") renderOptions.opacity = 0.42;
     if (kind === "gold") { renderOptions.strokeStyle = "#fff4a8"; renderOptions.lineWidth = 3 * geometry.scale; }
     if (kind === "rainbow") { renderOptions.strokeStyle = "#ffffff"; renderOptions.lineWidth = 3 * geometry.scale; }
@@ -4726,7 +4825,7 @@ function createDrop(): Matter.Body {
     else if (isShape) body = createRandomShapeBody(x, startY, radius, renderOptions);
     else {
         body = Bodies.circle(x, startY, radius, { restitution, friction: 0.01, frictionAir: normalTrait?.frictionAir ?? 0.002, density, render: renderOptions });
-        (body as any).plugin = createDropPlugin(kind, x, startY, radius, normalTrait ? { traitKind: normalTrait.kind, traitLabel: normalTrait.label, traitMark: normalTrait.mark } : {});
+        (body as any).plugin = createDropPlugin(kind, x, startY, radius, { ...(normalTrait ? { traitKind: normalTrait.kind, traitLabel: normalTrait.label, traitMark: normalTrait.mark } : {}), timeBallSkin, timeBallSkinLabel: getTimeBallSkinLabel(timeBallSkin) });
     }
 
     const traitVX = normalTrait?.kind === "sprinter" ? (appRandom() < 0.5 ? -1 : 1) * (3.2 + appRandom() * 2.4) * geometry.scale : 0;
@@ -4736,6 +4835,9 @@ function createDrop(): Matter.Body {
     if (normalTrait && appRandom() < 0.08) {
         addFloatingText(normalTrait.label, x, 78 * geometry.scale, normalTrait.strokeStyle);
         maybeShowCommentary(`実況「${normalTrait.label} が混ざりました」`);
+    }
+    if (timeBallSkin !== "normal" && appRandom() < 0.025) {
+        addFloatingText(getTimeBallSkinLabel(timeBallSkin), x, 74 * geometry.scale, getTimeBallSkinFillStyle(timeBallSkin, fillStyle));
     }
     if (kind === "gold") addFloatingText("金玉投入", x, 80 * geometry.scale, "#d89b00");
     if (kind === "rainbow") { addFloatingText("虹玉投入", x, 80 * geometry.scale, "#b44cff"); triggerCameraShake(5 * geometry.scale, 180); }
@@ -5347,6 +5449,7 @@ function updateInfo(): void {
         <div>${t("実況ログ", "Commentary")}: <b>${settings.commentaryEnabled ? "ON" : "OFF"}</b></div>
         <div>${t("盤面変異", "Board anomaly")}: <b>${settings.boardAnomalyEnabled ? "ON" : "OFF"}</b></div>
         <div>${t("通常玉個体差", "Ball traits")}: <b>${settings.normalBallTraitsEnabled ? "ON" : "OFF"}</b></div>
+        <div>${t("時間帯玉", "Time ball skins")}: <b>${settings.timeBallSkinsEnabled ? "ON" : "OFF"}</b> / ${getTimeBallThemeLabel(getCurrentTimeBallTheme())}</div>
         <div>${t("捨て区画", "Discarded")}: <b>${discardedCount.toLocaleString()}</b></div>
     `;
     updateRandomGraph();
@@ -5718,6 +5821,110 @@ function drawSpecialIcon(context: CanvasRenderingContext2D, kind: DropKind, x: n
     context.restore();
 }
 
+function drawStarPath(context: CanvasRenderingContext2D, radius: number, points = 5): void {
+    context.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+        const angle = -Math.PI / 2 + (i * Math.PI) / points;
+        const r = i % 2 === 0 ? radius : radius * 0.45;
+        const x = Math.cos(angle) * r;
+        const y = Math.sin(angle) * r;
+        if (i === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+    }
+    context.closePath();
+}
+
+function drawTimeBallSkinIcon(context: CanvasRenderingContext2D, skin: TimeBallSkin, x: number, y: number, radius: number, angle: number, fallbackColor: string): void {
+    if (skin === "normal") return;
+    const color = getTimeBallSkinFillStyle(skin, fallbackColor);
+    context.save();
+    context.translate(x, y);
+    context.rotate(angle);
+    context.lineJoin = "round";
+    context.lineCap = "round";
+    context.strokeStyle = "rgba(255,255,255,.88)";
+    context.lineWidth = Math.max(1.2, radius * 0.12);
+    context.shadowColor = color;
+    context.shadowBlur = settings.simpleMode ? 0 : Math.max(0, radius * 0.4);
+    context.fillStyle = color;
+
+    if (skin === "drop") {
+        context.beginPath();
+        context.moveTo(0, -radius * 1.08);
+        context.bezierCurveTo(radius * 0.78, -radius * 0.2, radius * 0.62, radius * 0.88, 0, radius * 1.0);
+        context.bezierCurveTo(-radius * 0.62, radius * 0.88, -radius * 0.78, -radius * 0.2, 0, -radius * 1.08);
+        context.closePath();
+        context.fill(); context.stroke();
+        context.fillStyle = "rgba(255,255,255,.70)";
+        context.beginPath(); context.ellipse(-radius * 0.22, -radius * 0.26, radius * 0.16, radius * 0.28, -0.45, 0, Math.PI * 2); context.fill();
+    } else if (skin === "spark") {
+        drawStarPath(context, radius * 1.02, 4);
+        context.fill(); context.stroke();
+        context.fillStyle = "rgba(255,245,200,.95)";
+        context.beginPath(); context.arc(0, 0, radius * 0.32, 0, Math.PI * 2); context.fill();
+    } else if (skin === "star") {
+        drawStarPath(context, radius * 1.06, 5);
+        context.fill(); context.stroke();
+    } else if (skin === "moon") {
+        context.beginPath(); context.arc(0, 0, radius * 0.98, Math.PI * 0.22, Math.PI * 1.78); context.bezierCurveTo(radius * 0.28, radius * 0.46, radius * 0.28, -radius * 0.46, radius * 0.98, -radius * 0.74); context.closePath();
+        context.fill(); context.stroke();
+    } else if (skin === "darkShard" || skin === "swordShard") {
+        context.beginPath();
+        context.moveTo(-radius * 0.28, -radius * 1.08);
+        context.lineTo(radius * 0.82, -radius * 0.22);
+        context.lineTo(radius * 0.26, radius * 1.04);
+        context.lineTo(-radius * 0.76, radius * 0.28);
+        context.closePath();
+        context.fill(); context.stroke();
+        if (skin === "swordShard") {
+            context.strokeStyle = "rgba(20,40,60,.78)";
+            context.lineWidth = Math.max(1, radius * 0.08);
+            context.beginPath(); context.moveTo(-radius * 0.15, -radius * 0.72); context.lineTo(radius * 0.18, radius * 0.72); context.stroke();
+        }
+    } else if (skin === "coin") {
+        context.beginPath(); context.ellipse(0, 0, radius * 0.92, radius * 0.76, 0, 0, Math.PI * 2); context.fill(); context.stroke();
+        context.strokeStyle = "rgba(95,58,0,.65)"; context.lineWidth = Math.max(1, radius * 0.08);
+        context.beginPath(); context.ellipse(0, 0, radius * 0.58, radius * 0.46, 0, 0, Math.PI * 2); context.stroke();
+    } else if (skin === "heart") {
+        context.beginPath();
+        context.moveTo(0, radius * 0.72);
+        context.bezierCurveTo(-radius * 1.0, radius * 0.06, -radius * 0.72, -radius * 0.76, 0, -radius * 0.34);
+        context.bezierCurveTo(radius * 0.72, -radius * 0.76, radius * 1.0, radius * 0.06, 0, radius * 0.72);
+        context.fill(); context.stroke();
+    } else if (skin === "crown") {
+        context.beginPath();
+        context.moveTo(-radius * 0.86, radius * 0.42);
+        context.lineTo(-radius * 0.62, -radius * 0.42);
+        context.lineTo(-radius * 0.22, radius * 0.08);
+        context.lineTo(0, -radius * 0.74);
+        context.lineTo(radius * 0.22, radius * 0.08);
+        context.lineTo(radius * 0.62, -radius * 0.42);
+        context.lineTo(radius * 0.86, radius * 0.42);
+        context.closePath();
+        context.fill(); context.stroke();
+    } else if (skin === "gloss") {
+        context.beginPath(); context.arc(0, 0, radius * 0.92, 0, Math.PI * 2); context.fill(); context.stroke();
+        context.fillStyle = "rgba(255,255,255,.65)";
+        context.beginPath(); context.arc(-radius * 0.28, -radius * 0.32, radius * 0.24, 0, Math.PI * 2); context.fill();
+    }
+    context.restore();
+}
+
+function drawTimeBallSkins(context: CanvasRenderingContext2D): void {
+    if (!settings.timeBallSkinsEnabled) return;
+    context.save();
+    for (const body of engine.world.bodies) {
+        const plugin = (body as any).plugin;
+        if (!plugin?.isDrop || plugin.kind !== "normal") continue;
+        const skin = plugin.timeBallSkin as TimeBallSkin | undefined;
+        if (!skin || skin === "normal") continue;
+        const radius = body.circleRadius ?? plugin.originalRadius ?? geometry.ballRadius;
+        const color = (body.render as any)?.fillStyle ?? randomColor();
+        drawTimeBallSkinIcon(context, skin, body.position.x, body.position.y, radius * 0.92, body.angle, color);
+    }
+    context.restore();
+}
+
 function drawNormalTraitMarks(context: CanvasRenderingContext2D): void {
     if (settings.simpleMode) return;
     context.save();
@@ -5801,6 +6008,7 @@ Events.on(render, "afterRender", () => {
     context.save();
     drawTapRipples(context);
     drawSpecialGlows(context);
+    drawTimeBallSkins(context);
     drawNormalTraitMarks(context);
     context.textAlign = "center";
     context.textBaseline = "middle";
