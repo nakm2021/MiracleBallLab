@@ -128,6 +128,7 @@ type Settings = {
     backgroundImage: string;
     simpleMode: boolean;
     cameraShakeEnabled: boolean;
+    slowMiracleEffects: boolean;
     probabilityMode: ProbabilityMode;
 };
 
@@ -339,6 +340,7 @@ let settings: Settings = {
     backgroundImage: DEFAULT_BACKGROUND_IMAGE_URL,
     simpleMode: false,
     cameraShakeEnabled: false,
+    slowMiracleEffects: false,
     probabilityMode: "normal",
 };
 
@@ -361,6 +363,8 @@ let isPaused = false;
 let isStarted = false;
 let isMiraclePaused = false;
 let miraclePauseTimer: number | undefined;
+let miraclePauseEndsAt = 0;
+let miraclePauseRemainingMs = 0;
 
 let labels: string[] = [];
 let binCounts: number[] = [];
@@ -691,6 +695,31 @@ gameFullscreenButton.style.fontWeight = "900";
 gameFullscreenButton.style.cursor = "pointer";
 gameFullscreenButton.onclick = () => toggleGameFullscreen();
 gameArea.appendChild(gameFullscreenButton);
+
+const pcPauseButton = document.createElement("button");
+pcPauseButton.textContent = "一時停止";
+pcPauseButton.title = "一時停止 / 再開";
+pcPauseButton.style.position = "absolute";
+pcPauseButton.style.left = isMobile ? "14px" : "16px";
+pcPauseButton.style.bottom = isMobile ? "82px" : "16px";
+pcPauseButton.style.zIndex = "4";
+pcPauseButton.style.display = isMobile ? "none" : "inline-flex";
+pcPauseButton.style.alignItems = "center";
+pcPauseButton.style.justifyContent = "center";
+pcPauseButton.style.minWidth = "112px";
+pcPauseButton.style.height = "48px";
+pcPauseButton.style.padding = "0 18px";
+pcPauseButton.style.borderRadius = "999px";
+pcPauseButton.style.border = "1px solid rgba(255,255,255,.48)";
+pcPauseButton.style.background = "rgba(15,21,36,.62)";
+pcPauseButton.style.backdropFilter = "blur(10px)";
+pcPauseButton.style.color = "#fff";
+pcPauseButton.style.fontSize = "18px";
+pcPauseButton.style.fontWeight = "900";
+pcPauseButton.style.fontFamily = ROUNDED_UI_FONT;
+pcPauseButton.style.cursor = "pointer";
+pcPauseButton.onclick = () => togglePause();
+gameArea.appendChild(pcPauseButton);
 
 const info = document.createElement("div");
 info.style.flex = "0 0 auto";
@@ -1127,6 +1156,13 @@ const simpleModeButton = setTooltip(setButtonLabel(createButton("シンプル: O
 }), "シンプル: OFF", "Simple: OFF"), "演出を軽くして見やすくします。", "Reduce effects for a lighter view.");
 displayButtons.appendChild(simpleModeButton);
 
+const slowMiracleButton = setTooltip(setButtonLabel(createButton("演出ゆっくり: OFF", () => {
+    settings.slowMiracleEffects = !settings.slowMiracleEffects;
+    updateSlowMiracleButton();
+    updateInfo();
+}), "演出ゆっくり: OFF", "Slow effects: OFF"), "奇跡演出だけを少し長く見せます。デフォルトはOFFです。", "Show miracle effects a little longer. Default is off.");
+displayButtons.appendChild(slowMiracleButton);
+
 const cameraShakeButton = setTooltip(setButtonLabel(createButton("画面揺れ: ON", () => {
     settings.cameraShakeEnabled = !settings.cameraShakeEnabled;
     updateCameraShakeButton();
@@ -1241,6 +1277,10 @@ miracleOverlay.style.color = "#fff";
 miracleOverlay.style.padding = "24px";
 miracleOverlay.style.boxSizing = "border-box";
 document.body.appendChild(miracleOverlay);
+let miracleOverlayTimer: number | undefined;
+let miracleOverlayEndsAt = 0;
+let miracleOverlayRemainingMs = 0;
+let miracleOverlayFrozen = false;
 
 const flashOverlay = document.createElement("div");
 flashOverlay.style.position = "fixed";
@@ -1496,10 +1536,14 @@ function getSpeedDisplayLabel(): string {
 }
 
 function getMiraclePauseDuration(def?: SpecialEventDef, repeatedInRun = false): number {
-    if (!def) return 1200;
-    if (def.rank === "SR" || def.rank === "SSR") return repeatedInRun ? 240 : 520;
-    if (def.rank === "UR") return 1800;
-    return 3000;
+    const slowRate = settings.slowMiracleEffects ? 1.75 : 1;
+    if (!def) return Math.round(1200 * slowRate);
+    if (def.rank === "SR" || def.rank === "SSR") {
+        // 同じSR/SSRが実行中に再発生した場合は、ゆっくり演出ONでも短縮を優先します。
+        return repeatedInRun ? 240 : Math.round(520 * slowRate);
+    }
+    if (def.rank === "UR") return Math.round(1800 * slowRate);
+    return Math.round(3000 * slowRate);
 }
 
 function getMiracleFeatureText(def: SpecialEventDef): string {
@@ -1646,8 +1690,17 @@ function setupMobileLayout(): void {
     mobileDockRunButton.style.fontSize = "24px";
     dock.appendChild(mobileDockRunButton);
 
-    mobileDockPauseButton = createButton(t("一時停止", "Pause"), () => togglePause());
-    mobileDockPauseButton.addEventListener("touchend", (event) => { event.preventDefault(); togglePause(); }, { passive: false });
+    mobileDockPauseButton = createButton(t("一時停止", "Pause"), () => {});
+    mobileDockPauseButton.onclick = null;
+    mobileDockPauseButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        togglePause();
+    }, { passive: false });
+    mobileDockPauseButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+    });
     mobileDockPauseButton.style.width = "100%";
     mobileDockPauseButton.style.height = "66px";
     mobileDockPauseButton.style.fontSize = "22px";
@@ -1740,6 +1793,7 @@ function updateUiLanguage(): void {
     for (const item of bilingualButtons) {
         if (item.button === simpleModeButton) continue;
         if (item.button === cameraShakeButton) continue;
+        if (item.button === slowMiracleButton) continue;
         if (item.button === soundButton) continue;
         if (item.button === confettiButton) continue;
         if (item.button === pixiButton) continue;
@@ -1750,11 +1804,14 @@ function updateUiLanguage(): void {
     updateThemeSelectLabels();
     updateSimpleModeButton();
     updateCameraShakeButton();
+    updateSlowMiracleButton();
     updateSoundButton();
     updateSkillButtons();
     confettiButton.textContent = confettiEnabled ? t("紙吹雪: ON", "Confetti: ON") : t("紙吹雪: OFF", "Confetti: OFF");
     pixiButton.textContent = pixiEnabled ? t("Pixi背景: ON", "Pixi BG: ON") : t("Pixi背景: OFF", "Pixi BG: OFF");
     gameFullscreenButton.title = t("全画面", "Fullscreen");
+    pcPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
+    pcPauseButton.title = pcPauseButton.textContent;
     updateVerticalVideoButton();
     updateObsButton();
     updateTooltipText();
@@ -2846,9 +2903,10 @@ function showMiracleBookPopup(): void {
         const found = totalCount > 0;
         const firstFoundAt = savedRecords.discoveredFirstAt[def.kind];
         const displayName = found ? `${def.symbol} ${def.label}` : `◼︎◼︎◼︎ (${getSilhouetteHint(def)})`;
-        const imageHtml = found
-            ? `<img src="${createMiracleImageDataUri(def)}" alt="${def.label}" style="width:${isMobile ? 98 : 112}px;height:${isMobile ? 98 : 112}px;border-radius:22px;object-fit:cover;box-shadow:0 10px 24px rgba(0,0,0,.18);background:#0f172a;" />`
-            : `<div style="width:${isMobile ? 98 : 112}px;height:${isMobile ? 98 : 112}px;border-radius:22px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#d9dde7,#b9c0cf);color:#6b7280;font-size:${isMobile ? 26 : 30}px;font-weight:900;box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);">?</div>`;
+        const imageHtml = `<div style="position:relative;width:${isMobile ? 98 : 112}px;height:${isMobile ? 98 : 112}px;">
+            <img src="${createMiracleImageDataUri(def)}" alt="${escapeSvgText(def.label)}" style="width:100%;height:100%;border-radius:22px;object-fit:cover;box-shadow:0 10px 24px rgba(0,0,0,.18);background:#0f172a;${found ? "" : "filter:saturate(.32) brightness(.72);opacity:.82;"}" />
+            ${found ? "" : `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:22px;background:rgba(15,23,42,.36);color:#fff;font-size:${isMobile ? 22 : 24}px;font-weight:1000;">?</div>`}
+        </div>`;
         const firstFoundText = found && firstFoundAt ? new Date(firstFoundAt).toLocaleString() : "----";
         return `<div style="display:grid;grid-template-columns:${isMobile ? "98px minmax(0,1fr)" : "112px minmax(0,1fr)"};gap:14px;align-items:start;padding:14px 0;border-bottom:1px solid rgba(80,90,120,.16);">
             <div>${imageHtml}</div>
@@ -2864,7 +2922,7 @@ function showMiracleBookPopup(): void {
         </div>`;
     }).join("");
     showPopup("奇跡図鑑", `
-        <p style="margin-top:0;">発見済みの奇跡は画像つきで表示されます。未発見のものは名前を伏せたまま記録されます。</p>
+        <p style="margin-top:0;">全ての奇跡を画像つきで表示します。未発見のものは画像だけ薄く見せ、名前は伏せたまま記録されます。</p>
         <div style="margin-top:16px;border-radius:22px;background:rgba(255,255,255,.75);padding:${isMobile ? "4px 14px" : "8px 16px"};box-sizing:border-box;max-width:100%;overflow:hidden;">${rows}</div>
     `);
 }
@@ -2891,8 +2949,8 @@ function showAboutPopup(): void {
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
         <p>100,000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
         <p>奇跡ログ、今日の運勢・奇跡率、研究レベル、奇跡合成・派生、スクリーンショット保存、秘密操作を追加しています。</p>
-        <p>背景はデフォルトで favicon.png を盤面にぴったり表示します。スマホでは画像が見切れにくいよう contain 表示にしています。画面揺れはデフォルトOFFです。</p>
-        <p>奇跡図鑑と発生演出には、アプリ内で生成したオリジナルSVG画像を使います。猫系の奇跡は猫画像が大きく出る専用演出です。</p>
+        <p>背景はデフォルトで favicon.png を盤面に大きく表示します。スマホでは見切れない範囲で最大表示します。画面揺れはデフォルトOFFです。</p>
+        <p>奇跡図鑑と発生演出には、全種類でアプリ内生成のオリジナルSVG画像を使います。発生時は該当画像を大きく表示します。猫系は専用の「ねこ、どーん！」演出になります。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。SR/SSRで同じ奇跡演出が実行中に再発生した場合は、2回目以降さらに短く閉じます。</p>
         <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
     `);
@@ -2902,10 +2960,10 @@ function showButtonHelpPopup(): void {
     showPopup("ボタン説明", `
         <p><b>実行:</b> 現在の設定で実験を開始します。開始前は待機中です。</p>
         <p><b>超低速 / 低速 / 通常 / 高速 / 超高速:</b> 玉の動く速度を変えます。超低速と低速は観察向け、超高速は処理は速いですがレア演出を見逃しやすくなります。</p>
-        <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。奇跡演出中でも一時停止を優先できます。スマホ下部にも一時停止ボタンがあります。</p>
+        <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。PC版は盤面左下にも一時停止ボタンを追加しています。奇跡演出中でも一時停止を優先できます。スマホ下部にも一時停止ボタンがあります。</p>
         <p><b>リセット:</b> 設定を読み直して、実験を最初から待機状態に戻します。</p>
         <p><b>シンプル:</b> 演出を減らして軽くします。重い場合や大量回数を試す場合に便利です。</p>
-        <p><b>音:</b> Tone.js を使って、開始・一時停止・スキル・秘密操作・レア玉ごとに違う短い効果音を鳴らします。GOD/EX級は低音とノイズを重ねて強めにしています。ブラウザ仕様上、最初にボタン操作が必要です。</p>
+        <p><b>演出ゆっくり:</b> 奇跡演出だけを少し長く見せます。デフォルトはOFFです。同じSR/SSRの短縮演出は優先されます。</p><p><b>音:</b> Tone.js を使って、開始・一時停止・スキル・秘密操作・レア玉ごとに違う短い効果音を鳴らします。GOD/EX級は低音とノイズを重ねて強めにしています。ブラウザ仕様上、最初にボタン操作が必要です。</p>
         <p><b>衝撃波 / 磁石 / 時止め:</b> 実験中に使える操作スキルです。衝撃波は玉を散らし、磁石は上位受け皿へ吸わせ、時止めは短時間だけ盤面を静止させます。</p>
         <p><b>ミッション:</b> 実験中の条件達成でスコア報酬を獲得します。</p>
         <p><b>今日の運勢:</b> 日付ごとの奇跡率、注目奇跡、ラッキー受け皿を表示します。奇跡率はレア抽選に少しだけ反映されます。</p>
@@ -3153,7 +3211,7 @@ function resetExperiment(startNow = false): void {
     resultOverlay.style.display = "none";
     milestoneOverlay.style.display = "none";
     celebrationOverlay.style.display = "none";
-    miracleOverlay.style.display = "none";
+    clearMiracleOverlayNow();
     canvas.style.transform = "translate(0,0)";
     activeWorldMode = null;
     activeRareBackgroundKind = null;
@@ -3183,8 +3241,16 @@ function updateCameraShakeButton(): void {
     cameraShakeButton.style.color = settings.cameraShakeEnabled ? "#26351f" : "#444444";
 }
 
+function updateSlowMiracleButton(): void {
+    slowMiracleButton.textContent = settings.slowMiracleEffects ? t("演出ゆっくり: ON", "Slow effects: ON") : t("演出ゆっくり: OFF", "Slow effects: OFF");
+    slowMiracleButton.style.background = settings.slowMiracleEffects ? "linear-gradient(180deg, #fff7ed 0%, #fed7aa 100%)" : "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)";
+    slowMiracleButton.style.color = settings.slowMiracleEffects ? "#7c2d12" : "#444444";
+}
+
 function updateStopButton(): void {
     stopButton.textContent = isPaused ? t("再開", "Resume") : t("ストップ", "Stop");
+    pcPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
+    pcPauseButton.title = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
     if (mobileDockPauseButton) mobileDockPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
 }
 
@@ -3200,37 +3266,165 @@ async function startExperiment(): Promise<void> {
     resetExperiment(true);
 }
 
+function clearMiracleOverlayNow(): void {
+    hideMiracleOverlayNow();
+}
+
+function setMiracleOverlayAnimationPaused(paused: boolean): void {
+    const state = paused ? "paused" : "running";
+
+    miracleOverlay.style.animationPlayState = state;
+
+    miracleOverlay
+        .querySelectorAll<HTMLElement>("*")
+        .forEach((el) => {
+            el.style.animationPlayState = state;
+        });
+}
+
+function hideMiracleOverlayNow(): void {
+    if (miracleOverlayTimer !== undefined) {
+        window.clearTimeout(miracleOverlayTimer);
+        miracleOverlayTimer = undefined;
+    }
+
+    miracleOverlayEndsAt = 0;
+    miracleOverlayRemainingMs = 0;
+    miracleOverlayFrozen = false;
+
+    setMiracleOverlayAnimationPaused(false);
+
+    miracleOverlay.style.display = "none";
+    miracleOverlay.innerHTML = "";
+}
+
+function startMiracleOverlayTimer(durationMs: number): void {
+    if (miracleOverlayTimer !== undefined) {
+        window.clearTimeout(miracleOverlayTimer);
+    }
+
+    miracleOverlayEndsAt = Date.now() + durationMs;
+    miracleOverlayRemainingMs = durationMs;
+    miracleOverlayFrozen = false;
+
+    miracleOverlayTimer = window.setTimeout(() => {
+        hideMiracleOverlayNow();
+    }, durationMs);
+}
+
+function pauseMiracleOverlayTimer(): void {
+    if (miracleOverlay.style.display === "none") return;
+
+    if (miracleOverlayTimer !== undefined) {
+        miracleOverlayRemainingMs = Math.max(120, miracleOverlayEndsAt - Date.now());
+        window.clearTimeout(miracleOverlayTimer);
+        miracleOverlayTimer = undefined;
+    }
+
+    miracleOverlayFrozen = true;
+    setMiracleOverlayAnimationPaused(true);
+}
+
+function resumeMiracleOverlayTimer(): void {
+    if (!miracleOverlayFrozen) return;
+
+    miracleOverlayFrozen = false;
+    setMiracleOverlayAnimationPaused(false);
+
+    const remainingMs = Math.max(120, miracleOverlayRemainingMs || 600);
+    startMiracleOverlayTimer(remainingMs);
+}
+
+function clearMiracleAutoPause(): void {
+    if (miraclePauseTimer !== undefined) {
+        window.clearTimeout(miraclePauseTimer);
+        miraclePauseTimer = undefined;
+    }
+    isMiraclePaused = false;
+}
+
+function finishMiraclePause(): void {
+    isMiraclePaused = false;
+    miraclePauseTimer = undefined;
+    miraclePauseEndsAt = 0;
+    miraclePauseRemainingMs = 0;
+
+    if (isStarted && !isFinished && !isPaused) {
+        Runner.run(runner, engine);
+    }
+
+    updateInfo();
+}
+
 function pauseForMiracle(def?: SpecialEventDef): void {
     if (!isStarted || isFinished || isMiraclePaused) return;
+
     const repeatedInRun = !!def && (repeatedMiracleRunCounts[def.kind] ?? 0) >= 2;
     const durationMs = getMiraclePauseDuration(def, repeatedInRun);
+
     isMiraclePaused = true;
+    miraclePauseEndsAt = Date.now() + durationMs;
+    miraclePauseRemainingMs = durationMs;
+
+    if (miraclePauseTimer !== undefined) {
+        window.clearTimeout(miraclePauseTimer);
+    }
+
     Runner.stop(runner);
     updateInfo();
+
     miraclePauseTimer = window.setTimeout(() => {
-        isMiraclePaused = false;
-        miraclePauseTimer = undefined;
-        if (isStarted && !isFinished && !isPaused) Runner.run(runner, engine);
-        updateInfo();
+        finishMiraclePause();
     }, durationMs);
+}
+
+function pauseMiraclePauseTimer(): void {
+    if (miraclePauseTimer === undefined) return;
+
+    miraclePauseRemainingMs = Math.max(120, miraclePauseEndsAt - Date.now());
+    window.clearTimeout(miraclePauseTimer);
+    miraclePauseTimer = undefined;
+}
+
+function resumeMiraclePauseTimer(): void {
+    if (!isMiraclePaused) return;
+    if (miraclePauseTimer !== undefined) return;
+
+    const remainingMs = Math.max(120, miraclePauseRemainingMs || 600);
+    miraclePauseEndsAt = Date.now() + remainingMs;
+
+    miraclePauseTimer = window.setTimeout(() => {
+        finishMiraclePause();
+    }, remainingMs);
 }
 
 function togglePause(): void {
     if (!isStarted || isFinished) return;
-    registerPauseSecretTap();
-    playUiSound(isPaused ? "resume" : "pause");
+
+    registerPauseSecretTap?.();
+    playUiSound?.(isPaused ? "resume" : "pause");
+
     if (isPaused) {
+        // 再開
         isPaused = false;
-        if (!isMiraclePaused) Runner.run(runner, engine);
-    } else {
-        isPaused = true;
-        if (miraclePauseTimer !== undefined) {
-            window.clearTimeout(miraclePauseTimer);
-            miraclePauseTimer = undefined;
+
+        resumeMiracleOverlayTimer();
+        resumeMiraclePauseTimer();
+
+        if (!isMiraclePaused) {
+            Runner.run(runner, engine);
         }
-        isMiraclePaused = false;
+    } else {
+        // 一時停止
+        isPaused = true;
+
+        // 奇跡演出中なら、演出タイマー・CSSアニメーションもその場で止める
+        pauseMiracleOverlayTimer();
+        pauseMiraclePauseTimer();
+
         Runner.stop(runner);
     }
+
     updateStopButton();
     updateInfo();
 }
@@ -3573,8 +3767,8 @@ function showFullScreenCelebration(count: number): void {
 function getMiracleIconHtml(kind: DropKind, fallbackSymbol: string): string {
     const def = findSpecialDef(kind);
     if (def) {
-        const imageSize = isCatMiracle(def) ? "clamp(210px,68vw,420px)" : "clamp(150px,42vw,280px)";
-        const boomText = isCatMiracle(def) ? `<div style="margin-top:10px;font-size:clamp(28px,8vw,72px);font-weight:1000;color:#fff7ed;text-shadow:0 8px 26px rgba(0,0,0,.72);letter-spacing:.06em;">ねこ、どーん！</div>` : "";
+        const imageSize = "clamp(210px,62vw,430px)";
+        const boomText = `<div style="margin-top:10px;font-size:clamp(24px,6vw,60px);font-weight:1000;color:#fff7ed;text-shadow:0 8px 26px rgba(0,0,0,.72);letter-spacing:.06em;">${isCatMiracle(def) ? "ねこ、どーん！" : `${escapeSvgText(def.label)}、どーん！`}</div>`;
         return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
             <img src="${createMiracleImageDataUri(def)}" alt="${escapeSvgText(def.label)}" style="width:${imageSize};height:${imageSize};border-radius:clamp(28px,8vw,64px);object-fit:contain;background:rgba(15,23,42,.84);box-shadow:0 26px 80px rgba(0,0,0,.58),0 0 0 clamp(6px,1.2vw,12px) rgba(255,255,255,.18);filter:drop-shadow(0 18px 28px rgba(0,0,0,.42));" />
             ${boomText}
@@ -3706,11 +3900,15 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
             ${miracleCombo >= 2 ? `<div style="margin-top:10px;font-size:clamp(20px,4vw,40px);font-weight:900;color:#ffe560;">${t("奇跡コンボ", "Miracle combo")} x${miracleCombo}</div>` : ""}
             ${repeatedInRun && (def?.rank === "SR" || def?.rank === "SSR") ? `<div style="margin-top:8px;font-size:clamp(16px,3vw,26px);font-weight:900;color:#bbf7d0;">同じSR/SSRのため短縮演出</div>` : ""}
         </div>`;
+    if (miracleOverlayTimer !== undefined) {
+        window.clearTimeout(miracleOverlayTimer);
+        miracleOverlayTimer = undefined;
+    }
     miracleOverlay.style.display = "flex";
     void playAnimeMiracleEffect(def);
     fireConfetti(kind === "blackSun" ? "black" : kind === "cosmicEgg" ? "cosmic" : "miracle");
     playSpecialSound(kind);
-    window.setTimeout(() => { miracleOverlay.style.display = "none"; miracleOverlay.innerHTML = ""; }, overlayDurationMs + 120);
+    startMiracleOverlayTimer(overlayDurationMs + 120);
 }
 
 function getSoundVolume(base = -8): number {
