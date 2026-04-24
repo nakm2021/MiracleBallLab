@@ -206,6 +206,17 @@ type MiracleChainDef = {
 
 type BoardAnomalyMode = "none" | "sideGravity" | "stickyTime" | "dimPins" | "tremor" | "updraft" | "blackHole" | "pinPulse" | "reverseRain";
 
+type RarePinKind = "red" | "blue" | "black" | "rainbow";
+
+type RarePinDef = {
+    kind: RarePinKind;
+    label: string;
+    description: string;
+    fillStyle: string;
+    strokeStyle: string;
+    rate: number;
+};
+
 const BASE_WIDTH = 800;
 const BASE_HEIGHT = 600;
 
@@ -218,6 +229,8 @@ const TIME_STOP_DURATION_MS = 2200;
 const COMMENTARY_MIN_INTERVAL_MS = 14000;
 const COMMENTARY_DISPLAY_MS = 9000;
 const MIRACLE_CHAIN_WINDOW_MS = 8 * 60 * 1000;
+const MIRACLE_OMEN_MIN_INTERVAL_MS = 18000;
+const MIRACLE_OMEN_DISPLAY_MS = 1800;
 
 const GOLD_RATE = 0.002;           // 1/500
 const RAINBOW_RATE = 0.0005;       // 1/2,000
@@ -263,6 +276,13 @@ const MIRACLE_CHAIN_DEFS: MiracleChainDef[] = [
     { id: "blue-time-rift", label: "蒼炎時裂", rank: "CHAIN+", sequence: ["blueFlame", "timeRift"], description: "青い炎が時空の裂け目に飲まれた連鎖記録です。盤面が少し冷たく歪みます。", rewardScore: 62000 },
     { id: "black-lab-apocalypse", label: "黒日研究所崩壊", rank: "EX-CHAIN", sequence: ["blackSun", "labExplosion"], description: "黒い太陽の直後に研究所爆発が来た危険な連鎖です。", rewardScore: 160000 },
     { id: "last-cosmic-seal", label: "終末宇宙封印", rank: "GOD-CHAIN", sequence: ["blackSun", "timeRift", "cosmicEgg"], description: "黒い太陽、時空の裂け目、宇宙卵が順に並んだ最終級の連鎖です。", rewardScore: 420000 },
+];
+
+const RARE_PIN_DEFS: RarePinDef[] = [
+    { kind: "red", label: "赤ピン", description: "触れた玉を少し強く弾きます。", fillStyle: "#ef4444", strokeStyle: "#fee2e2", rate: 0.018 },
+    { kind: "blue", label: "青ピン", description: "触れた玉を少し中央へ寄せます。", fillStyle: "#2563eb", strokeStyle: "#dbeafe", rate: 0.014 },
+    { kind: "black", label: "黒ピン", description: "通常玉を低確率で金玉へ変質させます。", fillStyle: "#111827", strokeStyle: "#f87171", rate: 0.007 },
+    { kind: "rainbow", label: "虹ピン", description: "触れると奇跡予兆が出やすい特別なピンです。", fillStyle: "#a855f7", strokeStyle: "#fef3c7", rate: 0.005 },
 ];
 
 const LOCAL_RARE_AUDIO_FILES = [
@@ -512,6 +532,10 @@ let recentMiracleKinds: { kind: DropKind; at: number }[] = [];
 let unlockedChainRunIds: Record<string, number> = {};
 let recentMiracleMiniLogs: MiracleLogEntry[] = [];
 let toastTimer: number | undefined;
+let isAppTerminated = false;
+let lastMiracleOmenAt = 0;
+let lastOmenText = "";
+let rarePinTouchCount: Record<RarePinKind, number> = { red: 0, blue: 0, black: 0, rainbow: 0 };
 
 let soundEnabled = true;
 let toneReady = false;
@@ -1249,6 +1273,9 @@ speedButtons.appendChild(setTooltip(setButtonLabel(createButton("超高速", () 
 const stopButton = setTooltip(setButtonLabel(createButton("ストップ", () => togglePause()), "ストップ", "Stop"), "実験を一時停止・再開します。", "Pause or resume the experiment.");
 stopButton.addEventListener("touchend", (event) => { event.preventDefault(); togglePause(); }, { passive: false });
 displayButtons.appendChild(stopButton);
+
+const terminateButton = setTooltip(setButtonLabel(createButton("終了", () => terminateExperimentSafely()), "終了", "Exit"), "スマホで閉じる前に物理エンジンと描画を停止し、裏側で動き続けないようにします。", "Stop the physics engine and rendering before closing on mobile.");
+displayButtons.appendChild(terminateButton);
 const shockwaveButton = setTooltip(setButtonLabel(createButton("衝撃波 ×2", () => useSkill("shockwave")), "衝撃波 ×2", "Shockwave ×2"), "画面中央から玉を散らすスキルです。", "Scatter balls from the center.");
 const magnetButton = setTooltip(setButtonLabel(createButton("磁石 ×2", () => useSkill("magnet")), "磁石 ×2", "Magnet ×2"), "一定時間、上位の受け皿へ吸い寄せます。", "Pull balls toward the current top bin for a while.");
 const timeStopButton = setTooltip(setButtonLabel(createButton("時止め ×1", () => useSkill("timeStop")), "時止め ×1", "Time stop ×1"), "短時間だけ時間を止めて盤面を立て直します。", "Temporarily stop time to regain control.");
@@ -1643,6 +1670,15 @@ function formatElapsedTime(ms: number): string {
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function escapeHtml(value: string | number): string {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 }
 
 function escapeCsv(value: string | number): string {
@@ -3064,6 +3100,8 @@ function getResearchReportHtml(): string {
             <div><b>${t("発見済み種類", "Discovered kinds")}:</b> ${SPECIAL_EVENT_DEFS.filter((d) => (savedRecords.discovered[d.kind] ?? 0) + (specialCreated[d.kind] ?? 0) > 0).length} / ${SPECIAL_EVENT_DEFS.length}</div>
             <div><b>合成・派生:</b> ${getFusionCount()} / ${FUSION_DEFS.length}</div>
             <div><b>秘密操作:</b> ${Object.keys(savedRecords.secretUnlocked ?? {}).length}</div>
+            <div><b>レアピン接触:</b> ${RARE_PIN_DEFS.map((x) => `${x.label} ${(rarePinTouchCount[x.kind] ?? 0).toLocaleString()}`).join(" / ")}</div>
+            <div><b>研究メモ:</b><br>${generateResearchMemoHtml()}</div>
             <div><b>${t("最近の奇跡", "Recent miracles")}:</b><br>${recentMiracles}</div>
         </div>`;
 }
@@ -3267,7 +3305,7 @@ function showMiracleBookPopup(): void {
         const totalCount = savedCount + nowCount;
         const found = totalCount > 0;
         const firstFoundAt = savedRecords.discoveredFirstAt[def.kind];
-        const displayName = found ? `${def.symbol} ${def.label}` : `◼︎◼︎◼︎ (${getSilhouetteHint(def)})`;
+        const displayName = found ? `${def.symbol} ${def.label}` : `??? シークレット枠`;
         const imageHtml = `<div style="position:relative;width:${isMobile ? 98 : 112}px;height:${isMobile ? 98 : 112}px;">
             <img src="${createMiracleImageDataUri(def)}" alt="${escapeSvgText(def.label)}" style="width:100%;height:100%;border-radius:22px;object-fit:cover;box-shadow:0 10px 24px rgba(0,0,0,.18);background:#0f172a;${found ? "" : "filter:saturate(.32) brightness(.72);opacity:.82;"}" />
             ${found ? "" : `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:22px;background:rgba(15,23,42,.36);color:#fff;font-size:${isMobile ? 22 : 24}px;font-weight:1000;">?</div>`}
@@ -3280,14 +3318,14 @@ function showMiracleBookPopup(): void {
                     <span style="display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:999px;background:${found ? "rgba(53,98,59,.14)" : "rgba(120,130,140,.14)"};font-weight:900;color:${found ? "#214329" : "#727a86"};">${def.rank}</span>
                     <span style="font-size:${isMobile ? 21 : 22}px;font-weight:900;line-height:1.35;word-break:break-word;color:${found ? "#1d2738" : "#999"};">${displayName}</span>
                 </div>
-                <div style="margin-top:8px;font-size:${isMobile ? 15 : 16}px;line-height:1.7;opacity:.82;">${getMiracleFeatureText(def)}</div>
-                <div style="margin-top:8px;font-size:${isMobile ? 15 : 16}px;line-height:1.6;opacity:.72;">${t("確率", "Odds")} ${formatProbability(def.denominator)} / ${t("累計発見", "Total found")} ${totalCount}${t("回", "x")}</div>
+                <div style="margin-top:8px;font-size:${isMobile ? 15 : 16}px;line-height:1.7;opacity:.82;">${found ? getMiracleFeatureText(def) : "未発見のため詳細は伏せられています。観測すると画像・名前・説明が解放されます。"}</div>
+                <div style="margin-top:8px;font-size:${isMobile ? 15 : 16}px;line-height:1.6;opacity:.72;">${t("確率", "Odds")} ${found ? formatProbability(def.denominator) : "????"} / ${t("累計発見", "Total found")} ${totalCount}${t("回", "x")}</div>
                 <div style="margin-top:2px;font-size:${isMobile ? 14 : 15}px;line-height:1.6;opacity:.62;">${t("初回発見", "First found")} ${firstFoundText}</div>
             </div>
         </div>`;
     }).join("");
     showPopup("奇跡図鑑", `
-        <p style="margin-top:0;">全ての奇跡を画像つきで表示します。未発見のものは画像だけ薄く見せ、名前は伏せたまま記録されます。</p>
+        <p style="margin-top:0;">全ての奇跡を画像つきで表示します。未発見のものは<b>シークレット枠</b>として、名前・確率・説明を伏せたまま表示します。</p>
         <div style="margin-top:16px;border-radius:22px;background:rgba(255,255,255,.75);padding:${isMobile ? "4px 14px" : "8px 16px"};box-sizing:border-box;max-width:100%;overflow:hidden;">${rows}</div>
     `);
 }
@@ -3311,6 +3349,9 @@ function showAboutPopup(): void {
         <p><b>ミラクルボールラボ</b>は、玉を上から落として、ピンに当たりながらどの受け皿に入るかを観測するランダム実験です。</p>
         <p>通常玉にはたまに<b>個体差</b>が付きます。重い玉、跳ね玉、小粒玉、のんびり玉、早足玉、回転玉、うす玉などがあり、同じ通常玉でも少し違う落ち方をします。</p>
         <ul style="text-align:left;line-height:1.7;">${getNormalTraitSummaryHtml()}</ul>
+        <p><b>終了ボタン</b>は、スマホで閉じる前に物理エンジン・描画・タイマーを止めるための安全停止です。ブラウザの仕様上タブ自体を必ず閉じることはできませんが、処理を止めてメモリや発熱を抑えやすくします。</p>
+        <p><b>奇跡予兆</b>は、本当に奇跡が出るとは限らない前触れ演出です。ピンの光・画面の違和感・実況ログで「来るかも」という雰囲気を出します。</p>
+        <p><b>レアピン</b>は、赤ピン・青ピン・黒ピン・虹ピンなどの特殊なピンです。玉を弾く、寄せる、低確率で変質させるなど、盤面に少しだけ事件を起こします。</p>
         <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王、銀のUFO、青い炎、流れ星、ラッキーセブン、桃色ハート、時空の裂け目、黒い太陽、研究所爆発、そして極秘の最上位奇跡など、たくさんのレア玉がまれに出ます。最上位は<b>1兆分の1</b>級です。</p>
         <p>さらに<b>10億分の1</b>レベルで、<b>poseidon mode / zeusu mode / hadesu mode / heart mode / nekochan mode / 人生名言ボイス</b>が発生します。mode系は出た瞬間から実験終了まで盤面全体の世界観が変わり続けます。</p>
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
@@ -3332,6 +3373,7 @@ function showButtonHelpPopup(): void {
         <p><b>超低速 / 低速 / 通常 / 高速 / 超高速:</b> 玉の動く速度を変えます。超低速と低速は観察向け、超高速は処理は速いですがレア演出を見逃しやすくなります。</p>
         <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。PC版は盤面左下にも一時停止ボタンを追加しています。奇跡演出中でも一時停止を優先できます。スマホ下部にも一時停止ボタンがあります。</p>
         <p><b>リセット:</b> 設定を読み直して、実験を最初から待機状態に戻します。</p>
+        <p><b>終了:</b> スマホで閉じる前に物理エンジン・描画・演出タイマーを止めます。発熱や裏側で動き続ける不安がある場合に使います。</p>
         <p><b>シンプル:</b> 演出を減らして軽くします。重い場合や大量回数を試す場合に便利です。</p>
         <p><b>演出ゆっくり:</b> 奇跡演出だけを少し長く見せます。デフォルトはOFFです。同じSR/SSRの短縮演出は優先されます。</p>
         <p><b>演出:</b> 奇跡演出、画面効果、エンディング演出をまとめてON/OFFします。デフォルトはOFFです。</p>
@@ -3590,6 +3632,8 @@ function resetExperiment(startNow = false): void {
     repeatedMiracleRunCounts = {};
     recentMiracleKinds = [];
     unlockedChainRunIds = {};
+    rarePinTouchCount = { red: 0, blue: 0, black: 0, rainbow: 0 };
+    lastOmenText = "";
     lastCommentaryAt = 0;
     if (commentaryTimer !== undefined) { window.clearTimeout(commentaryTimer); commentaryTimer = undefined; }
     commentaryOverlay.style.display = "none";
@@ -3956,6 +4000,97 @@ function createWallsAndFloor(): Matter.Body[] {
     return [leftWall, rightWall, ground];
 }
 
+
+function rollRarePin(): RarePinDef | null {
+    if (settings.simpleMode) return null;
+    for (const def of RARE_PIN_DEFS) {
+        if (appRandom() < def.rate) return def;
+    }
+    return null;
+}
+
+function getRarePinDef(kind: RarePinKind | undefined): RarePinDef | null {
+    return RARE_PIN_DEFS.find((x) => x.kind === kind) ?? null;
+}
+
+function maybeTriggerMiracleOmen(force = false): void {
+    if (isAppTerminated || !settings.effectsEnabled || settings.simpleMode || isPaused || isMiraclePaused || isFinished) return;
+    const now = Date.now();
+    if (!force && now - lastMiracleOmenAt < MIRACLE_OMEN_MIN_INTERVAL_MS) return;
+    if (!force && appRandom() > 0.00065 * getProbabilityScale() * Math.max(0.75, getEffectIntensity())) return;
+    lastMiracleOmenAt = now;
+    const messages = [
+        t("予兆: ピンが一瞬だけざわついた", "Omen: the pins briefly trembled"),
+        t("予兆: 確率の匂いが変わりました", "Omen: the smell of probability changed"),
+        t("予兆: 研究所の明かりが少し落ちました", "Omen: the lab lights dimmed"),
+        t("予兆: favicon が盤面の奥で光った気がします", "Omen: the favicon seemed to glow inside the board"),
+        t("予兆: 何か来るかもしれません", "Omen: something may be coming"),
+    ];
+    lastOmenText = messages[Math.floor(appRandom() * messages.length)] ?? messages[0];
+    maybeShowCommentary(`実況「${lastOmenText}」`, true);
+    addFloatingText(lastOmenText.replace(/^予兆: /, ""), geometry.width / 2, 72 * geometry.scale, "#facc15");
+    if (settings.cameraShakeEnabled) triggerCameraShake(4 * geometry.scale, 220);
+    const oldFilter = gameArea.style.filter;
+    gameArea.style.filter = `${oldFilter ? oldFilter + " " : ""}brightness(.92) saturate(1.25)`;
+    window.setTimeout(() => {
+        if (!isAppTerminated) gameArea.style.filter = oldFilter;
+    }, MIRACLE_OMEN_DISPLAY_MS);
+}
+
+function generateResearchMemoText(): string {
+    const elapsed = formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime);
+    const sum = binCounts.reduce((a, b) => a + b, 0) || 1;
+    const maxCount = Math.max(...binCounts, 0);
+    const minCount = Math.min(...binCounts);
+    const topIndex = binCounts.indexOf(maxCount);
+    const discardRate = finishedCount > 0 ? (discardedCount / finishedCount) * 100 : 0;
+    const imbalance = ((maxCount - minCount) / sum) * 100;
+    const best = miracleLogs[0];
+    const discoveredCount = SPECIAL_EVENT_DEFS.filter((d) => (savedRecords.discovered[d.kind] ?? 0) + (specialCreated[d.kind] ?? 0) > 0).length;
+    const rarePinSummary = RARE_PIN_DEFS.map((x) => `${x.label}${rarePinTouchCount[x.kind] ?? 0}`).join(" / ");
+    const mood = imbalance > 18 ? "大きな偏りがあり、盤面がかなり主張した回でした。" : imbalance > 10 ? "少し偏りがあり、中央か端に流れが寄った回でした。" : "分布は比較的落ち着いており、安定した観測になりました。";
+    const miracleLine = best ? `今回もっとも印象的だった奇跡は「${best.label}」です。` : "今回は大きな奇跡は出ませんでしたが、通常観測として記録する価値があります。";
+    const omenLine = lastOmenText ? `途中で「${lastOmenText}」という予兆が観測されました。` : "今回は目立った奇跡予兆は観測されませんでした。";
+    return `今回の研究では ${finishedCount.toLocaleString()} 個のボールを処理しました。所要時間は ${elapsed}、捨て区間は ${discardedCount.toLocaleString()} 個（${discardRate.toFixed(2)}%）です。もっとも多かった受け皿は「${topIndex >= 0 ? labels[topIndex] : "-"}」で ${maxCount.toLocaleString()} 回でした。${mood}\n${miracleLine}\n${omenLine}\nレアピン接触記録は ${rarePinSummary} です。奇跡図鑑は ${discoveredCount} / ${SPECIAL_EVENT_DEFS.length} 種類まで解放されています。`;
+}
+
+function generateResearchMemoHtml(): string {
+    return escapeHtml(generateResearchMemoText()).replace(/\n/g, "<br>");
+}
+
+function terminateExperimentSafely(): void {
+    if (isAppTerminated) return;
+    isAppTerminated = true;
+    isPaused = true;
+    isStarted = false;
+    isFinished = true;
+    try { Runner.stop(runner); } catch {}
+    try { Render.stop(render); } catch {}
+    try { Engine.clear(engine); } catch {}
+    try { Composite.clear(engine.world, false); } catch {}
+    for (const timer of [miracleOverlayTimer, miraclePauseTimer, subtitleTimer, comboTimer, rareBackgroundTimer, lifeQuoteOverlayTimer, commentaryTimer, toastTimer, resizeTimer]) {
+        if (timer !== undefined) window.clearTimeout(timer);
+    }
+    miracleOverlay.style.display = "none";
+    celebrationOverlay.style.display = "none";
+    milestoneOverlay.style.display = "none";
+    commentaryOverlay.style.display = "none";
+    activeEffectBadge.style.display = "none";
+    recentMiracleMini.style.display = "none";
+    updateStopButton();
+    updateInfo();
+    resultOverlay.innerHTML = `
+        <div style="max-width:820px;width:min(820px,94vw);padding:${isMobile ? "28px 18px" : "38px"};border-radius:30px;background:rgba(15,23,42,.82);box-shadow:0 28px 90px rgba(0,0,0,.50);text-align:center;">
+            <div style="font-size:clamp(34px,7vw,72px);font-weight:1000;color:#fff;">安全停止しました</div>
+            <div style="margin-top:16px;font-size:clamp(17px,3vw,28px);line-height:1.7;color:#e5e7eb;">物理エンジン、描画、演出タイマーを停止しました。<br>スマホではこの後ブラウザの戻るボタンやタブを閉じる操作で終了してください。</div>
+            <div style="margin-top:20px;font-size:clamp(15px,2.4vw,22px);line-height:1.7;color:#cbd5e1;text-align:left;background:rgba(255,255,255,.08);padding:16px;border-radius:18px;">${generateResearchMemoHtml()}</div>
+            <div style="margin-top:22px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="safe-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(255,255,255,.35);cursor:pointer;font-weight:900;background:rgba(255,255,255,.16);color:#fff;">閉じる</button></div>
+        </div>`;
+    resultOverlay.style.display = "flex";
+    document.getElementById("safe-close-result-button")!.onclick = () => closeFinalResult();
+    showSoftToast(t("安全停止しました", "Safely stopped"));
+}
+
 function createPins(): Matter.Body[] {
     const pins: Matter.Body[] = [];
     const pinStartY = clamp(70 * geometry.scale, 40, 120);
@@ -3967,18 +4102,29 @@ function createPins(): Matter.Body[] {
         if (row % 2 === 0) {
             for (let col = 0; col < geometry.totalBinCount; col++) {
                 const x = geometry.binLeft + geometry.binWidth / 2 + col * geometry.binWidth;
-                pins.push(Bodies.circle(x, y, geometry.pinRadius, { isStatic: true, render: { fillStyle: "#d4af37", strokeStyle: "#fff2a8", lineWidth: Math.max(1, 1.5 * geometry.scale) } }));
+                {
+                    const rarePin = rollRarePin();
+                    const pin = Bodies.circle(x, y, geometry.pinRadius, { isStatic: true, render: { fillStyle: rarePin?.fillStyle ?? "#d4af37", strokeStyle: rarePin?.strokeStyle ?? "#fff2a8", lineWidth: Math.max(1, (rarePin ? 2.8 : 1.5) * geometry.scale) } });
+                    (pin as any).plugin = { isPin: true, baseX: x, baseY: y, wiggleFrames: 0, rarePinKind: rarePin?.kind, rarePinLabel: rarePin?.label };
+                    pins.push(pin);
+                }
             }
         } else {
             for (let col = 1; col < geometry.totalBinCount; col++) {
                 const x = geometry.binLeft + col * geometry.binWidth;
-                pins.push(Bodies.circle(x, y, geometry.pinRadius, { isStatic: true, render: { fillStyle: "#d4af37", strokeStyle: "#fff2a8", lineWidth: Math.max(1, 1.5 * geometry.scale) } }));
+                {
+                    const rarePin = rollRarePin();
+                    const pin = Bodies.circle(x, y, geometry.pinRadius, { isStatic: true, render: { fillStyle: rarePin?.fillStyle ?? "#d4af37", strokeStyle: rarePin?.strokeStyle ?? "#fff2a8", lineWidth: Math.max(1, (rarePin ? 2.8 : 1.5) * geometry.scale) } });
+                    (pin as any).plugin = { isPin: true, baseX: x, baseY: y, wiggleFrames: 0, rarePinKind: rarePin?.kind, rarePinLabel: rarePin?.label };
+                    pins.push(pin);
+                }
             }
         }
     }
 
     for (const pin of pins) {
-        (pin as any).plugin = { isPin: true, baseX: pin.position.x, baseY: pin.position.y, wiggleFrames: 0 };
+        const plugin = (pin as any).plugin ?? {};
+        (pin as any).plugin = { isPin: true, baseX: pin.position.x, baseY: pin.position.y, wiggleFrames: 0, ...plugin };
     }
     return pins;
 }
@@ -4075,6 +4221,7 @@ function createDrop(): Matter.Body {
     const visibleRight = geometry.binLeft + (geometry.visibleStart + settings.binCount) * geometry.binWidth;
     const x = visibleLeft + appRandom() * (visibleRight - visibleLeft);
     const startY = clamp(35 * geometry.scale, 20, 80);
+    maybeTriggerMiracleOmen(false);
 
     let kind: DropKind = "normal";
     let radius = geometry.ballRadius;
@@ -4916,6 +5063,7 @@ function showFinalResult(): void {
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の極秘イベント。出たら奇跡どころか、画面が伝説になります。</div>
             <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">発見済み種類: ${(SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length).toLocaleString()} / ${SPECIAL_EVENT_DEFS.length}　捨て区画: ${discardedCount.toLocaleString()}</div>
+            <div style="margin-top:18px;font-size:clamp(16px,2vw,26px);opacity:.95;text-align:left;background:rgba(255,255,255,.08);padding:16px;border-radius:18px;"><b>研究メモ自動生成</b><br>${generateResearchMemoHtml()}</div>
             <div style="margin-top:18px;font-size:clamp(16px,2vw,26px);opacity:.95;">${getResearchReportHtml()}</div>
             <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="copy-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">結果コピー</button><button id="download-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">CSV保存</button><button id="share-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);box-shadow:0 5px 14px rgba(90,96,180,.16);">録画・SNS</button><button id="bottom-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">閉じる</button></div>
         </div>`;
@@ -5317,11 +5465,54 @@ Events.on(render, "afterRender", () => {
     context.restore();
 });
 
+
+function handleRarePinCollision(pin: Matter.Body, drop: Matter.Body): void {
+    const pinPlugin = (pin as any).plugin;
+    const dropPlugin = (drop as any).plugin;
+    if (!pinPlugin?.rarePinKind || !dropPlugin?.isDrop) return;
+    const kind = pinPlugin.rarePinKind as RarePinKind;
+    rarePinTouchCount[kind] = (rarePinTouchCount[kind] ?? 0) + 1;
+    pinPlugin.wiggleFrames = Math.max(pinPlugin.wiggleFrames ?? 0, 30);
+    const rarePin = getRarePinDef(kind);
+    if (rarePin && appRandom() < 0.12) addFloatingText(rarePin.label, pin.position.x, pin.position.y - 18 * geometry.scale, rarePin.fillStyle);
+    if (kind === "red") {
+        Body.setVelocity(drop, { x: drop.velocity.x * 1.15 + (appRandom() - 0.5) * 3.4 * geometry.scale, y: Math.min(drop.velocity.y, -2.2 * geometry.scale) });
+    } else if (kind === "blue") {
+        const dx = geometry.width / 2 - drop.position.x;
+        Body.applyForce(drop, drop.position, { x: dx * 0.000004, y: -0.0000012 });
+    } else if (kind === "black") {
+        if ((dropPlugin.kind ?? "normal") === "normal" && appRandom() < 0.045) {
+            dropPlugin.kind = "gold";
+            dropPlugin.symbol = "金";
+            drop.render.fillStyle = "#ffd700";
+            drop.render.strokeStyle = "#fff4a8";
+            drop.render.lineWidth = 3 * geometry.scale;
+            addFloatingText("黒ピン変質", drop.position.x, drop.position.y - 18 * geometry.scale, "#ffd700");
+            maybeShowCommentary("実況「黒ピンで通常玉が変質しました」", true);
+        }
+    } else if (kind === "rainbow") {
+        if (appRandom() < 0.18) maybeTriggerMiracleOmen(true);
+    }
+}
+
+Events.on(engine, "collisionStart", (event) => {
+    if (isAppTerminated) return;
+    for (const pair of event.pairs) {
+        const a = pair.bodyA;
+        const b = pair.bodyB;
+        const ap = (a as any).plugin;
+        const bp = (b as any).plugin;
+        if (ap?.isPin && bp?.isDrop) handleRarePinCollision(a, b);
+        else if (bp?.isPin && ap?.isDrop) handleRarePinCollision(b, a);
+    }
+});
+
 // ======================================================
 // Physics update
 // ======================================================
 
 Events.on(engine, "afterUpdate", () => {
+    if (isAppTerminated) return;
     updateCameraShake();
     updatePinWiggles();
     updateBoardAnomaly();
@@ -5492,6 +5683,7 @@ hideBootOverlay();
 
 let resizeTimer: number | undefined;
 function scheduleResize(): void {
+    if (isAppTerminated) return;
     if (resizeTimer !== undefined) window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => {
         if (!applySettingsFromInputs(false)) return;
