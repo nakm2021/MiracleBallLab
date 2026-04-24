@@ -217,6 +217,20 @@ type RarePinDef = {
     rate: number;
 };
 
+type TutorialMissionDef = {
+    id: string;
+    label: string;
+    description: string;
+    evaluate: () => boolean;
+};
+
+type TapRipple = {
+    x: number;
+    y: number;
+    life: number;
+    maxLife: number;
+};
+
 const BASE_WIDTH = 800;
 const BASE_HEIGHT = 600;
 
@@ -231,6 +245,8 @@ const COMMENTARY_DISPLAY_MS = 9000;
 const MIRACLE_CHAIN_WINDOW_MS = 8 * 60 * 1000;
 const MIRACLE_OMEN_MIN_INTERVAL_MS = 18000;
 const MIRACLE_OMEN_DISPLAY_MS = 1800;
+const FIRST_RUN_GUIDE_STORAGE_KEY = "miracle-ball-lab-first-guide-seen-v1";
+const SMALL_MIRACLE_MIN_INTERVAL_MS = 9000;
 
 const GOLD_RATE = 0.002;           // 1/500
 const RAINBOW_RATE = 0.0005;       // 1/2,000
@@ -536,6 +552,18 @@ let isAppTerminated = false;
 let lastMiracleOmenAt = 0;
 let lastOmenText = "";
 let rarePinTouchCount: Record<RarePinKind, number> = { red: 0, blue: 0, black: 0, rainbow: 0 };
+let tutorialMissionProgress: Record<string, boolean> = {};
+let tutorialMissionPanelVisible = false;
+let tutorialMissionExpanded = !isMobile;
+let tutorialMissionCollapseTimer: number | undefined;
+let guideModeActive = false;
+let guideModeStartedAt = 0;
+let welcomeShowcaseDone = false;
+let smallMiracleCount = 0;
+let tapInterventionCount = 0;
+let nextSmallMiracleAt = 0;
+let tapRipples: TapRipple[] = [];
+let guideTimers: number[] = [];
 
 let soundEnabled = true;
 let toneReady = false;
@@ -814,7 +842,8 @@ pcPauseButton.title = "一時停止 / 再開";
 pcPauseButton.style.position = "absolute";
 pcPauseButton.style.left = isMobile ? "14px" : "16px";
 pcPauseButton.style.bottom = isMobile ? "82px" : "16px";
-pcPauseButton.style.zIndex = "4";
+pcPauseButton.style.zIndex = "120";
+pcPauseButton.style.pointerEvents = "auto";
 pcPauseButton.style.display = isMobile ? "none" : "inline-flex";
 pcPauseButton.style.alignItems = "center";
 pcPauseButton.style.justifyContent = "center";
@@ -830,7 +859,16 @@ pcPauseButton.style.fontSize = "18px";
 pcPauseButton.style.fontWeight = "900";
 pcPauseButton.style.fontFamily = ROUNDED_UI_FONT;
 pcPauseButton.style.cursor = "pointer";
-pcPauseButton.onclick = () => togglePause();
+pcPauseButton.onclick = null;
+pcPauseButton.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    togglePause();
+}, { passive: false });
+pcPauseButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+});
 gameArea.appendChild(pcPauseButton);
 
 const info = document.createElement("div");
@@ -1591,6 +1629,59 @@ recentMiracleMini.style.pointerEvents = "none";
 recentMiracleMini.style.display = "none";
 recentMiracleMini.style.boxShadow = "0 10px 26px rgba(0,0,0,.18)";
 document.body.appendChild(recentMiracleMini);
+
+const tutorialMissionPanel = document.createElement("div");
+tutorialMissionPanel.style.position = "fixed";
+tutorialMissionPanel.style.left = isMobile ? "10px" : "18px";
+tutorialMissionPanel.style.bottom = isMobile ? "14px" : "auto";
+tutorialMissionPanel.style.top = isMobile ? "auto" : "112px";
+tutorialMissionPanel.style.width = isMobile ? "auto" : "320px";
+tutorialMissionPanel.style.maxWidth = isMobile ? "calc(100vw - 20px)" : "320px";
+tutorialMissionPanel.style.maxHeight = isMobile ? "42vh" : "44vh";
+tutorialMissionPanel.style.overflow = "auto";
+tutorialMissionPanel.style.padding = isMobile ? "9px 12px" : "12px 14px";
+tutorialMissionPanel.style.borderRadius = isMobile ? "999px" : "18px";
+tutorialMissionPanel.style.background = "rgba(15,23,42,.58)";
+tutorialMissionPanel.style.backdropFilter = "blur(10px)";
+tutorialMissionPanel.style.color = "#fff";
+tutorialMissionPanel.style.fontWeight = "800";
+tutorialMissionPanel.style.fontSize = isMobile ? "12px" : "14px";
+tutorialMissionPanel.style.lineHeight = "1.35";
+tutorialMissionPanel.style.zIndex = "94";
+tutorialMissionPanel.style.pointerEvents = isMobile ? "auto" : "none";
+tutorialMissionPanel.style.cursor = isMobile ? "pointer" : "default";
+tutorialMissionPanel.style.userSelect = "none";
+tutorialMissionPanel.style.display = "none";
+tutorialMissionPanel.style.border = "1px solid rgba(255,215,0,.35)";
+tutorialMissionPanel.style.boxShadow = "0 10px 28px rgba(0,0,0,.24)";
+tutorialMissionPanel.addEventListener("click", (event) => {
+    if (!isMobile) return;
+    event.stopPropagation();
+    tutorialMissionExpanded = true;
+    updateTutorialMissions(true);
+    scheduleTutorialMissionCollapse();
+});
+document.body.appendChild(tutorialMissionPanel);
+
+const researchProgressPanel = document.createElement("div");
+researchProgressPanel.style.position = "fixed";
+researchProgressPanel.style.left = "50%";
+researchProgressPanel.style.top = isMobile ? "118px" : "82px";
+researchProgressPanel.style.transform = "translateX(-50%)";
+researchProgressPanel.style.width = isMobile ? "min(88vw, 520px)" : "min(52vw, 640px)";
+researchProgressPanel.style.padding = isMobile ? "8px 12px" : "8px 14px";
+researchProgressPanel.style.borderRadius = "999px";
+researchProgressPanel.style.background = "rgba(15,23,42,.62)";
+researchProgressPanel.style.backdropFilter = "blur(8px)";
+researchProgressPanel.style.color = "#fff";
+researchProgressPanel.style.fontWeight = "900";
+researchProgressPanel.style.fontSize = isMobile ? "12px" : "14px";
+researchProgressPanel.style.zIndex = "93";
+researchProgressPanel.style.pointerEvents = "none";
+researchProgressPanel.style.display = "none";
+researchProgressPanel.style.boxShadow = "0 10px 24px rgba(0,0,0,.20)";
+document.body.appendChild(researchProgressPanel);
+
 updateStatusMiniOverlays();
 updateRecentMiracleMini();
 
@@ -2254,6 +2345,267 @@ function buildMissionDefs(): MissionDef[] {
     ];
 }
 
+function buildTutorialMissionDefs(): TutorialMissionDef[] {
+    return [
+        {
+            id: "watch_100",
+            label: "100球を観測",
+            description: "まずは100個の落下を見届ける",
+            evaluate: () => finishedCount >= 100,
+        },
+        {
+            id: "tap_board",
+            label: "盤面に介入",
+            description: "画面をタップして波紋を1回出す",
+            evaluate: () => tapInterventionCount >= 1,
+        },
+        {
+            id: "small_event",
+            label: "小さな奇跡",
+            description: "図鑑外の小イベントを1回観測する",
+            evaluate: () => smallMiracleCount >= 1,
+        },
+        {
+            id: "omen_or_pin",
+            label: "予兆かレアピン",
+            description: "奇跡予兆、またはレアピン接触を1回見る",
+            evaluate: () => !!lastOmenText || Object.values(rarePinTouchCount).some((x) => x > 0),
+        },
+    ];
+}
+
+function shouldShowTutorialMissions(): boolean {
+    return guideModeActive || savedRecords.totalRuns <= 0;
+}
+
+function scheduleTutorialMissionCollapse(): void {
+    if (!isMobile) return;
+    if (tutorialMissionCollapseTimer !== undefined) window.clearTimeout(tutorialMissionCollapseTimer);
+    tutorialMissionCollapseTimer = window.setTimeout(() => {
+        if (isAppTerminated) return;
+        tutorialMissionExpanded = false;
+        updateTutorialMissions(false);
+    }, 5000);
+}
+
+function renderTutorialMissionBadge(clearCount: number, totalCount: number): void {
+    tutorialMissionPanel.style.left = "10px";
+    tutorialMissionPanel.style.right = "auto";
+    tutorialMissionPanel.style.bottom = "14px";
+    tutorialMissionPanel.style.top = "auto";
+    tutorialMissionPanel.style.width = "auto";
+    tutorialMissionPanel.style.maxWidth = "calc(100vw - 20px)";
+    tutorialMissionPanel.style.maxHeight = "none";
+    tutorialMissionPanel.style.padding = "9px 12px";
+    tutorialMissionPanel.style.borderRadius = "999px";
+    tutorialMissionPanel.style.background = "rgba(15,23,42,.52)";
+    tutorialMissionPanel.style.fontSize = "12px";
+    tutorialMissionPanel.innerHTML = `<span style="white-space:nowrap;">研究ミッション ${clearCount}/${totalCount}</span>`;
+}
+
+function renderTutorialMissionDetail(rows: string, clearCount: number, totalCount: number): void {
+    tutorialMissionPanel.style.left = isMobile ? "10px" : "18px";
+    tutorialMissionPanel.style.right = isMobile ? "10px" : "auto";
+    tutorialMissionPanel.style.bottom = isMobile ? "14px" : "auto";
+    tutorialMissionPanel.style.top = isMobile ? "auto" : "112px";
+    tutorialMissionPanel.style.width = isMobile ? "auto" : "320px";
+    tutorialMissionPanel.style.maxWidth = isMobile ? "calc(100vw - 20px)" : "320px";
+    tutorialMissionPanel.style.maxHeight = isMobile ? "42vh" : "44vh";
+    tutorialMissionPanel.style.padding = isMobile ? "12px 14px" : "12px 14px";
+    tutorialMissionPanel.style.borderRadius = "18px";
+    tutorialMissionPanel.style.background = "rgba(15,23,42,.68)";
+    tutorialMissionPanel.style.fontSize = isMobile ? "13px" : "14px";
+    const collapseHint = isMobile ? `<span style="opacity:.68;font-size:.86em;">タップで5秒後に折りたたみ</span>` : "";
+    tutorialMissionPanel.innerHTML = `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><b>はじめての研究ミッション</b><span style="opacity:.78;">${clearCount}/${totalCount}</span></div>${collapseHint}${rows}`;
+}
+
+function updateTutorialMissions(forceExpand = false): void {
+    if (!shouldShowTutorialMissions()) {
+        tutorialMissionPanel.style.display = "none";
+        tutorialMissionPanelVisible = false;
+        return;
+    }
+    const defs = buildTutorialMissionDefs();
+    let changed = false;
+    for (const mission of defs) {
+        if (!tutorialMissionProgress[mission.id] && mission.evaluate()) {
+            tutorialMissionProgress[mission.id] = true;
+            changed = true;
+            addScore(1200, "GUIDE", geometry.width / 2, 96 * geometry.scale);
+            showSoftToast(t(`ミッション達成: ${mission.label}`, `Mission clear: ${mission.label}`));
+            maybeShowCommentary(`実況「${mission.label}を確認しました」`, true);
+        }
+    }
+    const clearCount = defs.filter((mission) => tutorialMissionProgress[mission.id]).length;
+    const rows = defs.map((mission) => {
+        const done = tutorialMissionProgress[mission.id];
+        return `<div style="display:flex;gap:8px;align-items:flex-start;margin-top:4px;opacity:${done ? ".72" : "1"};"><span>${done ? "✅" : "□"}</span><span><b>${mission.label}</b><br><span style="opacity:.72;font-size:.92em;">${mission.description}</span></span></div>`;
+    }).join("");
+    if (changed && isMobile) {
+        tutorialMissionExpanded = true;
+        scheduleTutorialMissionCollapse();
+    }
+    if (forceExpand && isMobile) tutorialMissionExpanded = true;
+    if (isMobile && !tutorialMissionExpanded) {
+        renderTutorialMissionBadge(clearCount, defs.length);
+    } else {
+        renderTutorialMissionDetail(rows, clearCount, defs.length);
+    }
+    tutorialMissionPanel.style.display = settings.mobileCompactMode && clearCount >= defs.length ? "none" : "block";
+    tutorialMissionPanelVisible = tutorialMissionPanel.style.display !== "none";
+    if (changed && clearCount >= defs.length) {
+        showMilestone("はじめての研究ミッション 完了");
+        try { localStorage.setItem(FIRST_RUN_GUIDE_STORAGE_KEY, "1"); } catch {}
+        window.setTimeout(() => {
+            if (!isAppTerminated && tutorialMissionPanelVisible) tutorialMissionPanel.style.display = "none";
+        }, 5000);
+    }
+}
+
+function updateResearchProgressPanel(): void {
+    if (!isStarted || isFinished || settings.simpleMode || settings.mobileCompactMode) {
+        researchProgressPanel.style.display = "none";
+        return;
+    }
+    const progress = clamp(finishedCount / Math.max(1, settings.targetCount), 0, 1);
+    const miracleDensity = clamp((miracleCombo * 12 + Object.values(specialCreated).reduce((a, b) => a + b, 0) * 8 + smallMiracleCount * 2 + (lastOmenText ? 8 : 0)) / 100, 0, 1);
+    researchProgressPanel.innerHTML = `<div style="display:flex;align-items:center;gap:10px;"><span style="white-space:nowrap;">研究進捗 ${Math.round(progress * 100)}%</span><div style="flex:1;height:8px;border-radius:999px;background:rgba(255,255,255,.22);overflow:hidden;"><div style="height:100%;width:${Math.round(progress * 100)}%;background:linear-gradient(90deg,#fde68a,#86efac,#93c5fd);"></div></div><span style="white-space:nowrap;">奇跡濃度 ${Math.round(miracleDensity * 100)}%</span></div>`;
+    researchProgressPanel.style.display = "block";
+}
+
+function scheduleFirstRunShowcase(): void {
+    for (const timer of guideTimers) window.clearTimeout(timer);
+    guideTimers = [];
+    const alreadySeen = (() => { try { return localStorage.getItem(FIRST_RUN_GUIDE_STORAGE_KEY) === "1"; } catch { return false; } })();
+    guideModeActive = !alreadySeen || savedRecords.totalRuns <= 0;
+    guideModeStartedAt = Date.now();
+    welcomeShowcaseDone = false;
+    if (!guideModeActive) return;
+    const schedule = (delay: number, action: () => void) => {
+        const id = window.setTimeout(() => { if (isStarted && !isFinished && !isAppTerminated) action(); }, delay);
+        guideTimers.push(id);
+    };
+    schedule(900, () => showWelcomeShowcase());
+    schedule(5200, () => maybeShowCommentary("研究員A「まずは盤面を観測してみましょう」", true));
+    schedule(9200, () => triggerSmallMiracleEvent("pinSpark"));
+    schedule(14500, () => maybeTriggerMiracleOmen(true));
+    schedule(21000, () => triggerSmallMiracleEvent("faviconWink"));
+    schedule(30000, () => {
+        maybeShowCommentary("観測装置「ここからは通常確率で記録を続けます」", true);
+        try { localStorage.setItem(FIRST_RUN_GUIDE_STORAGE_KEY, "1"); } catch {}
+    });
+}
+
+function showWelcomeShowcase(): void {
+    if (welcomeShowcaseDone || settings.simpleMode) return;
+    welcomeShowcaseDone = true;
+    showSoftToast(t("研究所起動成功", "Lab booted"));
+    maybeShowCommentary("実況「ようこそ、MiracleBallLabへ」", true);
+    addFloatingText("WELCOME MIRACLE", geometry.width / 2, 88 * geometry.scale, "#fde68a");
+    fireConfetti("normal");
+}
+
+function triggerSmallMiracleEvent(forcedId?: string): void {
+    if (isAppTerminated || !isStarted || isFinished || isPaused || isMiraclePaused || settings.simpleMode) return;
+    const events = ["pinSpark", "lucky777", "labComment", "faviconWink", "miniWave"];
+    const id = forcedId ?? events[Math.floor(appRandom() * events.length)] ?? "pinSpark";
+    smallMiracleCount++;
+    nextSmallMiracleAt = Date.now() + SMALL_MIRACLE_MIN_INTERVAL_MS + appRandom() * 12000;
+    if (id === "pinSpark") {
+        addFloatingText("ピンが光った", geometry.width / 2, geometry.height * 0.24, "#fde68a");
+        for (const body of engine.world.bodies) {
+            const plugin = (body as any).plugin;
+            if (plugin?.isPin && appRandom() < 0.18) plugin.wiggleFrames = Math.max(plugin.wiggleFrames ?? 0, 24);
+        }
+    } else if (id === "lucky777") {
+        addFloatingText("LUCKY 777", geometry.width / 2, geometry.height * 0.22, "#facc15");
+        addScore(777, "LUCKY", geometry.width / 2, geometry.height * 0.30);
+        fireConfetti("normal");
+    } else if (id === "faviconWink") {
+        addFloatingText("favicon が一瞬光った", geometry.width / 2, geometry.height * 0.18, "#86efac");
+        triggerCameraShake(3 * geometry.scale, 180);
+    } else if (id === "miniWave") {
+        addFloatingText("盤面に小さな波紋", geometry.width / 2, geometry.height * 0.20, "#93c5fd");
+        createTapRipple(geometry.width / 2, geometry.height * 0.36, false);
+    } else {
+        maybeShowCommentary("研究員B「いま、小さな奇跡みたいな反応がありました」", true);
+        addFloatingText("小さな奇跡", geometry.width / 2, geometry.height * 0.24, "#ffffff");
+    }
+    updateTutorialMissions();
+}
+
+function maybeTriggerSmallMiracleEvent(): void {
+    if (settings.effectsEnabled === false && !guideModeActive) return;
+    const now = Date.now();
+    if (nextSmallMiracleAt <= 0) nextSmallMiracleAt = now + 7000 + appRandom() * 10000;
+    const guideBoost = guideModeActive && now - guideModeStartedAt < 30000;
+    if (now < nextSmallMiracleAt && !guideBoost) return;
+    const rate = guideBoost ? 0.018 : 0.0025 * Math.max(0.75, getEffectIntensity());
+    if (appRandom() < rate) triggerSmallMiracleEvent();
+}
+
+function createTapRipple(x: number, y: number, pushDrops = true): void {
+    tapRipples.push({ x, y, life: 34, maxLife: 34 });
+    if (!pushDrops) return;
+    for (const body of engine.world.bodies) {
+        const plugin = (body as any).plugin;
+        if (!plugin?.isDrop) continue;
+        const dx = body.position.x - x;
+        const dy = body.position.y - y;
+        const dist = Math.max(24, Math.hypot(dx, dy));
+        const range = 150 * geometry.scale;
+        if (dist > range) continue;
+        const power = (1 - dist / range) * 0.00008;
+        Body.applyForce(body, body.position, { x: (dx / dist) * power, y: (dy / dist) * power - 0.000018 });
+    }
+}
+
+function handleTapIntervention(event: PointerEvent): void {
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) * (geometry.width / Math.max(1, rect.width));
+    const y = (event.clientY - rect.top) * (geometry.height / Math.max(1, rect.height));
+    if (x < 0 || x > geometry.width || y < 0 || y > geometry.height) return;
+    tapInterventionCount++;
+    createTapRipple(x, y, true);
+    addFloatingText("観測波紋", x, y, "#93c5fd");
+    if (tapInterventionCount % 3 === 1) maybeShowCommentary("実況「ユーザーが盤面へ介入しました」", true);
+    updateTutorialMissions();
+}
+
+function drawTapRipples(context: CanvasRenderingContext2D): void {
+    if (settings.simpleMode || tapRipples.length === 0) return;
+    context.save();
+    for (let i = tapRipples.length - 1; i >= 0; i--) {
+        const ripple = tapRipples[i];
+        const p = 1 - ripple.life / ripple.maxLife;
+        const radius = (24 + p * 130) * geometry.scale;
+        context.globalAlpha = Math.max(0, ripple.life / ripple.maxLife) * 0.72;
+        context.strokeStyle = "#93c5fd";
+        context.lineWidth = Math.max(2, 5 * geometry.scale * (1 - p));
+        context.beginPath();
+        context.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
+        context.stroke();
+        if (!isPaused) ripple.life--;
+        if (ripple.life <= 0) tapRipples.splice(i, 1);
+    }
+    context.restore();
+}
+
+function getResearchEvaluation(): { grade: string; type: string; density: number; note: string } {
+    const specialCount = Object.values(specialCreated).reduce((a, b) => a + b, 0);
+    const chainCount = Object.keys(unlockedChainRunIds).length;
+    const discardRate = finishedCount > 0 ? discardedCount / finishedCount : 0;
+    const centerIndex = Math.floor(settings.binCount / 2);
+    const centerCount = binCounts[centerIndex] ?? 0;
+    const centerRate = finishedCount > 0 ? centerCount / finishedCount : 0;
+    const density = Math.round(clamp(specialCount * 16 + chainCount * 24 + bestComboThisRun * 7 + smallMiracleCount * 3 + (lastOmenText ? 10 : 0), 0, 100));
+    const score = runScore + specialCount * 9000 + chainCount * 18000 + density * 350 - discardRate * 12000;
+    const grade = score > 120000 ? "S" : score > 70000 ? "A" : score > 35000 ? "B" : score > 12000 ? "C" : "D";
+    const type = specialCount > 0 ? "奇跡観測型" : discardRate <= 0.06 ? "安定研究型" : centerRate >= 0.22 ? "中央集中型" : smallMiracleCount >= 2 ? "予兆多発型" : "基礎観測型";
+    const note = grade === "S" ? "研究所の記録に残るかなり濃い実験です。" : grade === "A" ? "見せ場のある良い観測回です。" : grade === "B" ? "小さな変化を拾えた研究回です。" : grade === "C" ? "次回の奇跡に向けた土台作りの回です。" : "静かな基礎データとして保存されました。";
+    return { grade, type, density, note };
+}
+
 function checkMissionProgress(): void {
     for (const mission of missionDefs) {
         if (missionProgress[mission.id]) continue;
@@ -2264,6 +2616,7 @@ function checkMissionProgress(): void {
         showMilestone(`MISSION CLEAR: ${mission.title}`);
         saveRecords();
     }
+    updateTutorialMissions();
 }
 
 function updateSkillButtons(): void {
@@ -3633,6 +3986,16 @@ function resetExperiment(startNow = false): void {
     recentMiracleKinds = [];
     unlockedChainRunIds = {};
     rarePinTouchCount = { red: 0, blue: 0, black: 0, rainbow: 0 };
+    tutorialMissionProgress = {};
+    guideModeActive = false;
+    guideModeStartedAt = 0;
+    welcomeShowcaseDone = false;
+    smallMiracleCount = 0;
+    tapInterventionCount = 0;
+    nextSmallMiracleAt = 0;
+    tapRipples = [];
+    for (const timer of guideTimers) window.clearTimeout(timer);
+    guideTimers = [];
     lastOmenText = "";
     lastCommentaryAt = 0;
     if (commentaryTimer !== undefined) { window.clearTimeout(commentaryTimer); commentaryTimer = undefined; }
@@ -3641,6 +4004,8 @@ function resetExperiment(startNow = false): void {
     recentMiracleMiniLogs = [];
     updateRecentMiracleMini();
     updateStatusMiniOverlays();
+    updateTutorialMissions();
+    updateResearchProgressPanel();
     anomalyUntil = 0;
     anomalyHidePins = false;
     anomalyMode = "none";
@@ -3659,6 +4024,7 @@ function resetExperiment(startNow = false): void {
     Composite.add(engine.world, [...createWallsAndFloor(), ...createPins(), ...createDividers()]);
     applyWorldModeBodyStyles();
     if (startNow) {
+        scheduleFirstRunShowcase();
         for (let i = 0; i < settings.activeLimit; i++) Composite.add(engine.world, createDrop());
         if (!isMiraclePaused) Runner.run(runner, engine);
     } else {
@@ -3775,15 +4141,21 @@ function applyMobileCompactMode(): void {
 function updateRecentMiracleMini(): void {
     if (!settings.showRecentMiracles) {
         recentMiracleMini.style.display = "none";
+    tutorialMissionPanel.style.display = "none";
+    researchProgressPanel.style.display = "none";
         return;
     }
     if (settings.mobileCompactMode && isMobile) {
         recentMiracleMini.style.display = "none";
+    tutorialMissionPanel.style.display = "none";
+    researchProgressPanel.style.display = "none";
         return;
     }
     const rows = recentMiracleMiniLogs.slice(0, 3);
     if (rows.length === 0) {
         recentMiracleMini.style.display = "none";
+    tutorialMissionPanel.style.display = "none";
+    researchProgressPanel.style.display = "none";
         return;
     }
     recentMiracleMini.innerHTML = `<div style="font-size:${isMobile ? "13px" : "13px"};opacity:.72;margin-bottom:4px;">${t("直近の奇跡", "Recent miracles")}</div>` + rows.map((x) => `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${x.rank} ${x.label}</div>`).join("");
@@ -4035,6 +4407,7 @@ function maybeTriggerMiracleOmen(force = false): void {
     window.setTimeout(() => {
         if (!isAppTerminated) gameArea.style.filter = oldFilter;
     }, MIRACLE_OMEN_DISPLAY_MS);
+    updateTutorialMissions();
 }
 
 function generateResearchMemoText(): string {
@@ -4077,6 +4450,8 @@ function terminateExperimentSafely(): void {
     commentaryOverlay.style.display = "none";
     activeEffectBadge.style.display = "none";
     recentMiracleMini.style.display = "none";
+    tutorialMissionPanel.style.display = "none";
+    researchProgressPanel.style.display = "none";
     updateStopButton();
     updateInfo();
     resultOverlay.innerHTML = `
@@ -5054,12 +5429,14 @@ function showFinalResult(): void {
     saveRecords();
     const ranking = binCounts.map((count, index) => ({ label: labels[index], count, percent: finishedCount > 0 ? (count / finishedCount) * 100 : 0 })).sort((a, b) => b.count - a.count);
     const rankingHtml = ranking.map((item, index) => `<div style="margin:7px 0;">${index + 1}位：${item.label}　${item.count.toLocaleString()}回　${item.percent.toFixed(2)}%</div>`).join("");
+    const evaluation = getResearchEvaluation();
     resultOverlay.innerHTML = `
         <div style="position:relative;max-width:920px;width:min(920px,94vw);max-height:88dvh;overflow:auto;padding:28px;border-radius:26px;background:rgba(5,8,18,.58);box-shadow:0 24px 80px rgba(0,0,0,.42);">
             <button id="close-result-button" aria-label="閉じる" style="position:absolute;right:14px;top:14px;width:46px;height:46px;border-radius:999px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.18);color:#fff;font-size:28px;font-weight:900;line-height:1;cursor:pointer;">×</button>
             <div style="font-size:clamp(38px,8vw,78px);font-weight:900;margin-bottom:18px;">実験完了</div>
             <div style="font-size:clamp(22px,4vw,40px);margin-bottom:18px;">${browserName} / 指定${settings.targetCount.toLocaleString()}回 / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime)}</div>
             <div style="font-size:clamp(20px,3vw,34px);margin-bottom:18px;">スコア <b>${runScore.toLocaleString()}</b> / ミッション ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length} / 奇跡コンボ最高 ${bestComboThisRun}</div>
+            <div style="margin:0 auto 18px;max-width:760px;padding:16px;border-radius:20px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);font-size:clamp(17px,2.6vw,28px);line-height:1.55;text-align:left;"><b>今回の研究評価: ${evaluation.grade}</b><br>観測タイプ: ${evaluation.type}<br>奇跡濃度: ${evaluation.density}%<br><span style="opacity:.82;">${evaluation.note}</span></div>
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の極秘イベント。出たら奇跡どころか、画面が伝説になります。</div>
             <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">発見済み種類: ${(SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length).toLocaleString()} / ${SPECIAL_EVENT_DEFS.length}　捨て区画: ${discardedCount.toLocaleString()}</div>
@@ -5381,6 +5758,7 @@ function hexToRgbTriplet(hex: string, fallback: string): string {
 Events.on(render, "afterRender", () => {
     const context = render.context;
     context.save();
+    drawTapRipples(context);
     drawSpecialGlows(context);
     drawNormalTraitMarks(context);
     context.textAlign = "center";
@@ -5396,7 +5774,7 @@ Events.on(render, "afterRender", () => {
             const alpha = hitFlash[i] / 18;
             context.fillStyle = `rgba(255,160,80,${alpha * 0.45})`;
             context.fillRect(x - geometry.binWidth / 2, geometry.groundTop - 118 * geometry.scale, geometry.binWidth, 118 * geometry.scale);
-            hitFlash[i]--;
+            if (!isPaused) hitFlash[i]--;
         }
         if (!settings.simpleMode && count === maxCount && maxCount > 0) {
             context.beginPath();
@@ -5450,7 +5828,7 @@ Events.on(render, "afterRender", () => {
         context.fillStyle = item.color;
         context.fillText(item.text, item.x, y);
         context.globalAlpha = 1;
-        item.life--;
+        if (!isPaused) item.life--;
         if (item.life <= 0) floatingTexts.splice(i, 1);
     }
     if (isStarted && !isPaused && !isMiraclePaused) {
@@ -5475,6 +5853,7 @@ function handleRarePinCollision(pin: Matter.Body, drop: Matter.Body): void {
     pinPlugin.wiggleFrames = Math.max(pinPlugin.wiggleFrames ?? 0, 30);
     const rarePin = getRarePinDef(kind);
     if (rarePin && appRandom() < 0.12) addFloatingText(rarePin.label, pin.position.x, pin.position.y - 18 * geometry.scale, rarePin.fillStyle);
+    updateTutorialMissions();
     if (kind === "red") {
         Body.setVelocity(drop, { x: drop.velocity.x * 1.15 + (appRandom() - 0.5) * 3.4 * geometry.scale, y: Math.min(drop.velocity.y, -2.2 * geometry.scale) });
     } else if (kind === "blue") {
@@ -5517,7 +5896,10 @@ Events.on(engine, "afterUpdate", () => {
     updatePinWiggles();
     updateBoardAnomaly();
     maybeTriggerBoardAnomaly();
+    maybeTriggerSmallMiracleEvent();
     maybeShowCommentary();
+    updateTutorialMissions();
+    updateResearchProgressPanel();
     gameArea.style.filter = anomalyUntil ? (anomalyHidePins ? "brightness(.84) contrast(1.1)" : "brightness(.95)") : "";
     if (!isStarted || isFinished || isMiraclePaused) return;
 
@@ -5663,6 +6045,8 @@ Events.on(engine, "afterUpdate", () => {
         endTime = Date.now();
         Runner.stop(runner);
         updateInfo();
+        tutorialMissionPanel.style.display = "none";
+        researchProgressPanel.style.display = "none";
         showEndingThenFinalResult();
     }
 });
