@@ -105,6 +105,14 @@ type MissionDef = {
 
 type SkillKind = "shockwave" | "magnet" | "timeStop";
 
+type SecretDef = {
+    id: string;
+    label: string;
+    hint: string;
+    detail: string;
+    rewardScore: number;
+};
+
 type SkillState = {
     shockwave: number;
     magnet: number;
@@ -184,6 +192,13 @@ const COSMIC_EGG_RATE = 0.000000000001; // 1/1,000,000,000,000
 
 const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v3";
 const SECRET_KEY_SEQUENCE = "miracle";
+const SECRET_KEY_SEQUENCES: Record<string, { label: string; detail: string }> = {
+    miracle: { label: "MIRACLE コード", detail: "キーボードで隠しコードを入力しました。今日の研究所は少しだけ騒がしくなります。" },
+    lab: { label: "LAB コード", detail: "研究所の短縮コードを入力しました。秘密研究員として記録します。" },
+    neko: { label: "NEKO コード", detail: "ねこちゃんモードの気配を呼びました。" },
+    sun: { label: "SUN コード", detail: "黒い太陽を探す研究者用の短縮コードです。" },
+};
+const SECRET_KEY_MAX_LENGTH = Math.max(SECRET_KEY_SEQUENCE.length, ...Object.keys(SECRET_KEY_SEQUENCES).map((x) => x.length));
 
 const FUSION_DEFS: FusionDef[] = [
     { id: "royal-meteor", label: "王の流星群", rank: "UR", sourceKinds: ["crown", "shootingStar"], requiredCount: 1, description: "王と流れ星が同じ研究記録に残ると派生する、記念撮影向けの合成奇跡です。", rewardScore: 42000 },
@@ -400,6 +415,9 @@ let miracleLogs: MiracleLogEntry[] = [...(savedRecords.miracleLogs ?? [])];
 let currentDailyFortune: DailyFortune | null = null;
 let secretKeyBuffer = "";
 let bootIconTapCount = 0;
+let pauseTapHistory: number[] = [];
+let mobileSettingsOpenCount = 0;
+let skillComboBuffer: SkillKind[] = [];
 let repeatedMiracleRunCounts: Record<string, number> = {};
 let miracleClips: MiracleClip[] = [];
 let replayFrameBuffer: string[] = [];
@@ -584,6 +602,7 @@ bootOverlay.appendChild(bootAnimationStyle);
 document.body.appendChild(bootOverlay);
 bootIcon.addEventListener("click", () => {
     bootIconTapCount++;
+    playUiSound("tick");
     if (bootIconTapCount >= 5) {
         unlockSecret("favicon-five-taps", "favicon 5連打", "起動ロゴを5回タップしました。ロード画面にも秘密がありました。");
         bootIconTapCount = 0;
@@ -1533,11 +1552,18 @@ function createMiracleImageDataUri(def: SpecialEventDef): string {
 function openMobileSettingsPopup(): void {
     if (!mobileSettingsOverlay) return;
     mobileSettingsOverlay.style.display = "flex";
+    mobileSettingsOpenCount++;
+    playUiSound("open");
+    if (mobileSettingsOpenCount >= 3) {
+        unlockSecret("settings-three-open", "設定室の常連", "スマホ設定画面を3回開きました。設定画面にも観測ログが残ります。");
+        mobileSettingsOpenCount = 0;
+    }
 }
 
 function closeMobileSettingsPopup(): void {
     if (!mobileSettingsOverlay) return;
     mobileSettingsOverlay.style.display = "none";
+    playUiSound("close");
 }
 
 function setupMobileLayout(): void {
@@ -1581,7 +1607,8 @@ function setupMobileLayout(): void {
     mobileSettingsOverlay.style.display = "none";
     mobileSettingsOverlay.style.alignItems = "stretch";
     mobileSettingsOverlay.style.justifyContent = "center";
-    mobileSettingsOverlay.style.background = "rgba(5,8,18,.62)";
+    mobileSettingsOverlay.style.background = "rgba(5,8,18,.38)";
+    mobileSettingsOverlay.style.backdropFilter = "blur(2px)";
     mobileSettingsOverlay.style.zIndex = "140";
     mobileSettingsOverlay.style.padding = "0";
     document.body.appendChild(mobileSettingsOverlay);
@@ -1593,11 +1620,12 @@ function setupMobileLayout(): void {
     mobileSettingsPanel.style.width = "100%";
     mobileSettingsPanel.style.height = "100dvh";
     mobileSettingsPanel.style.maxHeight = "100dvh";
-    mobileSettingsPanel.style.background = "linear-gradient(180deg,#fbfdff 0%,#eff4ff 100%)";
+    mobileSettingsPanel.style.background = "linear-gradient(180deg,rgba(251,253,255,.88) 0%,rgba(239,244,255,.78) 100%)";
+    mobileSettingsPanel.style.backdropFilter = "blur(14px) saturate(1.18)";
     mobileSettingsPanel.style.borderTopLeftRadius = "0";
     mobileSettingsPanel.style.borderTopRightRadius = "0";
     mobileSettingsPanel.style.boxShadow = "0 -12px 40px rgba(0,0,0,.28)";
-    mobileSettingsPanel.style.padding = "14px 12px 22px 12px";
+    mobileSettingsPanel.style.padding = "0 12px 22px 12px";
     mobileSettingsPanel.style.overflowY = "auto";
     mobileSettingsPanel.style.overflowX = "hidden";
     mobileSettingsPanel.style.overscrollBehavior = "contain";
@@ -1610,6 +1638,13 @@ function setupMobileLayout(): void {
     closeRow.style.justifyContent = "space-between";
     closeRow.style.alignItems = "center";
     closeRow.style.marginBottom = "10px";
+    closeRow.style.position = "sticky";
+    closeRow.style.top = "0";
+    closeRow.style.zIndex = "5";
+    closeRow.style.padding = "max(10px, env(safe-area-inset-top)) 0 10px 0";
+    closeRow.style.background = "linear-gradient(180deg,rgba(251,253,255,.96),rgba(251,253,255,.84))";
+    closeRow.style.backdropFilter = "blur(14px)";
+    closeRow.style.borderBottom = "1px solid rgba(80,90,120,.18)";
     closeRow.innerHTML = `<div style="font-size:22px;font-weight:900;color:#243018;">${t("設定", "Settings")}</div>`;
     const closeButton = createButton("×", () => closeMobileSettingsPopup());
     closeButton.style.flex = "0 0 56px";
@@ -1617,6 +1652,8 @@ function setupMobileLayout(): void {
     closeButton.style.height = "56px";
     closeButton.style.padding = "0";
     closeButton.style.fontSize = "30px";
+    closeButton.style.position = "relative";
+    closeButton.style.zIndex = "6";
     closeRow.appendChild(closeButton);
     mobileSettingsPanel.appendChild(closeRow);
 
@@ -1890,6 +1927,8 @@ function useSkill(kind: SkillKind): void {
     if ((skillState[kind] ?? 0) <= 0) return;
     skillState[kind]--;
     lastSkillUsedAt = Date.now();
+    registerSkillSecretCombo(kind);
+    playUiSound(kind === "timeStop" ? "time" : "skill");
     if (kind === "shockwave") applyShockwaveSkill();
     else if (kind === "magnet") applyMagnetSkill();
     else applyTimeStopSkill();
@@ -2254,34 +2293,91 @@ function showFusionPopup(): void {
     showPopup("奇跡合成・派生", `<p>特定の奇跡を観測すると、合成・派生の研究記録が解放されます。</p>${rows}`);
 }
 
-function unlockSecret(id: string, label: string, detail: string): void {
+function getSecretDefs(): SecretDef[] {
+    return [
+        { id: "keyword-miracle", label: "MIRACLE コード", hint: "PCで研究所の合言葉を英字入力", detail: "キーボードで隠しコードを入力しました。今日の研究所は少しだけ騒がしくなります。", rewardScore: 7777 },
+        { id: "keyword-lab", label: "LAB コード", hint: "研究所の短縮名を英字入力", detail: "短い研究所コードを入力しました。", rewardScore: 5000 },
+        { id: "keyword-neko", label: "NEKO コード", hint: "猫っぽい英字を入力", detail: "ねこちゃんモードの気配を呼びました。", rewardScore: 5000 },
+        { id: "keyword-sun", label: "SUN コード", hint: "太陽に関係する英字を入力", detail: "黒い太陽を探す研究者用の短縮コードです。", rewardScore: 5000 },
+        { id: "favicon-five-taps", label: "favicon 5連打", hint: "起動画面のロゴを連打", detail: "起動ロゴを5回タップしました。ロード画面にも秘密がありました。", rewardScore: 7777 },
+        { id: "pause-seven-taps", label: "時間停止ごっこ", hint: "一時停止を短時間に何度も操作", detail: "一時停止操作を短時間に7回行いました。時間を止めようとする研究記録です。", rewardScore: 9000 },
+        { id: "settings-three-open", label: "設定室の常連", hint: "スマホの設定画面を何度か開く", detail: "スマホ設定画面を3回開きました。設定画面にも観測ログが残ります。", rewardScore: 6000 },
+        { id: "skill-combo-lab", label: "三種の介入", hint: "実験中に衝撃波→磁石→時止めの順で使う", detail: "盤面介入スキルを決まった順番で使いました。研究員が完全に介入しています。", rewardScore: 12000 },
+    ];
+}
+
+function unlockSecret(id: string, label: string, detail: string, rewardScore?: number): void {
     if (savedRecords.secretUnlocked[id]) {
-        showMilestone(`${label} 起動`);
+        showMilestone(label + " 起動");
         return;
     }
+    const def = getSecretDefs().find((x) => x.id === id);
+    const score = rewardScore ?? def?.rewardScore ?? 7777;
     savedRecords.secretUnlocked[id] = Date.now();
-    addScore(7777, `SECRET ${label}`);
+    addScore(score, "SECRET " + label);
     saveRecords();
-    showPopup("秘密操作を発見", `<p><b>${label}</b> を解放しました。</p><p>${detail}</p><p>研究レベルに少しだけボーナスが入ります。</p>`);
+    playSecretSound();
+    showPopup("秘密操作を発見", "<p><b>" + label + "</b> を解放しました。</p><p>" + detail + "</p><p>報酬: +" + score.toLocaleString() + " score</p><p>研究レベルに少しだけボーナスが入ります。</p>");
 }
 
 function showSecretPopup(): void {
-    const unlocked = Object.keys(savedRecords.secretUnlocked ?? {});
-    const rows = unlocked.length === 0 ? "<p>まだ秘密操作は見つかっていません。</p>" : unlocked.map((id) => `<div style="padding:10px 0;border-bottom:1px solid rgba(80,90,120,.16);"><b>${id}</b><br><span style="opacity:.72;">${new Date(savedRecords.secretUnlocked[id]).toLocaleString()}</span></div>`).join("");
-    showPopup("秘密操作", `<p>ヒント: キーボードで研究所名に関係する英字、または起動ロゴを何度かタップ。</p>${rows}`);
+    const defs = getSecretDefs();
+    const unlockedCount = defs.filter((x) => savedRecords.secretUnlocked[x.id]).length;
+    const rows = defs.map((def) => {
+        const ts = savedRecords.secretUnlocked[def.id];
+        const unlocked = !!ts;
+        const title = unlocked ? def.label : "未発見の秘密操作";
+        const mark = unlocked ? "✅" : "🔒";
+        const titleColor = unlocked ? "#166534" : "#334155";
+        const scoreColor = unlocked ? "#166534" : "#64748b";
+        const size = isMobile ? "20px" : "17px";
+        return "<div style=\"padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);\">" +
+            "<div style=\"display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;\">" +
+            "<b style=\"font-size:" + size + ";color:" + titleColor + ";\">" + mark + " " + title + "</b>" +
+            "<span style=\"font-weight:900;color:" + scoreColor + ";\">+" + def.rewardScore.toLocaleString() + "</span>" +
+            "</div>" +
+            "<div style=\"margin-top:6px;opacity:.78;line-height:1.55;\">ヒント: " + def.hint + "</div>" +
+            "<div style=\"margin-top:4px;opacity:.68;\">" + (unlocked ? new Date(ts).toLocaleString() : "未解放") + "</div>" +
+        "</div>";
+    }).join("");
+    showPopup("秘密操作",
+        "<p>秘密操作をゲーム内実績のように整理しました。見つけるとスコアと研究レベルに少しだけ反映されます。</p>" +
+        "<p><b>解放状況:</b> " + unlockedCount + " / " + defs.length + "</p>" +
+        "<div style=\"border-radius:18px;background:rgba(255,255,255,.70);padding:4px 14px;\">" + rows + "</div>"
+    );
 }
 
 function handleSecretKey(event: KeyboardEvent): void {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const key = event.key.toLowerCase();
     if (!/^[a-z]$/.test(key)) return;
-    secretKeyBuffer = (secretKeyBuffer + key).slice(-SECRET_KEY_SEQUENCE.length);
-    if (secretKeyBuffer === SECRET_KEY_SEQUENCE) {
-        unlockSecret("keyword-miracle", "MIRACLE コード", "キーボードで隠しコードを入力しました。今日の研究所は少しだけ騒がしくなります。");
-        secretKeyBuffer = "";
+    secretKeyBuffer = (secretKeyBuffer + key).slice(-SECRET_KEY_MAX_LENGTH);
+    for (const [code, info] of Object.entries(SECRET_KEY_SEQUENCES)) {
+        if (secretKeyBuffer.endsWith(code)) {
+            const id = "keyword-" + code;
+            unlockSecret(id, info.label, info.detail);
+            secretKeyBuffer = "";
+            return;
+        }
     }
 }
 
+function registerPauseSecretTap(): void {
+    const now = Date.now();
+    pauseTapHistory = [...pauseTapHistory.filter((x) => now - x < 5000), now];
+    if (pauseTapHistory.length >= 7) {
+        unlockSecret("pause-seven-taps", "時間停止ごっこ", "一時停止操作を短時間に7回行いました。時間を止めようとする研究記録です。");
+        pauseTapHistory = [];
+    }
+}
+
+function registerSkillSecretCombo(kind: SkillKind): void {
+    skillComboBuffer = [...skillComboBuffer, kind].slice(-3);
+    if (skillComboBuffer.join(">") === "shockwave>magnet>timeStop") {
+        unlockSecret("skill-combo-lab", "三種の介入", "盤面介入スキルを決まった順番で使いました。研究員が完全に介入しています。");
+        skillComboBuffer = [];
+    }
+}
 function getThemeOptions(): Array<{ value: ThemeMode; ja: string; en: string }> {
     return [
         { value: "lab", ja: "研究所", en: "Lab" },
@@ -2749,12 +2845,12 @@ function showButtonHelpPopup(): void {
         <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。奇跡演出中でも一時停止を優先できます。スマホ下部にも一時停止ボタンがあります。</p>
         <p><b>リセット:</b> 設定を読み直して、実験を最初から待機状態に戻します。</p>
         <p><b>シンプル:</b> 演出を減らして軽くします。重い場合や大量回数を試す場合に便利です。</p>
-        <p><b>音:</b> npm 依存の Tone.js を使って、レア玉や激レア演出で音を鳴らします。ブラウザ仕様上、最初にボタン操作が必要です。</p>
+        <p><b>音:</b> Tone.js を使って、開始・一時停止・スキル・秘密操作・レア玉ごとに違う短い効果音を鳴らします。GOD/EX級は低音とノイズを重ねて強めにしています。ブラウザ仕様上、最初にボタン操作が必要です。</p>
         <p><b>衝撃波 / 磁石 / 時止め:</b> 実験中に使える操作スキルです。衝撃波は玉を散らし、磁石は上位受け皿へ吸わせ、時止めは短時間だけ盤面を静止させます。</p>
         <p><b>ミッション:</b> 実験中の条件達成でスコア報酬を獲得します。</p>
         <p><b>今日の運勢:</b> 日付ごとの奇跡率、注目奇跡、ラッキー受け皿を表示します。奇跡率はレア抽選に少しだけ反映されます。</p>
         <p><b>奇跡合成:</b> 特定の奇跡同士を観測すると、派生奇跡が研究記録として解放されます。</p>
-        <p><b>秘密:</b> 裏コマンドの発見状況を表示します。隠し操作を見つけると研究レベルに少しだけボーナスが入ります。</p>
+        <p><b>秘密:</b> 裏コマンドの発見状況を表示します。キーボード入力、ロゴ連打、一時停止連打、スキルの順番操作などを実績風に集められます。</p>
         <p><b>録画・SNS:</b> 投稿文コピー、現在画面のスクリーンショット保存、縦長シェアカード保存ができます。奇跡のGIF保存はリプレイから行います。</p>
         <p><b>紙吹雪:</b> 達成時やレア演出時の紙吹雪をON/OFFします。</p>
         <p><b>Pixi背景:</b> Pixi.jsを使った背景演出をON/OFFします。見た目は楽しいですが、PCやスマホによっては重くなります。</p>
@@ -3032,6 +3128,7 @@ async function startExperiment(): Promise<void> {
     void ensureGifReady();
     // ブラウザの仕様上、音声開始はユーザー操作後が安全なので、実行ボタン押下時に準備する
     if (soundEnabled && !toneReady) await enableSound(false);
+    playUiSound("start");
     engine.timing.timeScale = getCurrentTimeScale();
     resetExperiment(true);
 }
@@ -3053,6 +3150,8 @@ function pauseForMiracle(def?: SpecialEventDef): void {
 
 function togglePause(): void {
     if (!isStarted || isFinished) return;
+    registerPauseSecretTap();
+    playUiSound(isPaused ? "resume" : "pause");
     if (isPaused) {
         isPaused = false;
         if (!isMiraclePaused) Runner.run(runner, engine);
@@ -3542,6 +3641,50 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     window.setTimeout(() => { miracleOverlay.style.display = "none"; miracleOverlay.innerHTML = ""; }, overlayDurationMs + 120);
 }
 
+function getSoundVolume(base = -8): number {
+    return base + (isMobile ? -4 : 0);
+}
+
+function playUiSound(kind: "start" | "pause" | "resume" | "open" | "close" | "tick" | "skill" | "time"): void {
+    if (!soundEnabled || !toneReady || settings.simpleMode) return;
+    try {
+        const now = Tone.now();
+        const synth = new Tone.Synth({
+            oscillator: { type: kind === "time" ? "sine" : kind === "skill" ? "triangle" : "square" },
+            envelope: { attack: 0.002, decay: 0.06, sustain: 0.05, release: 0.12 },
+        }).toDestination();
+        synth.volume.value = getSoundVolume(kind === "tick" ? -18 : -14);
+        const notes: Record<string, string[]> = {
+            start: ["C5", "E5", "G5"],
+            pause: ["E4", "C4"],
+            resume: ["C4", "E4"],
+            open: ["G4", "B4"],
+            close: ["B4", "G4"],
+            tick: ["C6"],
+            skill: ["D5", "A5"],
+            time: ["F4", "C5", "F5"],
+        };
+        notes[kind].forEach((note, index) => synth.triggerAttackRelease(note, "32n", now + index * 0.055));
+        window.setTimeout(() => synth.dispose(), 650);
+    } catch {}
+}
+
+function playSecretSound(): void {
+    if (!soundEnabled || !toneReady || settings.simpleMode) return;
+    try {
+        const now = Tone.now();
+        const synth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "fatsawtooth" },
+            envelope: { attack: 0.01, decay: 0.18, sustain: 0.18, release: 0.42 },
+        }).toDestination();
+        synth.volume.value = getSoundVolume(-9);
+        ["C4", "E4", "G4", "B4", "D5", "G5"].forEach((note, i) => synth.triggerAttackRelease(note, i < 4 ? "16n" : "8n", now + i * 0.075));
+        const noise = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.005, decay: 0.13, sustain: 0 } }).toDestination();
+        noise.volume.value = -22;
+        noise.triggerAttackRelease("16n", now + 0.08);
+        window.setTimeout(() => { synth.dispose(); noise.dispose(); }, 1200);
+    } catch {}
+}
 function updateSoundButton(): void {
     soundButton.textContent = soundEnabled ? t("音: ON", "Sound: ON") : t("音: OFF", "Sound: OFF");
 }
@@ -3553,7 +3696,10 @@ async function enableSound(showNotice = true): Promise<void> {
         toneReady = true;
         soundEnabled = true;
         updateSoundButton();
-        if (showNotice) showMilestone(t("音ON", "Sound ON"));
+        if (showNotice) {
+            showMilestone(t("音ON", "Sound ON"));
+            window.setTimeout(() => playUiSound("start"), 30);
+        }
     } catch {
         soundButton.textContent = t("音: 読込失敗", "Sound: Load failed");
     }
@@ -3624,7 +3770,14 @@ function playSpecialSound(kind: DropKind): void {
             oscillator: { type: flavor === "god" ? "square8" : flavor === "ex" ? "sawtooth" : "triangle" },
             envelope: { attack: 0.005, decay: 0.14, sustain: 0.18, release: 0.35 },
         }).toDestination();
+        synth.volume.value = getSoundVolume(flavor === "god" ? -5 : flavor === "ex" ? -7 : -9);
         const now = Tone.now();
+        if (flavor === "god" || flavor === "ex") {
+            const bass = new Tone.MembraneSynth({ pitchDecay: 0.08, octaves: 4, envelope: { attack: 0.001, decay: 0.38, sustain: 0.02, release: 0.5 } }).toDestination();
+            bass.volume.value = getSoundVolume(flavor === "god" ? -7 : -11);
+            bass.triggerAttackRelease(flavor === "god" ? "C2" : "D2", "8n", now);
+            window.setTimeout(() => bass.dispose(), 1200);
+        }
         const sequence = createRareSequence(flavor);
         for (const step of sequence) synth.triggerAttackRelease(step.note, step.duration, now + step.at);
         if (kind === "giant") synth.triggerAttackRelease("C2", "8n", now);
