@@ -172,6 +172,32 @@ type FloatingText = {
     color: string;
 };
 
+type NormalBallTraitKind = "standard" | "heavy" | "bouncy" | "tiny" | "sleepy" | "sprinter" | "spinner" | "ghost";
+
+type NormalBallTraitDef = {
+    kind: NormalBallTraitKind;
+    label: string;
+    mark: string;
+    description: string;
+    rate: number;
+    radiusScale: number;
+    restitution: number;
+    density: number;
+    frictionAir: number;
+    strokeStyle: string;
+};
+
+type MiracleChainDef = {
+    id: string;
+    label: string;
+    rank: string;
+    sequence: DropKind[];
+    description: string;
+    rewardScore: number;
+};
+
+type BoardAnomalyMode = "none" | "sideGravity" | "stickyTime" | "dimPins" | "tremor" | "updraft" | "blackHole" | "pinPulse" | "reverseRain";
+
 const BASE_WIDTH = 800;
 const BASE_HEIGHT = 600;
 
@@ -181,6 +207,9 @@ const FINAL_SWEEP_DELAY_MS = 3000;
 const SCORE_STORAGE_BONUS_INTERVAL = 5000;
 const MAGNET_DURATION_MS = 5000;
 const TIME_STOP_DURATION_MS = 2200;
+const COMMENTARY_MIN_INTERVAL_MS = 14000;
+const COMMENTARY_DISPLAY_MS = 9000;
+const MIRACLE_CHAIN_WINDOW_MS = 8 * 60 * 1000;
 
 const GOLD_RATE = 0.002;           // 1/500
 const RAINBOW_RATE = 0.0005;       // 1/2,000
@@ -209,6 +238,24 @@ const FUSION_DEFS: FusionDef[] = [
     { id: "lab-cosmos", label: "研究所宇宙卵", rank: "GOD", sourceKinds: ["labExplosion", "cosmicEgg"], requiredCount: 1, description: "研究所爆発と宇宙卵が同時期に観測された、ほぼ都市伝説の合成記録です。", rewardScore: 300000 },
 ];
 
+
+const NORMAL_BALL_TRAITS: NormalBallTraitDef[] = [
+    { kind: "heavy", label: "重い玉", mark: "重", description: "少し重く、下に落ちやすい通常玉です。", rate: 0.055, radiusScale: 1.08, restitution: 0.64, density: 0.00185, frictionAir: 0.0015, strokeStyle: "#475569" },
+    { kind: "bouncy", label: "跳ね玉", mark: "跳", description: "よく跳ねるため、予想外の受け皿へ向かいやすい通常玉です。", rate: 0.052, radiusScale: 1.00, restitution: 1.04, density: 0.0009, frictionAir: 0.0012, strokeStyle: "#22c55e" },
+    { kind: "tiny", label: "小粒玉", mark: "小", description: "少し小さく、ピンの間をすり抜けやすい通常玉です。", rate: 0.050, radiusScale: 0.74, restitution: 0.86, density: 0.00078, frictionAir: 0.0022, strokeStyle: "#38bdf8" },
+    { kind: "sleepy", label: "のんびり玉", mark: "眠", description: "空気抵抗が大きく、ゆっくり落ちる通常玉です。", rate: 0.040, radiusScale: 1.00, restitution: 0.70, density: 0.0010, frictionAir: 0.0100, strokeStyle: "#a78bfa" },
+    { kind: "sprinter", label: "早足玉", mark: "速", description: "横方向に少し勢いを持って生まれる通常玉です。", rate: 0.035, radiusScale: 0.96, restitution: 0.90, density: 0.00105, frictionAir: 0.0010, strokeStyle: "#f97316" },
+    { kind: "spinner", label: "回転玉", mark: "回", description: "最初から強めに回転して、壁やピンで変な跳ね方をします。", rate: 0.032, radiusScale: 1.00, restitution: 0.88, density: 0.0010, frictionAir: 0.0018, strokeStyle: "#eab308" },
+    { kind: "ghost", label: "うす玉", mark: "薄", description: "半透明で少し軽く、画面上で見つけにくい通常玉です。", rate: 0.026, radiusScale: 0.94, restitution: 0.96, density: 0.00082, frictionAir: 0.0026, strokeStyle: "#94a3b8" },
+];
+
+const MIRACLE_CHAIN_DEFS: MiracleChainDef[] = [
+    { id: "royal-starry-night", label: "王の星読み", rank: "CHAIN", sequence: ["crown", "shootingStar"], description: "王冠のあとに流れ星が続いた連鎖記録です。研究所が一瞬だけ星空になります。", rewardScore: 32000 },
+    { id: "heart-lucky-shift", label: "幸運心拍", rank: "CHAIN", sequence: ["heart", "luckySeven"], description: "桃色ハートからラッキーセブンへつながった、やさしい確率連鎖です。", rewardScore: 38000 },
+    { id: "blue-time-rift", label: "蒼炎時裂", rank: "CHAIN+", sequence: ["blueFlame", "timeRift"], description: "青い炎が時空の裂け目に飲まれた連鎖記録です。盤面が少し冷たく歪みます。", rewardScore: 62000 },
+    { id: "black-lab-apocalypse", label: "黒日研究所崩壊", rank: "EX-CHAIN", sequence: ["blackSun", "labExplosion"], description: "黒い太陽の直後に研究所爆発が来た危険な連鎖です。", rewardScore: 160000 },
+    { id: "last-cosmic-seal", label: "終末宇宙封印", rank: "GOD-CHAIN", sequence: ["blackSun", "timeRift", "cosmicEgg"], description: "黒い太陽、時空の裂け目、宇宙卵が順に並んだ最終級の連鎖です。", rewardScore: 420000 },
+];
 
 const LOCAL_RARE_AUDIO_FILES = [
     "/audio/rare-01.mp3",
@@ -441,6 +488,13 @@ let anomalyUntil = 0;
 let anomalyLabel = "";
 let anomalyOldGravityX = 0;
 let anomalyHidePins = false;
+let anomalyMode: BoardAnomalyMode = "none";
+let anomalyCenterX = 0;
+let anomalyTick = 0;
+let lastCommentaryAt = 0;
+let commentaryTimer: number | undefined;
+let recentMiracleKinds: { kind: DropKind; at: number }[] = [];
+let unlockedChainRunIds: Record<string, number> = {};
 
 let soundEnabled = true;
 let toneReady = false;
@@ -1330,6 +1384,18 @@ subtitleOverlay.style.zIndex = "121";
 subtitleOverlay.style.display = "none";
 subtitleOverlay.style.pointerEvents = "none";
 document.body.appendChild(subtitleOverlay);
+
+const commentaryOverlay = document.createElement("div");
+commentaryOverlay.style.position = "fixed";
+commentaryOverlay.style.left = "0";
+commentaryOverlay.style.bottom = isMobile ? "62px" : "10px";
+commentaryOverlay.style.width = "100vw";
+commentaryOverlay.style.height = isMobile ? "34px" : "30px";
+commentaryOverlay.style.zIndex = "92";
+commentaryOverlay.style.pointerEvents = "none";
+commentaryOverlay.style.overflow = "hidden";
+commentaryOverlay.style.display = "none";
+document.body.appendChild(commentaryOverlay);
 
 const comboOverlay = document.createElement("div");
 comboOverlay.style.position = "fixed";
@@ -2405,7 +2471,12 @@ function showFusionPopup(): void {
             <div style="margin-top:6px;opacity:.72;">素材: ${sources}</div>
         </div>`;
     }).join("");
-    showPopup("奇跡合成・派生", `<p>特定の奇跡を観測すると、合成・派生の研究記録が解放されます。</p>${rows}`);
+    const chainRows = MIRACLE_CHAIN_DEFS.map((chain) => {
+        const names = chain.sequence.map((kind) => findSpecialDef(kind)?.label ?? kind).join(" → ");
+        const unlocked = !!unlockedChainRunIds[chain.id];
+        return `<div style="padding:10px 0;border-bottom:1px dashed rgba(80,90,120,.18);"><b>${unlocked ? "✅" : "🔁"} ${chain.label} [${chain.rank}]</b><div style="margin-top:4px;opacity:.74;">順番: ${names}</div><div style="margin-top:4px;opacity:.74;">${chain.description}</div></div>`;
+    }).join("");
+    showPopup("奇跡合成・派生", `<p>特定の奇跡を観測すると、合成・派生の研究記録が解放されます。</p>${rows}<h3 style="margin-top:18px;">実験中の奇跡連鎖</h3><p>下記の順番で奇跡が続くと、その実験中だけの連鎖演出が発生します。</p>${chainRows}`);
 }
 
 function getSecretDefs(): SecretDef[] {
@@ -2554,6 +2625,65 @@ function addMiracleLog(def: SpecialEventDef): void {
     miracleLogs = miracleLogs.slice(0, 80);
     savedRecords.miracleLogs = miracleLogs;
     saveRecords();
+}
+
+function recordMiracleForChains(kind: DropKind): void {
+    const now = Date.now();
+    recentMiracleKinds = [...recentMiracleKinds.filter((x) => now - x.at <= MIRACLE_CHAIN_WINDOW_MS), { kind, at: now }].slice(-8);
+}
+
+function tryTriggerMiracleChains(): void {
+    const kinds = recentMiracleKinds.map((x) => x.kind);
+    for (const chain of MIRACLE_CHAIN_DEFS) {
+        if (unlockedChainRunIds[chain.id]) continue;
+        if (chain.sequence.length > kinds.length) continue;
+        const tail = kinds.slice(-chain.sequence.length);
+        const matched = chain.sequence.every((kind, index) => tail[index] === kind);
+        if (!matched) continue;
+        unlockedChainRunIds[chain.id] = Date.now();
+        addScore(chain.rewardScore, `CHAIN ${chain.label}`);
+        miracleLogs.unshift({
+            label: chain.label,
+            rank: chain.rank,
+            denominator: 0,
+            finishedAt: Date.now(),
+            finishedCount,
+            mode: settings.probabilityMode,
+            speedLabel: speedLabelText,
+            combo: miracleCombo,
+            note: "奇跡同士の連鎖で発生",
+        });
+        miracleLogs = miracleLogs.slice(0, 80);
+        savedRecords.miracleLogs = miracleLogs;
+        saveRecords();
+        triggerChainEndingEffect(chain);
+        break;
+    }
+}
+
+function triggerChainEndingEffect(chain: MiracleChainDef): void {
+    if (settings.simpleMode) {
+        setSubtitle(`${chain.label} 発生`);
+        return;
+    }
+    fireConfetti(chain.rank.includes("GOD") ? "cosmic" : chain.rank.includes("EX") ? "black" : "miracle");
+    triggerCameraShake(chain.rank.includes("GOD") ? 44 * geometry.scale : chain.rank.includes("EX") ? 34 * geometry.scale : 22 * geometry.scale, chain.rank.includes("GOD") ? 1300 : 760);
+    maybeShowCommentary(`実況「連鎖奇跡 ${chain.label} を観測しました」`, true);
+    setSubtitle(`${chain.label}: ${chain.description}`);
+    celebrationOverlay.innerHTML = `
+        <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 35%, rgba(255,245,180,.32), rgba(20,16,42,.82) 58%, rgba(0,0,0,.94));backdrop-filter:blur(3px);"></div>
+        <div style="position:relative;z-index:2;width:min(92vw,900px);padding:${isMobile ? "24px 18px" : "34px 42px"};border-radius:34px;background:rgba(15,23,42,.72);box-shadow:0 30px 90px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.18);color:#fff;animation:chain-ending-pop 3.2s ease-out forwards;">
+            <style>@keyframes chain-ending-pop{0%{transform:scale(.86);opacity:0}12%{transform:scale(1.03);opacity:1}82%{transform:scale(1);opacity:1}100%{transform:scale(.98);opacity:0}}</style>
+            <div style="font-size:clamp(22px,5vw,44px);font-weight:1000;color:#fde68a;letter-spacing:.08em;">MIRACLE CHAIN</div>
+            <div style="margin-top:8px;font-size:clamp(36px,9vw,86px);font-weight:1000;text-shadow:0 8px 30px rgba(0,0,0,.65);">${chain.label}</div>
+            <div style="margin-top:12px;font-size:clamp(17px,3vw,28px);line-height:1.65;opacity:.94;">${chain.description}</div>
+            <div style="margin-top:16px;font-size:clamp(18px,3vw,30px);font-weight:1000;color:#bbf7d0;">+${chain.rewardScore.toLocaleString()} score</div>
+        </div>`;
+    celebrationOverlay.style.display = "flex";
+    window.setTimeout(() => {
+        celebrationOverlay.style.display = "none";
+        celebrationOverlay.innerHTML = "";
+    }, 3300);
 }
 
 function setSubtitle(text: string): void {
@@ -2819,26 +2949,50 @@ function applyRareBackground(kind: DropKind): void {
 function maybeTriggerBoardAnomaly(): void {
     if (settings.simpleMode || targetReachedTime !== null || isPaused || isMiraclePaused || isFinished) return;
     if (Date.now() < anomalyUntil) return;
-    if (appRandom() > 0.00003 * getProbabilityScale()) return;
-    const choice = Math.floor(appRandom() * 4);
-    anomalyUntil = Date.now() + 3000;
+    if (appRandom() > 0.000035 * getProbabilityScale()) return;
+    const choice = Math.floor(appRandom() * 8);
+    anomalyUntil = Date.now() + (choice >= 4 ? 4200 : 3000);
     anomalyOldGravityX = engine.gravity.x;
     anomalyHidePins = false;
+    anomalyMode = "none";
+    anomalyCenterX = geometry.width * (0.25 + appRandom() * 0.5);
+    anomalyTick = 0;
     if (choice === 0) {
+        anomalyMode = "sideGravity";
         engine.gravity.x = appRandom() < 0.5 ? -0.22 : 0.22;
         anomalyLabel = t("異変: 重力が横に傾いた", "Anomaly: gravity tilted sideways");
     } else if (choice === 1) {
+        anomalyMode = "stickyTime";
         engine.timing.timeScale = Math.max(0.5, engine.timing.timeScale * 0.7);
         anomalyLabel = t("異変: 時間が少し粘る", "Anomaly: time became sticky");
     } else if (choice === 2) {
+        anomalyMode = "dimPins";
         anomalyHidePins = true;
         anomalyLabel = t("異変: ピンが見えにくい", "Anomaly: pins became dim");
-    } else {
+    } else if (choice === 3) {
+        anomalyMode = "tremor";
         triggerCameraShake(14 * geometry.scale, 500);
         anomalyLabel = t("異変: 盤面がざわつく", "Anomaly: board is trembling");
+    } else if (choice === 4) {
+        anomalyMode = "updraft";
+        anomalyLabel = t("異変: 下から風が吹いた", "Anomaly: an updraft appeared");
+    } else if (choice === 5) {
+        anomalyMode = "blackHole";
+        anomalyLabel = t("異変: 小さな重力穴が開いた", "Anomaly: a tiny gravity well opened");
+    } else if (choice === 6) {
+        anomalyMode = "pinPulse";
+        anomalyLabel = t("異変: ピンが一斉に震えた", "Anomaly: pins pulsed together");
+        for (const body of engine.world.bodies) {
+            const plugin = (body as any).plugin;
+            if (plugin?.isPin) plugin.wiggleFrames = Math.max(plugin.wiggleFrames ?? 0, 42);
+        }
+    } else {
+        anomalyMode = "reverseRain";
+        anomalyLabel = t("異変: 玉が少し浮きたがる", "Anomaly: balls want to float");
     }
     addFloatingText(anomalyLabel, geometry.width / 2, 80 * geometry.scale, "#ffef78");
     setSubtitle(anomalyLabel);
+    maybeShowCommentary(`観測装置「${anomalyLabel}」`, true);
 }
 
 function updateBoardAnomaly(): void {
@@ -2846,7 +3000,27 @@ function updateBoardAnomaly(): void {
         anomalyUntil = 0;
         engine.gravity.x = anomalyOldGravityX;
         anomalyHidePins = false;
+        anomalyMode = "none";
+        anomalyCenterX = 0;
+        anomalyTick = 0;
         engine.timing.timeScale = getCurrentTimeScale();
+    }
+}
+
+function applyActiveBoardAnomalyForce(body: Matter.Body): void {
+    if (!anomalyUntil || anomalyMode === "none") return;
+    anomalyTick++;
+    if (anomalyMode === "updraft") {
+        Body.applyForce(body, body.position, { x: Math.sin((Date.now() + body.id * 17) / 320) * 0.0000012, y: -0.0000024 });
+    } else if (anomalyMode === "blackHole") {
+        const dx = anomalyCenterX - body.position.x;
+        const dy = geometry.height * 0.36 - body.position.y;
+        const dist = Math.max(80 * geometry.scale, Math.hypot(dx, dy));
+        Body.applyForce(body, body.position, { x: dx / dist * 0.0000032, y: dy / dist * 0.0000022 });
+    } else if (anomalyMode === "reverseRain") {
+        Body.applyForce(body, body.position, { x: 0, y: -0.0000016 });
+    } else if (anomalyMode === "tremor" && anomalyTick % 18 === 0) {
+        Body.applyForce(body, body.position, { x: (appRandom() - 0.5) * 0.000012, y: -0.000003 });
     }
 }
 
@@ -2944,13 +3118,18 @@ function showRecordsPopup(): void {
 function showAboutPopup(): void {
     showPopup("ミラクルボールラボについて", `
         <p><b>ミラクルボールラボ</b>は、玉を上から落として、ピンに当たりながらどの受け皿に入るかを観測するランダム実験です。</p>
+        <p>通常玉にはたまに<b>個体差</b>が付きます。重い玉、跳ね玉、小粒玉、のんびり玉、早足玉、回転玉、うす玉などがあり、同じ通常玉でも少し違う落ち方をします。</p>
+        <ul style="text-align:left;line-height:1.7;">${getNormalTraitSummaryHtml()}</ul>
         <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王、銀のUFO、青い炎、流れ星、ラッキーセブン、桃色ハート、時空の裂け目、黒い太陽、研究所爆発、そして極秘の最上位奇跡など、たくさんのレア玉がまれに出ます。最上位は<b>1兆分の1</b>級です。</p>
         <p>さらに<b>10億分の1</b>レベルで、<b>poseidon mode / zeusu mode / hadesu mode / heart mode / nekochan mode / 人生名言ボイス</b>が発生します。mode系は出た瞬間から実験終了まで盤面全体の世界観が変わり続けます。</p>
         <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
         <p>100,000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
         <p>奇跡ログ、今日の運勢・奇跡率、研究レベル、奇跡合成・派生、スクリーンショット保存、秘密操作を追加しています。</p>
+        <p>実験中は、画面下に研究員の<b>実況ログ</b>が本当にたまに横から流れます。出過ぎると邪魔なので、かなり控えめです。</p>
+        <p>まれに<b>盤面変異イベント</b>が発生し、横重力、粘る時間、上昇気流、小さな重力穴、ピン一斉振動などで盤面が短時間だけ変化します。</p>
+        <p>特定の奇跡が決まった順番で続くと<b>奇跡同士の連鎖</b>が発生し、専用の連鎖演出とスコアが入ります。実験完了時には短いエンディング演出を挟んで結果画面に進みます。</p>
         <p>背景はデフォルトで favicon.png を盤面に大きく表示します。スマホでは見切れない範囲で最大表示します。画面揺れはデフォルトOFFです。</p>
-        <p>奇跡図鑑と発生演出には、全種類でアプリ内生成のオリジナルSVG画像を使います。発生時は該当画像を大きく表示します。猫系は専用の「ねこ、どーん！」演出になります。</p>
+        <p>奇跡図鑑と発生演出には、全種類でアプリ内生成のオリジナルSVG画像を使います。発生時は該当画像を大きく表示します。「どーん！」の文字演出は控え、画像と発生名を中心に見せます。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。SR/SSRで同じ奇跡演出が実行中に再発生した場合は、2回目以降さらに短く閉じます。</p>
         <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
     `);
@@ -2967,7 +3146,8 @@ function showButtonHelpPopup(): void {
         <p><b>衝撃波 / 磁石 / 時止め:</b> 実験中に使える操作スキルです。衝撃波は玉を散らし、磁石は上位受け皿へ吸わせ、時止めは短時間だけ盤面を静止させます。</p>
         <p><b>ミッション:</b> 実験中の条件達成でスコア報酬を獲得します。</p>
         <p><b>今日の運勢:</b> 日付ごとの奇跡率、注目奇跡、ラッキー受け皿を表示します。奇跡率はレア抽選に少しだけ反映されます。</p>
-        <p><b>奇跡合成:</b> 特定の奇跡同士を観測すると、派生奇跡が研究記録として解放されます。</p>
+        <p><b>奇跡合成:</b> 特定の奇跡同士を観測すると、派生奇跡が研究記録として解放されます。さらに実験中に特定の順番で奇跡が続くと、奇跡連鎖演出が発生します。</p>
+        <p><b>実況ログ:</b> 画面下に研究員の短い実況がたまに流れます。常に流れるものではなく、観測のアクセント用です。</p>
         <p><b>秘密:</b> 裏コマンドの発見状況を表示します。キーボード入力、ロゴ連打、一時停止連打、スキルの順番操作などを実績風に集められます。</p>
         <p><b>録画・SNS:</b> 投稿文コピー、現在画面のスクリーンショット保存、縦長シェアカード保存ができます。奇跡のGIF保存はリプレイから行います。</p>
         <p><b>紙吹雪:</b> 達成時やレア演出時の紙吹雪をON/OFFします。</p>
@@ -3204,6 +3384,15 @@ function resetExperiment(startNow = false): void {
     labExplosionCreated = 0;
     specialCreated = {};
     repeatedMiracleRunCounts = {};
+    recentMiracleKinds = [];
+    unlockedChainRunIds = {};
+    lastCommentaryAt = 0;
+    if (commentaryTimer !== undefined) { window.clearTimeout(commentaryTimer); commentaryTimer = undefined; }
+    commentaryOverlay.style.display = "none";
+    commentaryOverlay.innerHTML = "";
+    anomalyUntil = 0;
+    anomalyHidePins = false;
+    anomalyMode = "none";
     currentSubtitleText = "";
     subtitleOverlay.style.display = "none";
     comboOverlay.style.display = "none";
@@ -3569,6 +3758,7 @@ function createDrop(): Matter.Body {
     let isHeart = false;
     let symbol = "";
     let label = "";
+    let normalTrait: NormalBallTraitDef | null = null;
 
     if (activeWorldMode === "poseidon") {
         fillStyle = ["#2a6dff", "#00a8ff", "#67d1ff"][Math.floor(appRandom() * 3)] ?? "#2a6dff";
@@ -3620,7 +3810,16 @@ function createDrop(): Matter.Body {
             }
         }
     }
-    const renderOptions: any = { fillStyle, strokeStyle: "rgba(255,255,255,0.85)", lineWidth: kind === "normal" ? 1 * geometry.scale : 3 * geometry.scale };
+    if (kind === "normal") {
+        normalTrait = rollNormalBallTrait();
+        if (normalTrait) {
+            radius *= normalTrait.radiusScale;
+            restitution = normalTrait.restitution;
+            density = normalTrait.density;
+        }
+    }
+    const renderOptions: any = { fillStyle, strokeStyle: normalTrait?.strokeStyle ?? "rgba(255,255,255,0.85)", lineWidth: kind === "normal" ? (normalTrait ? 2.5 * geometry.scale : 1 * geometry.scale) : 3 * geometry.scale };
+    if (normalTrait?.kind === "ghost") renderOptions.opacity = 0.42;
     if (kind === "gold") { renderOptions.strokeStyle = "#fff4a8"; renderOptions.lineWidth = 3 * geometry.scale; }
     if (kind === "rainbow") { renderOptions.strokeStyle = "#ffffff"; renderOptions.lineWidth = 3 * geometry.scale; }
     if (kind === "heart") { renderOptions.fillStyle = "#ff69b4"; renderOptions.strokeStyle = "#ffe0f0"; renderOptions.lineWidth = 4 * geometry.scale; }
@@ -3639,13 +3838,18 @@ function createDrop(): Matter.Body {
     else if (isHeart) body = createHeartBody(x, startY, radius, renderOptions);
     else if (isShape) body = createRandomShapeBody(x, startY, radius, renderOptions);
     else {
-        body = Bodies.circle(x, startY, radius, { restitution, friction: 0.01, frictionAir: 0.002, density, render: renderOptions });
-        (body as any).plugin = createDropPlugin(kind, x, startY, radius);
+        body = Bodies.circle(x, startY, radius, { restitution, friction: 0.01, frictionAir: normalTrait?.frictionAir ?? 0.002, density, render: renderOptions });
+        (body as any).plugin = createDropPlugin(kind, x, startY, radius, normalTrait ? { traitKind: normalTrait.kind, traitLabel: normalTrait.label, traitMark: normalTrait.mark } : {});
     }
 
-    Body.setVelocity(body, { x: (appRandom() - 0.5) * 2 * geometry.scale, y: 0 });
-    Body.setAngularVelocity(body, (appRandom() - 0.5) * 0.22);
+    const traitVX = normalTrait?.kind === "sprinter" ? (appRandom() < 0.5 ? -1 : 1) * (3.2 + appRandom() * 2.4) * geometry.scale : 0;
+    Body.setVelocity(body, { x: (appRandom() - 0.5) * 2 * geometry.scale + traitVX, y: normalTrait?.kind === "sleepy" ? -0.6 * geometry.scale : 0 });
+    Body.setAngularVelocity(body, normalTrait?.kind === "spinner" ? (appRandom() < 0.5 ? -1 : 1) * (0.55 + appRandom() * 0.35) : (appRandom() - 0.5) * 0.22);
 
+    if (normalTrait && appRandom() < 0.08) {
+        addFloatingText(normalTrait.label, x, 78 * geometry.scale, normalTrait.strokeStyle);
+        maybeShowCommentary(`実況「${normalTrait.label} が混ざりました」`);
+    }
     if (kind === "gold") addFloatingText("金玉投入", x, 80 * geometry.scale, "#d89b00");
     if (kind === "rainbow") { addFloatingText("虹玉投入", x, 80 * geometry.scale, "#b44cff"); triggerCameraShake(5 * geometry.scale, 180); }
     if (kind === "giant") { addFloatingText("巨大玉投入", x, 90 * geometry.scale, "#111111"); triggerCameraShake(10 * geometry.scale, 260); }
@@ -3713,6 +3917,53 @@ function addFloatingText(text: string, x: number, y: number, color: string): voi
     floatingTexts.push({ text, x, y, life: 60, maxLife: 60, color });
 }
 
+function rollNormalBallTrait(): NormalBallTraitDef | null {
+    const scale = settings.probabilityMode === "festival" ? 1.25 : settings.probabilityMode === "hell" ? 0.75 : 1;
+    let roll = appRandom();
+    for (const trait of NORMAL_BALL_TRAITS) {
+        roll -= trait.rate * scale;
+        if (roll <= 0) return trait;
+    }
+    return null;
+}
+
+function getNormalTraitSummaryHtml(): string {
+    return NORMAL_BALL_TRAITS.map((trait) => `<li><b>${trait.label}</b>: ${trait.description}</li>`).join("");
+}
+
+function maybeShowCommentary(text?: string, force = false): void {
+    if (settings.simpleMode) return;
+    if (!force && (!isStarted || isFinished || isPaused || isMiraclePaused)) return;
+    const now = Date.now();
+    if (!force && now - lastCommentaryAt < COMMENTARY_MIN_INTERVAL_MS) return;
+    if (!force && appRandom() > 0.018) return;
+    const candidates = [
+        "研究員A「いまの玉、ちょっと性格ありますね」",
+        "観測装置「乱数の温度は正常です。たぶん。」",
+        "研究員B「捨て区間の顔色をうかがっています」",
+        "実況「盤面が静かにざわついています」",
+        "ねこ研究員「にゃーん。記録しました。」",
+        "観測装置「奇跡濃度、微量に上昇」",
+        "研究員A「この実験、見た目よりだいぶ騒がしいです」",
+        "実況「通常玉にも妙な個体差が出ています」",
+    ];
+    const message = text || candidates[Math.floor(appRandom() * candidates.length)] || candidates[0];
+    lastCommentaryAt = now;
+    if (commentaryTimer !== undefined) window.clearTimeout(commentaryTimer);
+    commentaryOverlay.innerHTML = `<div style="position:absolute;white-space:nowrap;left:100vw;bottom:0;padding:4px 16px;border-radius:999px;background:rgba(15,23,42,.74);color:#fff;font-weight:900;font-size:${isMobile ? "18px" : "16px"};line-height:1.4;text-shadow:0 2px 8px rgba(0,0,0,.45);box-shadow:0 8px 22px rgba(0,0,0,.22);transition:transform ${COMMENTARY_DISPLAY_MS}ms linear;">${message}</div>`;
+    commentaryOverlay.style.display = "block";
+    const line = commentaryOverlay.firstElementChild as HTMLElement | null;
+    if (line) {
+        window.requestAnimationFrame(() => {
+            line.style.transform = "translateX(calc(-100vw - 100% - 32px))";
+        });
+    }
+    commentaryTimer = window.setTimeout(() => {
+        commentaryOverlay.style.display = "none";
+        commentaryOverlay.innerHTML = "";
+    }, COMMENTARY_DISPLAY_MS + 300);
+}
+
 function triggerCameraShake(power: number, durationMs: number): void {
     if (settings.simpleMode) return;
     if (!settings.cameraShakeEnabled) return;
@@ -3768,10 +4019,8 @@ function getMiracleIconHtml(kind: DropKind, fallbackSymbol: string): string {
     const def = findSpecialDef(kind);
     if (def) {
         const imageSize = "clamp(210px,62vw,430px)";
-        const boomText = `<div style="margin-top:10px;font-size:clamp(24px,6vw,60px);font-weight:1000;color:#fff7ed;text-shadow:0 8px 26px rgba(0,0,0,.72);letter-spacing:.06em;">${isCatMiracle(def) ? "ねこ、どーん！" : `${escapeSvgText(def.label)}、どーん！`}</div>`;
         return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
             <img src="${createMiracleImageDataUri(def)}" alt="${escapeSvgText(def.label)}" style="width:${imageSize};height:${imageSize};border-radius:clamp(28px,8vw,64px);object-fit:contain;background:rgba(15,23,42,.84);box-shadow:0 26px 80px rgba(0,0,0,.58),0 0 0 clamp(6px,1.2vw,12px) rgba(255,255,255,.18);filter:drop-shadow(0 18px 28px rgba(0,0,0,.42));" />
-            ${boomText}
         </div>`;
     }
     const label = fallbackSymbol || "奇";
@@ -3877,6 +4126,8 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
         pauseForMiracle(def);
         updateMiracleCombo();
         addMiracleLog(def);
+        recordMiracleForChains(def.kind);
+        tryTriggerMiracleChains();
         const subtitle = `${def.label} ${t("発生", "appeared")} / [${def.rank}] ${formatProbability(def.denominator)}`;
         if (kind === "lifeQuoteMode") speakLifeQuoteEvent();
         else setSubtitle(subtitle);
@@ -4278,6 +4529,34 @@ function closeFinalResult(): void {
     resultOverlay.innerHTML = "";
 }
 
+function showEndingThenFinalResult(): void {
+    if (settings.simpleMode) {
+        showFinalResult();
+        return;
+    }
+    const best = miracleLogs[0];
+    const hasGodChain = Object.keys(unlockedChainRunIds).some((id) => MIRACLE_CHAIN_DEFS.find((x) => x.id === id)?.rank.includes("GOD"));
+    const title = hasGodChain ? "確率の外側へ到達" : best ? "観測記録を封印" : "実験終了";
+    const line = hasGodChain
+        ? "研究所は、奇跡同士の連鎖を最終記録として保存しました。"
+        : best
+            ? `${best.label} を含む研究記録を保存しました。`
+            : "通常観測として、静かに研究記録を保存しました。";
+    maybeShowCommentary(`実況「${title}」`, true);
+    fireConfetti(hasGodChain ? "cosmic" : best ? "miracle" : "normal");
+    resultOverlay.innerHTML = `
+        <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 36%, rgba(255,255,255,.18), rgba(15,23,42,.82) 54%, rgba(0,0,0,.96));"></div>
+        <div style="position:relative;max-width:900px;width:min(900px,94vw);padding:${isMobile ? "28px 18px" : "40px 48px"};border-radius:34px;background:rgba(15,23,42,.66);box-shadow:0 30px 90px rgba(0,0,0,.52);text-align:center;animation:ending-fade 2.4s ease-out forwards;">
+            <style>@keyframes ending-fade{0%{opacity:0;transform:translateY(18px) scale(.98)}18%{opacity:1;transform:translateY(0) scale(1)}82%{opacity:1}100%{opacity:0;transform:translateY(-8px) scale(.99)}}</style>
+            <div style="font-size:clamp(22px,4vw,38px);font-weight:1000;color:#fde68a;letter-spacing:.08em;">ENDING</div>
+            <div style="margin-top:10px;font-size:clamp(38px,8vw,82px);font-weight:1000;color:#fff;text-shadow:0 8px 30px rgba(0,0,0,.66);">${title}</div>
+            <div style="margin-top:16px;font-size:clamp(18px,3vw,30px);line-height:1.7;color:#e5e7eb;">${line}</div>
+            <div style="margin-top:18px;font-size:clamp(16px,2.6vw,24px);color:#cbd5e1;">${finishedCount.toLocaleString()}回の落下を確認しました。</div>
+        </div>`;
+    resultOverlay.style.display = "flex";
+    window.setTimeout(() => showFinalResult(), 2500);
+}
+
 function showFinalResult(): void {
     savedRecords.totalRuns++;
     savedRecords.maxFinishedCount = Math.max(savedRecords.maxFinishedCount, finishedCount);
@@ -4532,6 +4811,29 @@ function drawSpecialIcon(context: CanvasRenderingContext2D, kind: DropKind, x: n
     context.restore();
 }
 
+function drawNormalTraitMarks(context: CanvasRenderingContext2D): void {
+    if (settings.simpleMode) return;
+    context.save();
+    for (const body of engine.world.bodies) {
+        const plugin = (body as any).plugin;
+        if (!plugin?.isDrop || plugin.kind !== "normal" || !plugin.traitMark) continue;
+        const x = body.position.x;
+        const y = body.position.y;
+        const radius = body.circleRadius ?? plugin.originalRadius ?? geometry.ballRadius;
+        context.globalAlpha = plugin.traitKind === "ghost" ? 0.55 : 0.88;
+        context.beginPath();
+        context.arc(x, y, radius * 0.66, 0, Math.PI * 2);
+        context.fillStyle = "rgba(255,255,255,.42)";
+        context.fill();
+        context.font = `900 ${Math.round(clamp(radius * 0.66, 9, 20))}px "Noto Sans JP", "Yu Gothic", sans-serif`;
+        context.fillStyle = "rgba(15,23,42,.86)";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(String(plugin.traitMark), x, y + radius * 0.03);
+    }
+    context.restore();
+}
+
 function drawSpecialGlows(context: CanvasRenderingContext2D): void {
     if (settings.simpleMode) return;
     const time = Date.now() / 1000;
@@ -4591,6 +4893,7 @@ Events.on(render, "afterRender", () => {
     const context = render.context;
     context.save();
     drawSpecialGlows(context);
+    drawNormalTraitMarks(context);
     context.textAlign = "center";
     context.textBaseline = "middle";
     drawDiscardBinLabel(context, 0);
@@ -4682,6 +4985,7 @@ Events.on(engine, "afterUpdate", () => {
     updatePinWiggles();
     updateBoardAnomaly();
     maybeTriggerBoardAnomaly();
+    maybeShowCommentary();
     gameArea.style.filter = anomalyUntil ? (anomalyHidePins ? "brightness(.84) contrast(1.1)" : "brightness(.95)") : "";
     if (!isStarted || isFinished || isMiraclePaused) return;
 
@@ -4732,6 +5036,8 @@ Events.on(engine, "afterUpdate", () => {
             const dx = targetX - body.position.x;
             Body.applyForce(body, body.position, { x: dx * 0.0000018, y: -0.00000035 });
         }
+
+        applyActiveBoardAnomalyForce(body);
 
         if (plugin.kind === "shape" || plugin.kind === "giant") {
             const lastX = plugin.lastX ?? body.position.x;
@@ -4825,7 +5131,7 @@ Events.on(engine, "afterUpdate", () => {
         endTime = Date.now();
         Runner.stop(runner);
         updateInfo();
-        showFinalResult();
+        showEndingThenFinalResult();
     }
 });
 
