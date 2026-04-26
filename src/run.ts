@@ -469,6 +469,8 @@ const uiFontPx = isMobile ? 25 : 20;
 const uiButtonFontPx = isMobile ? 26 : 20;
 const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
 const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
+const APP_NAME = "MiracleBallLab";
+const APP_VERSION = "2026.04.26-appstore-prep";
 
 let settings: Settings = {
     targetCount: 500,
@@ -733,6 +735,65 @@ globalStyle.textContent = `
   body.miracle-black-mode canvas { background-color:#020617 !important; }
 `;
 document.head.appendChild(globalStyle);
+
+function ensureHeadTag<K extends keyof HTMLElementTagNameMap>(tagName: K, selector: string, setup: (el: HTMLElementTagNameMap[K]) => void): HTMLElementTagNameMap[K] {
+    let el = document.head.querySelector(selector) as HTMLElementTagNameMap[K] | null;
+    if (!el) {
+        el = document.createElement(tagName);
+        document.head.appendChild(el);
+    }
+    setup(el);
+    return el;
+}
+
+function setupWebAppMetadata(): void {
+    document.title = APP_NAME;
+    ensureHeadTag("meta", 'meta[name="viewport"]', (el) => {
+        el.setAttribute("name", "viewport");
+        el.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no");
+    });
+    ensureHeadTag("meta", 'meta[name="theme-color"]', (el) => {
+        el.setAttribute("name", "theme-color");
+        el.setAttribute("content", "#172554");
+    });
+    ensureHeadTag("meta", 'meta[name="apple-mobile-web-app-capable"]', (el) => {
+        el.setAttribute("name", "apple-mobile-web-app-capable");
+        el.setAttribute("content", "yes");
+    });
+    ensureHeadTag("meta", 'meta[name="apple-mobile-web-app-title"]', (el) => {
+        el.setAttribute("name", "apple-mobile-web-app-title");
+        el.setAttribute("content", APP_NAME);
+    });
+    ensureHeadTag("meta", 'meta[name="apple-mobile-web-app-status-bar-style"]', (el) => {
+        el.setAttribute("name", "apple-mobile-web-app-status-bar-style");
+        el.setAttribute("content", "black-translucent");
+    });
+    ensureHeadTag("link", 'link[rel="manifest"]', (el) => {
+        el.setAttribute("rel", "manifest");
+        el.setAttribute("href", `${import.meta.env.BASE_URL}manifest.webmanifest`);
+    });
+    ensureHeadTag("link", 'link[rel="apple-touch-icon"]', (el) => {
+        el.setAttribute("rel", "apple-touch-icon");
+        el.setAttribute("href", `${import.meta.env.BASE_URL}favicon.png`);
+    });
+    ensureHeadTag("link", 'link[rel="icon"]', (el) => {
+        el.setAttribute("rel", "icon");
+        el.setAttribute("href", `${import.meta.env.BASE_URL}favicon.png`);
+    });
+}
+
+function registerServiceWorker(): void {
+    if (!("serviceWorker" in navigator)) return;
+    if (location.protocol !== "https:" && location.hostname !== "localhost") return;
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`).catch(() => {
+            // Service Worker が無い環境でもゲーム本体は動かす。
+        });
+    });
+}
+
+setupWebAppMetadata();
+registerServiceWorker();
 
 const bootStartedAt = Date.now();
 const bootMinimumDurationMs = 2000;
@@ -1348,6 +1409,7 @@ const settingButtons = createSection("反映・出力", "Apply & export");
 const runButton = setTooltip(setButtonLabel(createButton("実行", () => startExperiment()), "実行", "Run"), "設定どおりに落下実験を開始します。", "Start the drop experiment with current settings.");
 utilityButtons.appendChild(runButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"), "このプログラムが何をするか説明します。", "Explain what this program does."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("アプリ化準備", () => showAppStorePlanPopup()), "アプリ化準備", "App prep"), "Web版完成からAppStore化までの確認項目を表示します。", "Show the checklist from web release to App Store."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("ボタン説明", () => showButtonHelpPopup()), "ボタン説明", "Buttons"), "各ボタンの役割を一覧表示します。", "Show a list of what each button does."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡図鑑", () => showMiracleBookPopup()), "奇跡図鑑", "Miracle book"), "レア玉の一覧と発見回数を見ます。", "View rare drops and discovery counts."));
 missionButton = setTooltip(setButtonLabel(createButton("ミッション", () => showMissionPopup()), "ミッション", "Missions"), "達成条件と報酬スコアを確認します。", "Check missions and score rewards.");
@@ -4250,6 +4312,21 @@ function showAboutPopup(): void {
         <p><b>ブラックモード</b>をONにすると、設定欄・ボタン・盤面背景を黒基調に切り替えます。デフォルトはOFFです。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。SR/SSRで同じ奇跡演出が実行中に再発生した場合は、2回目以降さらに短く閉じます。</p>
         <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
+    `);
+}
+
+function showAppStorePlanPopup(): void {
+    showPopup("アプリ化準備", `
+        <p><b>${APP_NAME}</b> のWeb版を完成させてから、iPhoneアプリ化するための確認メモです。</p>
+        <p><b>現在の版:</b> ${APP_VERSION}</p>
+        <ol style="text-align:left;line-height:1.8;padding-left:1.4em;">
+            <li><b>Web版完成:</b> GitHubへpushし、Cloudflare Pages / GitHub Pages でHTTPS公開します。</li>
+            <li><b>PWA準備:</b> <code>manifest.webmanifest</code> と <code>service-worker.js</code> を <code>public</code> 配下へ置きます。</li>
+            <li><b>スマホ確認:</b> iPhone Safariで開き、音、動画、終了ボタン、縦画面、ホーム画面追加を確認します。</li>
+            <li><b>AppStore化:</b> CapacitorなどでWeb版を包み、Xcodeで署名してApp Store Connectへ提出します。</li>
+            <li><b>更新方針:</b> Web版はpushで反映、AppStore版は大きな変更ごとにApple審査へ出す前提にします。</li>
+        </ol>
+        <p style="opacity:.78;">アプリ化後も中身をWeb表示に寄せる場合、審査で説明しやすいように、ゲームとしての主要機能は現在のWeb版で完結している状態にしておくのがおすすめです。</p>
     `);
 }
 
@@ -7461,3 +7538,23 @@ function scheduleResize(): void {
 }
 window.addEventListener("resize", scheduleResize);
 window.visualViewport?.addEventListener("resize", scheduleResize);
+
+let wasRunningBeforePageHidden = false;
+function handlePageHiddenForMobile(): void {
+    if (isAppTerminated) return;
+    wasRunningBeforePageHidden = isStarted && !isFinished && !isPaused;
+    if (wasRunningBeforePageHidden) togglePause();
+    stopRemoteMiracleVideo();
+}
+
+function handlePageVisibleForMobile(): void {
+    if (isAppTerminated) return;
+    if (wasRunningBeforePageHidden && isStarted && !isFinished && isPaused) togglePause();
+    wasRunningBeforePageHidden = false;
+}
+
+window.addEventListener("pagehide", handlePageHiddenForMobile);
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") handlePageHiddenForMobile();
+    if (document.visibilityState === "visible") handlePageVisibleForMobile();
+});
