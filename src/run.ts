@@ -193,6 +193,50 @@ type UserPreferences = Partial<Settings> & {
     language?: "ja" | "en";
 };
 
+type AdminLogEventType =
+    | "app_open"
+    | "run_start"
+    | "run_finish"
+    | "miracle"
+    | "video_play"
+    | "video_skip_lower_rank"
+    | "video_fail"
+    | "settings_apply"
+    | "safe_exit"
+    | "admin_unlock";
+
+type AdminLogEntry = {
+    type: AdminLogEventType;
+    at: number;
+    detail?: string;
+    rank?: string;
+    label?: string;
+    count?: number;
+    targetCount?: number;
+    speedLabel?: string;
+    mode?: ProbabilityMode;
+};
+
+type AdminStats = {
+    version: number;
+    createdAt: number;
+    updatedAt: number;
+    appOpenCount: number;
+    runStartCount: number;
+    runFinishCount: number;
+    safeExitCount: number;
+    miracleCount: number;
+    videoPlayCount: number;
+    videoSkipLowerRankCount: number;
+    videoFailCount: number;
+    totalFinishedCount: number;
+    rankCounts: Record<string, number>;
+    dailyOpenCounts: Record<string, number>;
+    dailyRunCounts: Record<string, number>;
+    dailyMiracleCounts: Record<string, number>;
+    lastEvents: AdminLogEntry[];
+};
+
 type Geometry = {
     width: number;
     height: number;
@@ -328,6 +372,7 @@ const SWORD_IMPACT_RATE = 0.0000002; // 1/5,000,000
 const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v3";
 const USER_PROFILE_STORAGE_KEY = "miracle-ball-lab-user-profile-v1";
 const USER_PREFERENCES_STORAGE_KEY = "miracle-ball-lab-user-preferences-v1";
+const ADMIN_STATS_STORAGE_KEY = "miracle-ball-lab-admin-stats-v1";
 const APP_VERSION = "1.0.0-web-appstore-ready";
 const SECRET_KEY_SEQUENCE = "miracle";
 const MIRACLE_ASSET_BASE_URL = "https://pub-53a4b50cc39c4d7882f67fc9340fe6e8.r2.dev";
@@ -564,6 +609,7 @@ let specialCreated: Record<string, number> = {};
 let savedRecords: SavedRecords = loadSavedRecords();
 let userProfile: UserProfile = loadUserProfile();
 let userPreferences: UserPreferences = loadUserPreferences();
+let adminStats: AdminStats = loadAdminStats();
 let missionDefs: MissionDef[] = [];
 let missionProgress: Record<string, boolean> = {};
 let runScore = 0;
@@ -673,6 +719,8 @@ const ADMIN_UNLOCK_STORAGE_KEY = "miracleAdminUnlocked";
 const ADMIN_PASSCODE_SHA256 = "e8a86901814993b1da9c180e735c2064c95886b8aeb7f70819d8201a4fbcb60d";
 let isAdminMode = localStorage.getItem(ADMIN_UNLOCK_STORAGE_KEY) === "1";
 let adminForceNextMiracleEffect = false;
+let activeRemoteMiracleVideoRankScore = -1;
+let activeRemoteMiracleVideoLabel = "";
 
 const engine = Engine.create();
 engine.gravity.y = 8;
@@ -2095,6 +2143,169 @@ function loadUserPreferences(): UserPreferences {
     return { version: 1 };
 }
 
+function createEmptyAdminStats(): AdminStats {
+    const now = Date.now();
+    return {
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+        appOpenCount: 0,
+        runStartCount: 0,
+        runFinishCount: 0,
+        safeExitCount: 0,
+        miracleCount: 0,
+        videoPlayCount: 0,
+        videoSkipLowerRankCount: 0,
+        videoFailCount: 0,
+        totalFinishedCount: 0,
+        rankCounts: {},
+        dailyOpenCounts: {},
+        dailyRunCounts: {},
+        dailyMiracleCounts: {},
+        lastEvents: [],
+    };
+}
+
+function loadAdminStats(): AdminStats {
+    try {
+        const raw = localStorage.getItem(ADMIN_STATS_STORAGE_KEY);
+        if (!raw) return createEmptyAdminStats();
+        const parsed = JSON.parse(raw) as Partial<AdminStats>;
+        const base = createEmptyAdminStats();
+        return {
+            ...base,
+            ...parsed,
+            rankCounts: parsed.rankCounts ?? {},
+            dailyOpenCounts: parsed.dailyOpenCounts ?? {},
+            dailyRunCounts: parsed.dailyRunCounts ?? {},
+            dailyMiracleCounts: parsed.dailyMiracleCounts ?? {},
+            lastEvents: Array.isArray(parsed.lastEvents) ? parsed.lastEvents.slice(0, 120) : [],
+        };
+    } catch {
+        return createEmptyAdminStats();
+    }
+}
+
+function saveAdminStats(): void {
+    adminStats.updatedAt = Date.now();
+    try {
+        localStorage.setItem(ADMIN_STATS_STORAGE_KEY, JSON.stringify(adminStats));
+    } catch {
+        adminStats.lastEvents = adminStats.lastEvents.slice(0, 40);
+        try { localStorage.setItem(ADMIN_STATS_STORAGE_KEY, JSON.stringify(adminStats)); } catch {}
+    }
+}
+
+function incrementAdminCounter(map: Record<string, number>, key: string, amount = 1): void {
+    map[key] = (map[key] ?? 0) + amount;
+}
+
+function recordAdminEvent(entry: AdminLogEntry): void {
+    const fullEntry: AdminLogEntry = {
+        at: entry.at || Date.now(),
+        type: entry.type,
+        detail: entry.detail,
+        rank: entry.rank,
+        label: entry.label,
+        count: entry.count,
+        targetCount: entry.targetCount,
+        speedLabel: entry.speedLabel ?? speedLabelText,
+        mode: entry.mode ?? settings.probabilityMode,
+    };
+    const day = getDateKey(new Date(fullEntry.at));
+    if (fullEntry.type === "app_open") {
+        adminStats.appOpenCount += 1;
+        incrementAdminCounter(adminStats.dailyOpenCounts, day);
+    } else if (fullEntry.type === "run_start") {
+        adminStats.runStartCount += 1;
+        incrementAdminCounter(adminStats.dailyRunCounts, day);
+    } else if (fullEntry.type === "run_finish") {
+        adminStats.runFinishCount += 1;
+        adminStats.totalFinishedCount += Math.max(0, fullEntry.count ?? 0);
+    } else if (fullEntry.type === "safe_exit") {
+        adminStats.safeExitCount += 1;
+    } else if (fullEntry.type === "miracle") {
+        adminStats.miracleCount += 1;
+        incrementAdminCounter(adminStats.dailyMiracleCounts, day);
+        if (fullEntry.rank) incrementAdminCounter(adminStats.rankCounts, fullEntry.rank);
+    } else if (fullEntry.type === "video_play") {
+        adminStats.videoPlayCount += 1;
+    } else if (fullEntry.type === "video_skip_lower_rank") {
+        adminStats.videoSkipLowerRankCount += 1;
+    } else if (fullEntry.type === "video_fail") {
+        adminStats.videoFailCount += 1;
+    }
+    adminStats.lastEvents = [fullEntry, ...adminStats.lastEvents].slice(0, 120);
+    saveAdminStats();
+}
+
+function getAdminRate(numerator: number, denominator: number): string {
+    if (denominator <= 0) return "0.0%";
+    return `${((numerator / denominator) * 100).toFixed(1)}%`;
+}
+
+function getTopAdminDays(map: Record<string, number>): string {
+    const rows = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    if (rows.length === 0) return `<div style="opacity:.65;">記録なし</div>`;
+    return rows.map(([day, count]) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed rgba(80,90,120,.16);"><span>${escapeHtml(day)}</span><b>${count.toLocaleString()}</b></div>`).join("");
+}
+
+function getAdminRankRows(): string {
+    const rows = Object.entries(adminStats.rankCounts).sort((a, b) => getRankScore(b[0]) - getRankScore(a[0]) || b[1] - a[1]);
+    if (rows.length === 0) return `<div style="opacity:.65;">まだレア役の記録はありません。</div>`;
+    return rows.map(([rank, count]) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed rgba(80,90,120,.16);"><span>${escapeHtml(rank)}</span><b>${count.toLocaleString()}</b></div>`).join("");
+}
+
+function getAdminEventRows(): string {
+    if (adminStats.lastEvents.length === 0) return `<div style="opacity:.65;">ログなし</div>`;
+    return adminStats.lastEvents.slice(0, 35).map((event) => {
+        const label = [event.label, event.rank ? `[${event.rank}]` : "", event.detail].filter(Boolean).join(" ");
+        return `<div style="padding:8px 0;border-bottom:1px solid rgba(80,90,120,.12);"><b>${escapeHtml(event.type)}</b> <span style="opacity:.68;">${formatDateTime(event.at)}</span><br><span style="opacity:.78;">${escapeHtml(label || "-")}</span></div>`;
+    }).join("");
+}
+
+function showAdminStatsPopup(): void {
+    if (!isAdminMode) {
+        showAdminGatePopup();
+        return;
+    }
+    const avgFinished = adminStats.runFinishCount > 0 ? Math.round(adminStats.totalFinishedCount / adminStats.runFinishCount).toLocaleString() : "0";
+    const body = `
+        <p><b>この端末内だけに保存している管理者用ログです。</b> 個人情報や広告IDは保存しません。</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(${isMobile ? "145px" : "170px"},1fr));gap:10px;margin:14px 0;">
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);"><div style="opacity:.68;">起動回数</div><b style="font-size:26px;">${adminStats.appOpenCount.toLocaleString()}</b></div>
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);"><div style="opacity:.68;">実行開始</div><b style="font-size:26px;">${adminStats.runStartCount.toLocaleString()}</b></div>
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);"><div style="opacity:.68;">実験完了</div><b style="font-size:26px;">${adminStats.runFinishCount.toLocaleString()}</b></div>
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);"><div style="opacity:.68;">完了率</div><b style="font-size:26px;">${getAdminRate(adminStats.runFinishCount, adminStats.runStartCount)}</b></div>
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);"><div style="opacity:.68;">奇跡回数</div><b style="font-size:26px;">${adminStats.miracleCount.toLocaleString()}</b></div>
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);"><div style="opacity:.68;">動画再生</div><b style="font-size:26px;">${adminStats.videoPlayCount.toLocaleString()}</b></div>
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);"><div style="opacity:.68;">低レア動画スキップ</div><b style="font-size:26px;">${adminStats.videoSkipLowerRankCount.toLocaleString()}</b></div>
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);"><div style="opacity:.68;">平均処理数</div><b style="font-size:26px;">${avgFinished}</b></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(${isMobile ? "230px" : "260px"},1fr));gap:12px;">
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.62);"><h3>ランク別レア役</h3>${getAdminRankRows()}</div>
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.62);"><h3>日別起動 TOP7</h3>${getTopAdminDays(adminStats.dailyOpenCounts)}</div>
+            <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.62);"><h3>日別実行 TOP7</h3>${getTopAdminDays(adminStats.dailyRunCounts)}</div>
+        </div>
+        <h3 style="margin-top:18px;">直近ログ</h3>
+        <div style="padding:12px 14px;border-radius:18px;background:rgba(255,255,255,.68);max-height:42vh;overflow:auto;">${getAdminEventRows()}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+            <button id="admin-log-copy-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:10px 16px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:linear-gradient(180deg,#dcfce7 0%,#bbf7d0 100%);color:#14532d;cursor:pointer;">JSONコピー</button>
+            <button id="admin-log-reset-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:10px 16px;border-radius:999px;border:1px solid rgba(127,29,29,.24);background:linear-gradient(180deg,#fee2e2 0%,#fecaca 100%);color:#7f1d1d;cursor:pointer;">ログ初期化</button>
+        </div>`;
+    showPopup("管理者ログ", body);
+    document.getElementById("admin-log-copy-button")!.onclick = () => {
+        void navigator.clipboard?.writeText(JSON.stringify(adminStats, null, 2));
+        showSoftToast("管理者ログJSONをコピーしました");
+    };
+    document.getElementById("admin-log-reset-button")!.onclick = () => {
+        adminStats = createEmptyAdminStats();
+        saveAdminStats();
+        showSoftToast("管理者ログを初期化しました");
+        showAdminStatsPopup();
+    };
+}
+
 function applyUserPreferencesToCurrentState(): void {
     const prefs = userPreferences;
     if (!prefs || typeof prefs !== "object") return;
@@ -2145,6 +2356,7 @@ function persistUserPreferencesSoon(): void {
 }
 
 function registerAppOpen(): void {
+    recordAdminEvent({ type: "app_open", at: Date.now(), detail: `${browserName} / ${window.innerWidth}x${window.innerHeight}` });
     const today = getDateKey();
     const last = userProfile.lastPlayedDateKey;
     const yesterday = getDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
@@ -3575,6 +3787,7 @@ function showAdminGatePopup(): void {
             if (hash === ADMIN_PASSCODE_SHA256) {
                 isAdminMode = true;
                 localStorage.setItem(ADMIN_UNLOCK_STORAGE_KEY, "1");
+                recordAdminEvent({ type: "admin_unlock", at: Date.now(), detail: "passcode ok" });
                 updateAdminButton();
                 playUiSound("open");
                 showSoftToast("研究主任モードを解放しました");
@@ -3613,6 +3826,7 @@ function showAdminPanelPopup(): void {
             <button id="admin-sword-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">剣の衝撃</button>
             <button id="admin-all-effects-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#dcfce7 0%,#bbf7d0 100%);color:#14532d;cursor:pointer;">演出系を全部ON</button>
             <button id="admin-r2-video-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">R2動画確認</button>
+            <button id="admin-log-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;cursor:pointer;">管理者ログ</button>
             <button id="admin-skill-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#eef2ff 0%,#c7d2fe 100%);color:#312e81;cursor:pointer;">スキル+99</button>
             <button id="admin-unlock-book-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#fef9c3 0%,#fde68a 100%);color:#713f12;cursor:pointer;">図鑑テスト解放</button>
             <button id="admin-lock-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(127,29,29,.25);background:linear-gradient(180deg,#fee2e2 0%,#fecaca 100%);color:#7f1d1d;cursor:pointer;">管理者解除</button>
@@ -3624,6 +3838,7 @@ function showAdminPanelPopup(): void {
     document.getElementById("admin-sword-button")!.onclick = () => triggerAdminMiracle("swordImpact");
     document.getElementById("admin-all-effects-button")!.onclick = () => adminEnableAllEffects();
     document.getElementById("admin-r2-video-button")!.onclick = () => { void showAdminRemoteVideoTestPopup(); };
+    document.getElementById("admin-log-button")!.onclick = () => showAdminStatsPopup();
     document.getElementById("admin-skill-button")!.onclick = () => adminAddSkillStock();
     document.getElementById("admin-unlock-book-button")!.onclick = () => adminUnlockMiracleBookForTest();
     document.getElementById("admin-lock-button")!.onclick = () => adminLockMode();
@@ -3911,6 +4126,7 @@ function getSilhouetteHint(def: SpecialEventDef): string {
 }
 
 function addMiracleLog(def: SpecialEventDef): void {
+    recordAdminEvent({ type: "miracle", at: Date.now(), label: def.label, rank: def.rank, count: finishedCount, targetCount: settings.targetCount });
     const repeatCount = repeatedMiracleRunCounts[def.kind] ?? 0;
     miracleLogs.unshift({
         label: def.label,
@@ -5103,6 +5319,7 @@ async function startExperiment(): Promise<void> {
     // ブラウザの仕様上、音声開始はユーザー操作後が安全なので、実行ボタン押下時に準備する
     if (soundEnabled && !toneReady) await enableSound(false);
     playUiSound("start");
+    recordAdminEvent({ type: "run_start", at: Date.now(), targetCount: settings.targetCount, detail: `${settings.activeLimit} active / ${settings.binCount} bins / ${settings.pinRows} rows` });
     engine.timing.timeScale = getCurrentTimeScale();
     resetExperiment(true);
 }
@@ -5130,6 +5347,11 @@ function normalizeRemoteMiracleUrl(url: string): string {
 
 function getRemoteAssetRank(asset: RemoteMiracleAsset): string {
     return String(asset.rank ?? "common").toLowerCase();
+}
+
+function getRemoteAssetRankScore(asset: RemoteMiracleAsset): number {
+    const rank = String(asset.rank ?? "N").toUpperCase();
+    return Math.max(0, getRankScore(rank));
 }
 
 function getRemoteMiracleAssetSources(asset: RemoteMiracleAsset): RemoteMiracleAssetSource[] {
@@ -5287,6 +5509,8 @@ function stopRemoteMiracleVideo(): void {
 
     remoteMiracleVideoOverlay.innerHTML = "";
     remoteMiracleVideoOverlay.style.display = "none";
+    activeRemoteMiracleVideoRankScore = -1;
+    activeRemoteMiracleVideoLabel = "";
 }
 
 function pauseRemoteMiracleVideo(): void {
@@ -5338,6 +5562,13 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
     const usableSources = getUsableRemoteMiracleAssetSources(asset);
     if (usableSources.length === 0) return false;
+
+    const nextRankScore = getRemoteAssetRankScore(asset);
+    const nextLabel = getRemoteMiracleAssetLabel(asset);
+    if (!force && activeRemoteMiracleVideo && remoteMiracleVideoOverlay.style.display !== "none" && nextRankScore < activeRemoteMiracleVideoRankScore) {
+        recordAdminEvent({ type: "video_skip_lower_rank", at: Date.now(), label: nextLabel, rank: String(asset.rank ?? "common").toUpperCase(), detail: `active ${activeRemoteMiracleVideoLabel}` });
+        return false;
+    }
 
     stopRemoteMiracleVideo();
 
@@ -5406,6 +5637,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
     if (!ready) {
         console.warn("[Miracle R2] video file not found or not ready", asset);
+        recordAdminEvent({ type: "video_fail", at: Date.now(), label: getRemoteMiracleAssetLabel(asset), rank: String(asset.rank ?? "common").toUpperCase(), detail: "not ready" });
         markRemoteMiracleAssetBad(asset);
 
         if (force) {
@@ -5428,6 +5660,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
     video.addEventListener("error", () => {
         console.warn("[Miracle R2] video load failed", asset);
+        recordAdminEvent({ type: "video_fail", at: Date.now(), label: getRemoteMiracleAssetLabel(asset), rank: String(asset.rank ?? "common").toUpperCase(), detail: "load error" });
         markRemoteMiracleAssetBad(asset);
         stopRemoteMiracleVideo();
 
@@ -5440,9 +5673,12 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     remoteMiracleVideoOverlay.appendChild(video);
     remoteMiracleVideoOverlay.style.display = "block";
     activeRemoteMiracleVideo = video;
+    activeRemoteMiracleVideoRankScore = nextRankScore;
+    activeRemoteMiracleVideoLabel = nextLabel;
 
     try {
         await video.play();
+        recordAdminEvent({ type: "video_play", at: Date.now(), label: nextLabel, rank: String(asset.rank ?? "common").toUpperCase() });
 
         if (remoteMiracleVideoTimer !== undefined) {
             window.clearTimeout(remoteMiracleVideoTimer);
@@ -5455,6 +5691,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
         return true;
     } catch (error) {
         console.warn("[Miracle R2] video autoplay/load failed", error);
+        recordAdminEvent({ type: "video_fail", at: Date.now(), label: getRemoteMiracleAssetLabel(asset), rank: String(asset.rank ?? "common").toUpperCase(), detail: "autoplay failed" });
         markRemoteMiracleAssetBad(asset);
         stopRemoteMiracleVideo();
 
@@ -5723,6 +5960,7 @@ function generateResearchMemoHtml(): string {
 }
 
 function terminateExperimentSafely(): void {
+    recordAdminEvent({ type: "safe_exit", at: Date.now(), count: finishedCount, targetCount: settings.targetCount });
     if (isAppTerminated) return;
     isAppTerminated = true;
     userProfile.totalSafeStops += 1;
@@ -6896,6 +7134,7 @@ function showEndingThenFinalResult(): void {
 }
 
 function showFinalResult(): void {
+    recordAdminEvent({ type: "run_finish", at: Date.now(), count: finishedCount, targetCount: settings.targetCount, detail: `score ${runScore}` });
     savedRecords.totalRuns++;
     savedRecords.maxFinishedCount = Math.max(savedRecords.maxFinishedCount, finishedCount);
     savedRecords.maxTargetCount = Math.max(savedRecords.maxTargetCount, settings.targetCount);
