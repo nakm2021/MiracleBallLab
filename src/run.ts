@@ -170,6 +170,29 @@ type Settings = {
     probabilityMode: ProbabilityMode;
 };
 
+type UserPlayStyle = "standard" | "viewer" | "collector" | "recording";
+
+type UserProfile = {
+    nickname: string;
+    playStyle: UserPlayStyle;
+    favoriteMiracle: string;
+    createdAt: number;
+    lastOpenedAt: number;
+    openCount: number;
+    lastPlayedDateKey: string;
+    consecutiveDays: number;
+    totalSafeStops: number;
+};
+
+type UserPreferences = Partial<Settings> & {
+    version: number;
+    speedLabelText?: string;
+    theme?: ThemeMode;
+    soundEnabled?: boolean;
+    confettiEnabled?: boolean;
+    language?: "ja" | "en";
+};
+
 type Geometry = {
     width: number;
     height: number;
@@ -303,6 +326,9 @@ const COSMIC_EGG_RATE = 0.000000000001; // 1/1,000,000,000,000
 const SWORD_IMPACT_RATE = 0.0000002; // 1/5,000,000
 
 const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v3";
+const USER_PROFILE_STORAGE_KEY = "miracle-ball-lab-user-profile-v1";
+const USER_PREFERENCES_STORAGE_KEY = "miracle-ball-lab-user-preferences-v1";
+const APP_VERSION = "1.0.0-web-appstore-ready";
 const SECRET_KEY_SEQUENCE = "miracle";
 const MIRACLE_ASSET_BASE_URL = "https://pub-53a4b50cc39c4d7882f67fc9340fe6e8.r2.dev";
 const MIRACLE_MANIFEST_URL = `${MIRACLE_ASSET_BASE_URL}/manifest.json`;
@@ -469,8 +495,6 @@ const uiFontPx = isMobile ? 25 : 20;
 const uiButtonFontPx = isMobile ? 26 : 20;
 const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
 const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
-const APP_NAME = "MiracleBallLab";
-const APP_VERSION = "2026.04.26-appstore-prep";
 
 let settings: Settings = {
     targetCount: 500,
@@ -538,6 +562,8 @@ let labExplosionCreated = 0;
 
 let specialCreated: Record<string, number> = {};
 let savedRecords: SavedRecords = loadSavedRecords();
+let userProfile: UserProfile = loadUserProfile();
+let userPreferences: UserPreferences = loadUserPreferences();
 let missionDefs: MissionDef[] = [];
 let missionProgress: Record<string, boolean> = {};
 let runScore = 0;
@@ -625,6 +651,8 @@ let guideTimers: number[] = [];
 let soundEnabled = true;
 let toneReady = false;
 let confettiEnabled = true;
+applyUserPreferencesToCurrentState();
+registerAppOpen();
 let pixiEnabled = false;
 let pixiReady = false;
 let pixiApp: Application | null = null;
@@ -735,65 +763,6 @@ globalStyle.textContent = `
   body.miracle-black-mode canvas { background-color:#020617 !important; }
 `;
 document.head.appendChild(globalStyle);
-
-function ensureHeadTag<K extends keyof HTMLElementTagNameMap>(tagName: K, selector: string, setup: (el: HTMLElementTagNameMap[K]) => void): HTMLElementTagNameMap[K] {
-    let el = document.head.querySelector(selector) as HTMLElementTagNameMap[K] | null;
-    if (!el) {
-        el = document.createElement(tagName);
-        document.head.appendChild(el);
-    }
-    setup(el);
-    return el;
-}
-
-function setupWebAppMetadata(): void {
-    document.title = APP_NAME;
-    ensureHeadTag("meta", 'meta[name="viewport"]', (el) => {
-        el.setAttribute("name", "viewport");
-        el.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no");
-    });
-    ensureHeadTag("meta", 'meta[name="theme-color"]', (el) => {
-        el.setAttribute("name", "theme-color");
-        el.setAttribute("content", "#172554");
-    });
-    ensureHeadTag("meta", 'meta[name="apple-mobile-web-app-capable"]', (el) => {
-        el.setAttribute("name", "apple-mobile-web-app-capable");
-        el.setAttribute("content", "yes");
-    });
-    ensureHeadTag("meta", 'meta[name="apple-mobile-web-app-title"]', (el) => {
-        el.setAttribute("name", "apple-mobile-web-app-title");
-        el.setAttribute("content", APP_NAME);
-    });
-    ensureHeadTag("meta", 'meta[name="apple-mobile-web-app-status-bar-style"]', (el) => {
-        el.setAttribute("name", "apple-mobile-web-app-status-bar-style");
-        el.setAttribute("content", "black-translucent");
-    });
-    ensureHeadTag("link", 'link[rel="manifest"]', (el) => {
-        el.setAttribute("rel", "manifest");
-        el.setAttribute("href", `${import.meta.env.BASE_URL}manifest.webmanifest`);
-    });
-    ensureHeadTag("link", 'link[rel="apple-touch-icon"]', (el) => {
-        el.setAttribute("rel", "apple-touch-icon");
-        el.setAttribute("href", `${import.meta.env.BASE_URL}favicon.png`);
-    });
-    ensureHeadTag("link", 'link[rel="icon"]', (el) => {
-        el.setAttribute("rel", "icon");
-        el.setAttribute("href", `${import.meta.env.BASE_URL}favicon.png`);
-    });
-}
-
-function registerServiceWorker(): void {
-    if (!("serviceWorker" in navigator)) return;
-    if (location.protocol !== "https:" && location.hostname !== "localhost") return;
-    window.addEventListener("load", () => {
-        navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`).catch(() => {
-            // Service Worker が無い環境でもゲーム本体は動かす。
-        });
-    });
-}
-
-setupWebAppMetadata();
-registerServiceWorker();
 
 const bootStartedAt = Date.now();
 const bootMinimumDurationMs = 2000;
@@ -1409,7 +1378,8 @@ const settingButtons = createSection("反映・出力", "Apply & export");
 const runButton = setTooltip(setButtonLabel(createButton("実行", () => startExperiment()), "実行", "Run"), "設定どおりに落下実験を開始します。", "Start the drop experiment with current settings.");
 utilityButtons.appendChild(runButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"), "このプログラムが何をするか説明します。", "Explain what this program does."));
-utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("アプリ化準備", () => showAppStorePlanPopup()), "アプリ化準備", "App prep"), "Web版完成からAppStore化までの確認項目を表示します。", "Show the checklist from web release to App Store."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("ユーザー設定", () => showUserSettingsPopup()), "ユーザー設定", "User"), "ニックネーム、遊び方、保存データを確認します。", "Manage nickname, play style, and local data."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("アプリ情報", () => showAppInfoPopup()), "アプリ情報", "App info"), "オフライン、プライバシー、AppStore向け情報を表示します。", "Show offline, privacy, and app information."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("ボタン説明", () => showButtonHelpPopup()), "ボタン説明", "Buttons"), "各ボタンの役割を一覧表示します。", "Show a list of what each button does."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡図鑑", () => showMiracleBookPopup()), "奇跡図鑑", "Miracle book"), "レア玉の一覧と発見回数を見ます。", "View rare drops and discovery counts."));
 missionButton = setTooltip(setButtonLabel(createButton("ミッション", () => showMissionPopup()), "ミッション", "Missions"), "達成条件と報酬スコアを確認します。", "Check missions and score rewards.");
@@ -1467,6 +1437,7 @@ function changeSpeed(label: string): void {
     engine.timing.timeScale = getCurrentTimeScale();
     updateSpeedButtons();
     updateInfo();
+    saveUserPreferencesFromCurrentState();
     showSoftToast(`${getSpeedDisplayLabel()}${t("に変更しました", " selected")}`);
 }
 
@@ -2066,6 +2037,200 @@ function saveRecords(): void {
     } catch {
         // localStorage不可の環境では無視
     }
+}
+
+function getDateKey(date = new Date()): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+}
+
+function createDefaultUserProfile(): UserProfile {
+    const now = Date.now();
+    return {
+        nickname: "研究員",
+        playStyle: "standard",
+        favoriteMiracle: "まだ未設定",
+        createdAt: now,
+        lastOpenedAt: now,
+        openCount: 0,
+        lastPlayedDateKey: "",
+        consecutiveDays: 0,
+        totalSafeStops: 0,
+    };
+}
+
+function loadUserProfile(): UserProfile {
+    try {
+        const raw = localStorage.getItem(USER_PROFILE_STORAGE_KEY);
+        if (raw) {
+            const data = JSON.parse(raw) as Partial<UserProfile>;
+            const base = createDefaultUserProfile();
+            return {
+                nickname: typeof data.nickname === "string" && data.nickname.trim() ? data.nickname.trim().slice(0, 24) : base.nickname,
+                playStyle: (["standard", "viewer", "collector", "recording"] as UserPlayStyle[]).includes(data.playStyle as UserPlayStyle) ? data.playStyle as UserPlayStyle : base.playStyle,
+                favoriteMiracle: typeof data.favoriteMiracle === "string" && data.favoriteMiracle.trim() ? data.favoriteMiracle.trim().slice(0, 40) : base.favoriteMiracle,
+                createdAt: typeof data.createdAt === "number" ? data.createdAt : base.createdAt,
+                lastOpenedAt: typeof data.lastOpenedAt === "number" ? data.lastOpenedAt : base.lastOpenedAt,
+                openCount: typeof data.openCount === "number" ? data.openCount : base.openCount,
+                lastPlayedDateKey: typeof data.lastPlayedDateKey === "string" ? data.lastPlayedDateKey : "",
+                consecutiveDays: typeof data.consecutiveDays === "number" ? data.consecutiveDays : 0,
+                totalSafeStops: typeof data.totalSafeStops === "number" ? data.totalSafeStops : 0,
+            };
+        }
+    } catch {}
+    return createDefaultUserProfile();
+}
+
+function saveUserProfile(): void {
+    try { localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(userProfile)); } catch {}
+}
+
+function loadUserPreferences(): UserPreferences {
+    try {
+        const raw = localStorage.getItem(USER_PREFERENCES_STORAGE_KEY);
+        if (raw) return JSON.parse(raw) as UserPreferences;
+    } catch {}
+    return { version: 1 };
+}
+
+function applyUserPreferencesToCurrentState(): void {
+    const prefs = userPreferences;
+    if (!prefs || typeof prefs !== "object") return;
+    settings = { ...settings, ...prefs };
+    if (prefs.speedLabelText) speedLabelText = prefs.speedLabelText;
+    if (prefs.theme) currentTheme = prefs.theme;
+    if (typeof prefs.soundEnabled === "boolean") soundEnabled = prefs.soundEnabled;
+    if (typeof prefs.confettiEnabled === "boolean") confettiEnabled = prefs.confettiEnabled;
+    if (prefs.language === "en") isEnglish = true;
+}
+
+function saveUserPreferencesFromCurrentState(): void {
+    const prefs: UserPreferences = {
+        version: 1,
+        targetCount: settings.targetCount,
+        activeLimit: settings.activeLimit,
+        binCount: settings.binCount,
+        pinRows: settings.pinRows,
+        labelText: settings.labelText,
+        backgroundImage: settings.backgroundImage === selectedBackgroundObjectUrl ? DEFAULT_BACKGROUND_IMAGE_URL : settings.backgroundImage,
+        simpleMode: settings.simpleMode,
+        cameraShakeEnabled: settings.cameraShakeEnabled,
+        slowMiracleEffects: settings.slowMiracleEffects,
+        effectsEnabled: settings.effectsEnabled,
+        commentaryEnabled: settings.commentaryEnabled,
+        boardAnomalyEnabled: settings.boardAnomalyEnabled,
+        normalBallTraitsEnabled: settings.normalBallTraitsEnabled,
+        timeBallSkinsEnabled: settings.timeBallSkinsEnabled,
+        mobileCompactMode: settings.mobileCompactMode,
+        showRecentMiracles: settings.showRecentMiracles,
+        blackModeEnabled: settings.blackModeEnabled,
+        effectMode: settings.effectMode,
+        probabilityMode: settings.probabilityMode,
+        speedLabelText,
+        theme: currentTheme,
+        soundEnabled,
+        confettiEnabled,
+        language: isEnglish ? "en" : "ja",
+    };
+    userPreferences = prefs;
+    try { localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(prefs)); } catch {}
+}
+
+let userPreferenceSaveTimer: number | undefined;
+function persistUserPreferencesSoon(): void {
+    if (userPreferenceSaveTimer !== undefined) window.clearTimeout(userPreferenceSaveTimer);
+    userPreferenceSaveTimer = window.setTimeout(() => saveUserPreferencesFromCurrentState(), 250);
+}
+
+function registerAppOpen(): void {
+    const today = getDateKey();
+    const last = userProfile.lastPlayedDateKey;
+    const yesterday = getDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    userProfile.openCount += 1;
+    userProfile.lastOpenedAt = Date.now();
+    if (last !== today) {
+        userProfile.consecutiveDays = last === yesterday ? userProfile.consecutiveDays + 1 : 1;
+        userProfile.lastPlayedDateKey = today;
+    }
+    saveUserProfile();
+}
+
+function getUserPlayStyleLabel(style: UserPlayStyle): string {
+    const ja: Record<UserPlayStyle, string> = { standard: "標準", viewer: "演出を見る", collector: "図鑑収集", recording: "録画・SNS" };
+    const en: Record<UserPlayStyle, string> = { standard: "Standard", viewer: "Effects", collector: "Collection", recording: "Recording" };
+    return isEnglish ? en[style] : ja[style];
+}
+
+function getAppOnlineStatusHtml(): string {
+    const online = navigator.onLine;
+    const swReady = "serviceWorker" in navigator;
+    return `
+        <span class="miracle-status-pill">${online ? "オンライン" : "オフライン"}</span>
+        <span class="miracle-status-pill">${swReady ? "オフライン起動準備あり" : "Service Workerなし"}</span>
+        <span class="miracle-status-pill">v${APP_VERSION}</span>
+    `;
+}
+
+function exportLocalUserData(): void {
+    const data = {
+        appName: "MiracleBallLab",
+        appVersion: APP_VERSION,
+        exportedAt: new Date().toISOString(),
+        userProfile,
+        userPreferences,
+        savedRecords,
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `miracle-ball-lab-user-data-${getDateKey()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showSoftToast(t("ユーザーデータを書き出しました", "User data exported"));
+}
+
+function resetLocalUserData(): void {
+    const ok = window.confirm("ブラウザ内のユーザー設定・記録・図鑑を削除します。元に戻せません。よろしいですか？");
+    if (!ok) return;
+    try {
+        localStorage.removeItem(RECORD_STORAGE_KEY);
+        localStorage.removeItem(USER_PROFILE_STORAGE_KEY);
+        localStorage.removeItem(USER_PREFERENCES_STORAGE_KEY);
+        localStorage.removeItem(FIRST_RUN_GUIDE_STORAGE_KEY);
+    } catch {}
+    window.location.reload();
+}
+
+function applyPlayStylePreset(style: UserPlayStyle): void {
+    userProfile.playStyle = style;
+    if (style === "viewer") {
+        settings.effectsEnabled = true;
+        settings.effectMode = "flashy";
+        settings.slowMiracleEffects = true;
+        settings.showRecentMiracles = true;
+    } else if (style === "collector") {
+        settings.effectsEnabled = true;
+        settings.effectMode = "normal";
+        settings.showRecentMiracles = true;
+        settings.probabilityMode = settings.probabilityMode === "normal" ? "festival" : settings.probabilityMode;
+    } else if (style === "recording") {
+        settings.effectsEnabled = true;
+        settings.effectMode = "recording";
+        settings.cameraShakeEnabled = false;
+        settings.showRecentMiracles = true;
+        isVerticalVideoMode = true;
+    }
+    effectModeSelect.value = settings.effectMode;
+    probabilityModeSelect.value = settings.probabilityMode;
+    updateUiLanguage();
+    updateStatusMiniOverlays();
+    saveUserProfile();
+    saveUserPreferencesFromCurrentState();
 }
 
 function getProbabilityScale(): number {
@@ -4276,6 +4441,95 @@ function showMiracleBookPopup(): void {
     `);
 }
 
+function showUserSettingsPopup(): void {
+    const discoveredKinds = getDiscoveredCount();
+    showPopup(t("ユーザー設定", "User settings"), `
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>研究員プロフィール</b></p>
+            <label style="display:block;font-weight:900;margin-bottom:6px;">ニックネーム</label>
+            <input id="user-nickname-input" value="${escapeHtml(userProfile.nickname)}" maxlength="24" style="width:100%;font-size:${isMobile ? 20 : 18}px;padding:12px 14px;border-radius:14px;border:1px solid #b8c1d1;box-sizing:border-box;" />
+            <label style="display:block;font-weight:900;margin:14px 0 6px;">遊び方</label>
+            <select id="user-play-style-select" style="width:100%;font-size:${isMobile ? 20 : 18}px;padding:12px 14px;border-radius:14px;border:1px solid #b8c1d1;box-sizing:border-box;">
+                <option value="standard" ${userProfile.playStyle === "standard" ? "selected" : ""}>標準</option>
+                <option value="viewer" ${userProfile.playStyle === "viewer" ? "selected" : ""}>演出を見る</option>
+                <option value="collector" ${userProfile.playStyle === "collector" ? "selected" : ""}>図鑑収集</option>
+                <option value="recording" ${userProfile.playStyle === "recording" ? "selected" : ""}>録画・SNS</option>
+            </select>
+            <label style="display:block;font-weight:900;margin:14px 0 6px;">好きな奇跡メモ</label>
+            <input id="user-favorite-input" value="${escapeHtml(userProfile.favoriteMiracle)}" maxlength="40" style="width:100%;font-size:${isMobile ? 20 : 18}px;padding:12px 14px;border-radius:14px;border:1px solid #b8c1d1;box-sizing:border-box;" />
+            <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+                <button id="save-user-profile-button" style="font-size:18px;font-weight:900;padding:10px 18px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);cursor:pointer;">保存して反映</button>
+                <button id="guest-name-button" style="font-size:18px;font-weight:900;padding:10px 18px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:#fff;cursor:pointer;">ゲスト名に戻す</button>
+            </div>
+        </div>
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>ユーザー状況</b></p>
+            <p>表示名: <b>${escapeHtml(userProfile.nickname)}</b></p>
+            <p>遊び方: <b>${getUserPlayStyleLabel(userProfile.playStyle)}</b></p>
+            <p>連続起動: <b>${userProfile.consecutiveDays}</b>日 / 起動回数: <b>${userProfile.openCount}</b>回</p>
+            <p>図鑑発見: <b>${discoveredKinds}</b> / ${SPECIAL_EVENT_DEFS.length} 種類</p>
+            <p>最高レア: <b>${escapeHtml(savedRecords.bestRank)}</b> ${escapeHtml(savedRecords.bestLabel)}</p>
+            <p>安全停止回数: <b>${userProfile.totalSafeStops}</b>回</p>
+        </div>
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>保存データ</b></p>
+            <p>ニックネーム、設定、図鑑、奇跡ログ、最高記録はこの端末のブラウザ内に保存します。ログインやサーバー送信は行いません。</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button id="export-user-data-button" style="font-size:18px;font-weight:900;padding:10px 18px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:#fff;cursor:pointer;">データ書き出し</button>
+                <button id="reset-local-data-button" style="font-size:18px;font-weight:900;padding:10px 18px;border-radius:999px;border:1px solid rgba(185,28,28,.35);background:#fee2e2;color:#991b1b;cursor:pointer;">ローカルデータ削除</button>
+            </div>
+        </div>
+    `);
+    const nicknameInput = document.getElementById("user-nickname-input") as HTMLInputElement | null;
+    const playStyleSelect = document.getElementById("user-play-style-select") as HTMLSelectElement | null;
+    const favoriteInput = document.getElementById("user-favorite-input") as HTMLInputElement | null;
+    document.getElementById("save-user-profile-button")?.addEventListener("click", () => {
+        userProfile.nickname = (nicknameInput?.value.trim() || "研究員").slice(0, 24);
+        userProfile.favoriteMiracle = (favoriteInput?.value.trim() || "まだ未設定").slice(0, 40);
+        applyPlayStylePreset((playStyleSelect?.value as UserPlayStyle) || "standard");
+        showSoftToast(t("ユーザー設定を保存しました", "User settings saved"));
+        showUserSettingsPopup();
+    });
+    document.getElementById("guest-name-button")?.addEventListener("click", () => {
+        if (nicknameInput) nicknameInput.value = "研究員";
+    });
+    document.getElementById("export-user-data-button")?.addEventListener("click", () => exportLocalUserData());
+    document.getElementById("reset-local-data-button")?.addEventListener("click", () => resetLocalUserData());
+}
+
+function showAppInfoPopup(): void {
+    const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
+    showPopup(t("アプリ情報", "App info"), `
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>MiracleBallLab</b></p>
+            <p>${getAppOnlineStatusHtml()}</p>
+            <p>表示モード: <b>${standalone ? "ホーム画面アプリ表示" : "ブラウザ表示"}</b></p>
+            <p>バージョン: <b>${APP_VERSION}</b></p>
+            <p>Bundle ID予定: <b>com.nakm2021.miracleballlab</b></p>
+        </div>
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>AppStore化を見据えた機能</b></p>
+            <ul style="line-height:1.8;margin-bottom:0;">
+                <li>一時停止・終了ボタンでスマホの発熱を抑えやすくする</li>
+                <li>設定保存により、次回起動時も前回の遊び方を復元する</li>
+                <li>ユーザー設定、図鑑、記録、ミッション、奇跡ログを端末内に保存する</li>
+                <li>オフライン時も読み込み済みのWeb資産で起動しやすくする</li>
+                <li>プライバシー説明とローカルデータ削除をアプリ内に用意する</li>
+            </ul>
+        </div>
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>プライバシー</b></p>
+            <p>このWeb版は、ユーザー名・設定・記録をブラウザの localStorage に保存します。現時点ではアカウント作成、位置情報取得、外部サーバーへのプレイ記録送信は行いません。</p>
+            <p>動画演出を使う場合は、設定された動画URLから素材を読み込みます。AppStore提出前には素材の権利確認とプライバシーポリシーURLの準備が必要です。</p>
+        </div>
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>オフライン確認</b></p>
+            <p>ホーム画面追加後に一度オンラインで起動しておくと、service-worker.js により主要ファイルがキャッシュされます。完全な初回オフライン起動はできません。</p>
+            <p style="opacity:.75;">Cloudflare Pagesで公開後、iPhoneの機内モードで起動確認するとAppStore化前の確認として有効です。</p>
+        </div>
+    `);
+}
+
 function showRecordsPopup(): void {
     showPopup("最高記録", `
         <p><b>実験回数:</b> ${savedRecords.totalRuns.toLocaleString()}回</p>
@@ -4311,22 +4565,8 @@ function showAboutPopup(): void {
         <p>奇跡図鑑と発生演出には、全種類でアプリ内生成のオリジナルSVG画像を使います。発生時は該当画像と発生名を大きく表示します。</p>
         <p><b>ブラックモード</b>をONにすると、設定欄・ボタン・盤面背景を黒基調に切り替えます。デフォルトはOFFです。</p>
         <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。SR/SSRで同じ奇跡演出が実行中に再発生した場合は、2回目以降さらに短く閉じます。</p>
+        <p><b>ユーザー機能:</b> ニックネーム、遊び方、好きな奇跡メモ、連続起動日数、設定復元、データ書き出し、ローカルデータ削除を追加しています。</p>
         <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
-    `);
-}
-
-function showAppStorePlanPopup(): void {
-    showPopup("アプリ化準備", `
-        <p><b>${APP_NAME}</b> のWeb版を完成させてから、iPhoneアプリ化するための確認メモです。</p>
-        <p><b>現在の版:</b> ${APP_VERSION}</p>
-        <ol style="text-align:left;line-height:1.8;padding-left:1.4em;">
-            <li><b>Web版完成:</b> GitHubへpushし、Cloudflare Pages / GitHub Pages でHTTPS公開します。</li>
-            <li><b>PWA準備:</b> <code>manifest.webmanifest</code> と <code>service-worker.js</code> を <code>public</code> 配下へ置きます。</li>
-            <li><b>スマホ確認:</b> iPhone Safariで開き、音、動画、終了ボタン、縦画面、ホーム画面追加を確認します。</li>
-            <li><b>AppStore化:</b> CapacitorなどでWeb版を包み、Xcodeで署名してApp Store Connectへ提出します。</li>
-            <li><b>更新方針:</b> Web版はpushで反映、AppStore版は大きな変更ごとにApple審査へ出す前提にします。</li>
-        </ol>
-        <p style="opacity:.78;">アプリ化後も中身をWeb表示に寄せる場合、審査で説明しやすいように、ゲームとしての主要機能は現在のWeb版で完結している状態にしておくのがおすすめです。</p>
     `);
 }
 
@@ -4413,6 +4653,7 @@ function applySettingsFromInputs(showInvalidPopup = true): boolean {
     pinRowInput.value = String(settings.pinRows);
     probabilityModeSelect.value = settings.probabilityMode;
     effectModeSelect.value = settings.effectMode;
+    persistUserPreferencesSoon();
     return true;
 }
 
@@ -4768,6 +5009,7 @@ function getEffectIntensity(force = false): number {
 }
 
 function showSoftToast(message: string): void {
+    persistUserPreferencesSoon();
     softToastOverlay.textContent = message;
     if (toastTimer !== undefined) window.clearTimeout(toastTimer);
     softToastOverlay.style.opacity = "1";
@@ -4853,6 +5095,8 @@ function updateStopButton(): void {
 
 async function startExperiment(): Promise<void> {
     if (!applySettingsFromInputs(true)) return;
+    userProfile.lastPlayedDateKey = getDateKey();
+    saveUserProfile();
     void ensureAnimeReady();
     void ensureTippyReady();
     void ensureGifReady();
@@ -5481,6 +5725,8 @@ function generateResearchMemoHtml(): string {
 function terminateExperimentSafely(): void {
     if (isAppTerminated) return;
     isAppTerminated = true;
+    userProfile.totalSafeStops += 1;
+    saveUserProfile();
     isPaused = true;
     isStarted = false;
     isFinished = true;
@@ -6497,7 +6743,7 @@ function updateInfo(): void {
     const fortune = currentDailyFortune ?? getDailyFortune();
     currentDailyFortune = fortune;
     recordHero.innerHTML = `
-        <div style="font-size:${isMobile ? 24 : 22}px;">🏆 ${t("最高記録", "Best records")}</div>
+        <div style="font-size:${isMobile ? 24 : 22}px;">🏆 ${t("最高記録", "Best records")} / ${escapeHtml(userProfile.nickname)}</div>
         <div style="font-size:${isMobile ? 22 : 20}px;">${t("最高レア", "Best rarity")}: <b>${savedRecords.bestRank}</b> ${savedRecords.bestLabel}</div>
         <div style="font-size:${isMobile ? 20 : 18}px;">研究Lv: <b>${levelInfo.level}</b> ${levelInfo.title} / ${t("今回スコア", "Run score")}: <b>${runScore.toLocaleString()}</b></div>
         <div style="font-size:${isMobile ? 18 : 16}px;opacity:.86;">${t("実験", "Runs")} ${savedRecords.totalRuns.toLocaleString()}${t("回", "")} / ${t("最大", "Max")} ${savedRecords.maxFinishedCount.toLocaleString()}${t("玉", " balls")} / 今日 x${fortune.rateBoost.toFixed(2)}</div>
@@ -6505,6 +6751,8 @@ function updateInfo(): void {
 
     topRow.innerHTML = `
         <div>${t("デバイス", "Device")}: <b>${isMobile ? t("スマホ向け", "Mobile") : t("PC向け", "Desktop")}</b></div>
+        <div>${t("ユーザー", "User")}: <b>${escapeHtml(userProfile.nickname)}</b> / ${getUserPlayStyleLabel(userProfile.playStyle)}</div>
+        <div>${t("通信", "Network")}: <b>${navigator.onLine ? t("オンライン", "Online") : t("オフライン", "Offline")}</b></div>
         <div>${t("ブラウザ", "Browser")}: <b>${browserName}</b></div>
         <div>${t("実行回数", "Progress")}: <b>${finishedCount.toLocaleString()}</b> / ${settings.targetCount.toLocaleString()}</div>
         <div>${t("役物通過", "Gate hits")}: <b>${Object.values(pachinkoYakumonoHitCount).reduce((a, b) => a + b, 0).toLocaleString()}</b> / ${t("当選", "Jackpots")}: <b>${pachinkoJackpotCount.toLocaleString()}</b></div>
@@ -7538,23 +7786,5 @@ function scheduleResize(): void {
 }
 window.addEventListener("resize", scheduleResize);
 window.visualViewport?.addEventListener("resize", scheduleResize);
-
-let wasRunningBeforePageHidden = false;
-function handlePageHiddenForMobile(): void {
-    if (isAppTerminated) return;
-    wasRunningBeforePageHidden = isStarted && !isFinished && !isPaused;
-    if (wasRunningBeforePageHidden) togglePause();
-    stopRemoteMiracleVideo();
-}
-
-function handlePageVisibleForMobile(): void {
-    if (isAppTerminated) return;
-    if (wasRunningBeforePageHidden && isStarted && !isFinished && isPaused) togglePause();
-    wasRunningBeforePageHidden = false;
-}
-
-window.addEventListener("pagehide", handlePageHiddenForMobile);
-document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") handlePageHiddenForMobile();
-    if (document.visibilityState === "visible") handlePageVisibleForMobile();
-});
+window.addEventListener("online", () => { showSoftToast(t("オンラインに戻りました", "Back online")); updateInfo(); });
+window.addEventListener("offline", () => { showSoftToast(t("オフラインです。保存済み範囲で動作します", "Offline. Cached app continues.")); updateInfo(); });

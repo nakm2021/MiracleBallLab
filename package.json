@@ -12,6 +12,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@capacitor/cli": "^7.6.2",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/ios": "^8.3.1",
     "animejs": "^3.2.2",
     "canvas-confetti": "^1.9.3",
     "gif.js": "^0.2.0",
