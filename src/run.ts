@@ -54,6 +54,7 @@ import type {
     PachinkoYakumonoDef,
     TutorialMissionDef,
     TapRipple,
+    ResearchReportEntry,
 } from "./miracle/types";
 
 const Engine = Matter.Engine;
@@ -1251,6 +1252,8 @@ const speedButtons = createSection("投下速度", "Drop speed");
 const displayButtons = createSection("表示・演出", "Display & effects");
 const settingButtons = createSection("反映・出力", "Apply & export");
 
+const homeButton = setTooltip(setButtonLabel(createButton("研究所ホーム", () => showLabHome()), "研究所ホーム", "Home"), "研究所ホーム画面を開きます。", "Open the lab home screen.");
+utilityButtons.appendChild(homeButton);
 const runButton = setTooltip(setButtonLabel(createButton("実行", () => startExperiment()), "実行", "Run"), "設定どおりに落下実験を開始します。", "Start the drop experiment with current settings.");
 utilityButtons.appendChild(runButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"), "このプログラムが何をするか説明します。", "Explain what this program does."));
@@ -1262,6 +1265,7 @@ missionButton = setTooltip(setButtonLabel(createButton("ミッション", () => 
 utilityButtons.appendChild(missionButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("最高記録", () => showRecordsPopup()), "最高記録", "Records"), "最高記録や通算記録を表示します。", "Show best and lifetime records."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡ログ", () => showMiracleLogPopup()), "奇跡ログ", "Miracle log"), "発生した奇跡の履歴を見ます。", "Show the history of miracles."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡アルバム", () => showMiracleAlbumPopup()), "奇跡アルバム", "Album"), "過去の神引きと研究レポートをカード形式で見ます。", "View miracle highlights and research reports."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("今日の運勢", () => showDailyFortunePopup()), "今日の運勢", "Fortune"), "今日の奇跡率とラッキー受け皿を表示します。", "Show today's miracle rate and lucky bin."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("デイリー研究", () => showDailyMissionPopup()), "デイリー研究", "Daily"), "今日だけの強化ミッションを表示します。", "Show enhanced daily missions."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("研究員ランク", () => showResearchRankPopup()), "研究員ランク", "Rank"), "研究員ランクと次の称号を表示します。", "Show researcher rank and progress."));
@@ -1428,6 +1432,16 @@ const mobileCompactButton = setTooltip(setButtonLabel(createButton("スマホ簡
     showSoftToast(settings.mobileCompactMode ? t("スマホ簡易表示をONにしました", "Mobile compact enabled") : t("スマホ簡易表示をOFFにしました", "Mobile compact disabled"));
 }), "スマホ簡易: OFF", "Compact: OFF"), "スマホで情報量を減らす簡易表示です。", "Reduce on-screen information on mobile.");
 displayButtons.appendChild(mobileCompactButton);
+
+const lowSpecButton = setTooltip(setButtonLabel(createButton("低スペック: OFF", () => {
+    settings.lowSpecMode = !settings.lowSpecMode;
+    applyLowSpecMode();
+    updateLowSpecButton();
+    updateInfo();
+    saveUserPreferencesFromCurrentState();
+    showSoftToast(settings.lowSpecMode ? t("低スペックモードをONにしました", "Low-spec mode enabled") : t("低スペックモードをOFFにしました", "Low-spec mode disabled"));
+}), "低スペック: OFF", "Low spec: OFF"), "スマホや低スペック端末向けに動画・演出・背景を軽くします。", "Reduce video, effects, and background load for weaker devices.");
+displayButtons.appendChild(lowSpecButton);
 
 const recentMiracleDisplayButton = setTooltip(setButtonLabel(createButton("直近の奇跡: OFF", () => {
     settings.showRecentMiracles = !settings.showRecentMiracles;
@@ -1894,6 +1908,7 @@ function loadSavedRecords(): SavedRecords {
                 secretUnlocked: data.secretUnlocked ?? {},
                 dailyMissionCompleted: data.dailyMissionCompleted ?? {},
                 unlockedThemes: data.unlockedThemes ?? {},
+                researchReports: Array.isArray(data.researchReports) ? data.researchReports.slice(0, 30) : [],
             };
         }
     }
@@ -1916,6 +1931,7 @@ function loadSavedRecords(): SavedRecords {
         secretUnlocked: {},
         dailyMissionCompleted: {},
         unlockedThemes: {},
+        researchReports: [],
     };
 }
 
@@ -2022,6 +2038,7 @@ function saveUserPreferencesFromCurrentState(): void {
         normalBallTraitsEnabled: settings.normalBallTraitsEnabled,
         timeBallSkinsEnabled: settings.timeBallSkinsEnabled,
         mobileCompactMode: settings.mobileCompactMode,
+        lowSpecMode: settings.lowSpecMode,
         showRecentMiracles: settings.showRecentMiracles,
         blackModeEnabled: settings.blackModeEnabled,
         effectMode: settings.effectMode,
@@ -2588,6 +2605,7 @@ function updateUiLanguage(): void {
         if (item.button === boardAnomalyButton) continue;
         if (item.button === normalTraitButton) continue;
         if (item.button === mobileCompactButton) continue;
+        if (item.button === lowSpecButton) continue;
         if (item.button === soundButton) continue;
         if (item.button === confettiButton) continue;
         if (item.button === pixiButton) continue;
@@ -2608,6 +2626,7 @@ function updateUiLanguage(): void {
     updateNormalTraitButton();
     updateTimeBallSkinButton();
     updateMobileCompactButton();
+    updateLowSpecButton();
     updateRecentMiracleDisplayButton();
     updateSoundButton();
     updateSkillButtons();
@@ -2830,7 +2849,22 @@ function applyDynamicUiPalette(): void {
     if (mobileSettingsPanel) {
         mobileSettingsPanel.style.background = palette.panel;
         mobileSettingsPanel.style.color = palette.fieldText;
-        applyThemePaletteToPanel(mobileSettingsPanel, palette);
+        applyThemePaletteToPanel(mobileSettingsPanel, {
+            body: palette.panel,
+            panel: palette.panel,
+            game: palette.section,
+            section: palette.section,
+            fieldBg: palette.fieldBg,
+            fieldText: palette.fieldText,
+            fieldBorder: palette.border,
+            buttonBg: palette.badge,
+            buttonText: palette.badgeText,
+            buttonBorder: palette.border,
+            title: palette.title,
+            badge: palette.badge,
+            badgeText: palette.badgeText,
+            mutedText: palette.subtitle,
+        });
     }
     recentMiracleMini.style.background = 'rgba(255,255,255,.84)';
     recentMiracleMini.style.color = palette.fieldText;
@@ -4318,6 +4352,119 @@ function showReplayPopup(): void {
     });
 }
 
+function getAppStoreDescriptionHtml(): string {
+    return `
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>AppStore向け説明文</b></p>
+            <p style="line-height:1.85;">MiracleBallLabは、無数のボールが落下する確率実験を観察しながら、まれに発生する「奇跡」を収集していく実験型コレクションアプリです。</p>
+            <p style="line-height:1.85;">毎日の研究ミッション、研究員ランク、奇跡図鑑、テーマ解放、実験レポート機能により、自分だけの研究記録を積み上げることができます。</p>
+            <p style="line-height:1.85;">低スペックモード、終了ボタン、オフライン起動を想定した保存設計により、スマホでも遊びやすい形を目指しています。</p>
+        </div>
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>短い紹介文</b></p>
+            <p>確率実験 × 奇跡収集 × 研究員育成。落下するボールから、自分だけの研究レポートを作ろう。</p>
+        </div>
+    `;
+}
+
+function showAppStoreDescriptionPopup(): void {
+    showPopup("AppStore説明文", getAppStoreDescriptionHtml());
+}
+
+function showLabHome(): void {
+    const rank = getCurrentResearchRankInfo();
+    const discoveredKinds = getDiscoveredKindCount();
+    const reports = savedRecords.researchReports ?? [];
+    const latestReport = reports[0];
+    const homeHtml = `
+        <div style="display:grid;gap:14px;">
+            <div class="miracle-user-card" style="background:linear-gradient(135deg, rgba(255,246,207,.96), rgba(220,238,194,.88));">
+                <div style="font-size:clamp(28px,6vw,54px);font-weight:1000;line-height:1.1;">MiracleBallLab</div>
+                <div style="margin-top:8px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">確率実験 × 奇跡収集 × 研究員育成ゲーム</div>
+                <div style="margin-top:10px;line-height:1.75;">今日の研究テーマ：<b>${escapeHtml(getDailyFortune().title)}</b><br>研究員ランク：<b>Lv.${rank.level} ${escapeHtml(rank.label)}</b> / 図鑑：<b>${discoveredKinds}</b>種類 / 実験：<b>${savedRecords.totalRuns.toLocaleString()}</b>回</div>
+            </div>
+            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:12px;">
+                <div class="miracle-user-card"><b>今日やること</b><br><span style="opacity:.82;line-height:1.7;">デイリー研究を確認して、研究レポートを1件作成しましょう。</span></div>
+                <div class="miracle-user-card"><b>最近の記録</b><br><span style="opacity:.82;line-height:1.7;">${latestReport ? `${new Date(latestReport.createdAt).toLocaleString()} / ${escapeHtml(latestReport.grade)} / ${latestReport.finishedCount.toLocaleString()}投下` : "まだ研究レポートはありません。"}</span></div>
+                <div class="miracle-user-card"><b>おすすめ設定</b><br><span style="opacity:.82;line-height:1.7;">重い場合は「低スペック: ON」。録画時は演出モードを録画向けにします。</span></div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+                <button data-home-action="start" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#fef3c7 0%,#facc15 100%);cursor:pointer;">実験を開始</button>
+                <button data-home-action="daily" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:#fff;cursor:pointer;">デイリー研究</button>
+                <button data-home-action="album" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:#fff;cursor:pointer;">奇跡アルバム</button>
+                <button data-home-action="book" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:#fff;cursor:pointer;">奇跡図鑑</button>
+                <button data-home-action="appstore" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:#fff;cursor:pointer;">AppStore説明文</button>
+            </div>
+            ${getAppStoreDescriptionHtml()}
+        </div>
+    `;
+    showPopup("研究所ホーム", homeHtml);
+    helpOverlay.querySelector('[data-home-action="start"]')?.addEventListener("click", () => { closeHelpPopup(); startExperiment(); });
+    helpOverlay.querySelector('[data-home-action="daily"]')?.addEventListener("click", () => showDailyMissionPopup());
+    helpOverlay.querySelector('[data-home-action="album"]')?.addEventListener("click", () => showMiracleAlbumPopup());
+    helpOverlay.querySelector('[data-home-action="book"]')?.addEventListener("click", () => showMiracleBookPopup());
+    helpOverlay.querySelector('[data-home-action="appstore"]')?.addEventListener("click", () => showAppStoreDescriptionPopup());
+}
+
+function getPlainResearchMemo(): string {
+    const text = generateResearchMemoHtml().replace(/<br\s*\/?>(\n)?/gi, " / ").replace(/<[^>]+>/g, "");
+    return text.replace(/\s+/g, " ").trim();
+}
+
+function createResearchReportEntry(): ResearchReportEntry {
+    const ranking = binCounts.map((count, index) => ({ label: labels[index] ?? "-", count })).sort((a, b) => b.count - a.count);
+    const top = ranking[0] ?? { label: "-", count: 0 };
+    const evaluation = getResearchEvaluation();
+    const best = miracleLogs[0];
+    return {
+        id: `report-${Date.now()}-${Math.floor(appRandom() * 100000)}`,
+        createdAt: Date.now(),
+        runNo: savedRecords.totalRuns + 1,
+        targetCount: settings.targetCount,
+        finishedCount,
+        discardedCount,
+        topLabel: top.label,
+        topCount: top.count,
+        grade: evaluation.grade,
+        type: evaluation.type,
+        score: runScore,
+        bestMiracleLabel: best?.label ?? "なし",
+        bestMiracleRank: best?.rank ?? "-",
+        memo: getPlainResearchMemo().slice(0, 260),
+    };
+}
+
+function saveCurrentResearchReport(): ResearchReportEntry {
+    const report = createResearchReportEntry();
+    savedRecords.researchReports = [report, ...((savedRecords.researchReports ?? []).filter((x) => x.id !== report.id))].slice(0, 30);
+    return report;
+}
+
+function showMiracleAlbumPopup(): void {
+    const reports = savedRecords.researchReports ?? [];
+    const miracleRows = miracleLogs.slice(0, 20).map((log, index) => `
+        <div class="miracle-user-card" style="display:grid;gap:6px;">
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><b>${index + 1}. ${escapeHtml(log.label)} [${escapeHtml(log.rank)}]</b><span style="opacity:.72;">${new Date(log.finishedAt).toLocaleString()}</span></div>
+            <div style="opacity:.84;line-height:1.65;">${log.denominator > 0 ? formatProbability(log.denominator) : "派生解放"} / ${log.finishedCount.toLocaleString()}投目 / combo x${log.combo}${log.note ? ` / ${escapeHtml(log.note)}` : ""}</div>
+        </div>
+    `).join("") || `<p>まだ奇跡はありません。まずは実験を開始してください。</p>`;
+    const reportRows = reports.slice(0, 12).map((report) => `
+        <div class="miracle-user-card" style="display:grid;gap:6px;">
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><b>第${report.runNo}回 実験レポート / ${escapeHtml(report.grade)}</b><span style="opacity:.72;">${new Date(report.createdAt).toLocaleString()}</span></div>
+            <div style="opacity:.86;line-height:1.65;">${report.finishedCount.toLocaleString()}投下 / スコア ${report.score.toLocaleString()} / 最頻 ${escapeHtml(report.topLabel)} ${report.topCount.toLocaleString()}回 / 最高 ${escapeHtml(report.bestMiracleLabel)} [${escapeHtml(report.bestMiracleRank)}]</div>
+            <div style="opacity:.76;line-height:1.65;">${escapeHtml(report.memo)}</div>
+        </div>
+    `).join("") || `<p>実験完了後に研究レポートが保存されます。</p>`;
+    showPopup("奇跡アルバム", `
+        <div style="display:grid;gap:14px;">
+            <div class="miracle-user-card"><b>神引きコレクション</b><br><span style="opacity:.78;">奇跡ログと研究レポートを保存し、あとから振り返れるようにしました。</span></div>
+            <h3 style="margin:0;">奇跡カード</h3>
+            ${miracleRows}
+            <h3 style="margin:10px 0 0;">研究レポート履歴</h3>
+            ${reportRows}
+        </div>
+    `);
+}
 function showMiracleLogPopup(): void {
     if (miracleLogs.length === 0) {
         showPopup(t("奇跡発生ログ", "Miracle log"), `<p>${t("まだ奇跡は発生していません。", "No miracles yet.")}</p>`);
@@ -4687,6 +4834,7 @@ function showAppInfoPopup(): void {
                 <li>玉を落として、まれに発生する特別な演出や記録を楽しめます。</li>
                 <li>一時停止・終了ボタンで、スマホでも無理なく遊びやすくしています。</li>
                 <li>設定、図鑑、最高記録、ミッション、奇跡ログをこの端末に保存できます。</li>
+                <li>研究所ホーム、奇跡アルバム、実験レポート履歴で、ゲームアプリらしい導線にしています。</li>
                 <li>一度読み込んだ主要ファイルは、通信が不安定な場所でも開きやすくなります。</li>
                 <li>ユーザー設定から保存データの確認や削除ができます。</li>
             </ul>
@@ -4723,6 +4871,8 @@ function showRecordsPopup(): void {
 function showAboutPopup(): void {
     showPopup("ミラクルボールラボについて", `
         <p><b>ミラクルボールラボ</b>は、玉が盤面を落ち、<b>START / 役物 / PREMIUM</b> を通過した瞬間だけ抽選するパチンコ風シミュレーションです。</p>
+        <p><b>新コンセプト:</b> 確率実験 × 奇跡収集 × 研究員育成。研究所ホーム、奇跡アルバム、実験レポート履歴、デイリー研究、研究員ランクを使って、自分だけの研究記録を積み上げるアプリとして楽しめます。</p>
+        <p><b>低スペックモード:</b> スマホや古い端末で重い場合は、動画・揺れ・背景・派手な演出をまとめて軽くできます。</p>
         <p>玉を作った瞬間には基本的にレア抽選しません。役物センサーを通過した玉だけが当たり・激アツ・奇跡演出の抽選対象になります。</p>
         <p>通常玉にはたまに<b>個体差</b>が付きます。重い玉、跳ね玉、小粒玉、のんびり玉、早足玉、回転玉、うす玉などがあり、同じ通常玉でも少し違う落ち方をします。</p>
         <ul style="text-align:left;line-height:1.7;">${getNormalTraitSummaryHtml()}</ul>
@@ -5185,6 +5335,39 @@ function updateTimeBallSkinButton(): void {
 function updateMobileCompactButton(): void {
     mobileCompactButton.textContent = settings.mobileCompactMode ? t("スマホ簡易: ON", "Compact: ON") : t("スマホ簡易: OFF", "Compact: OFF");
     paintToggleButton(mobileCompactButton, settings.mobileCompactMode);
+}
+
+function updateLowSpecButton(): void {
+    lowSpecButton.textContent = settings.lowSpecMode ? t("低スペック: ON", "Low spec: ON") : t("低スペック: OFF", "Low spec: OFF");
+    paintToggleButton(lowSpecButton, settings.lowSpecMode, "linear-gradient(180deg, #e0f2fe 0%, #bae6fd 100%)");
+}
+
+function applyLowSpecMode(): void {
+    if (!settings.lowSpecMode) return;
+    settings.simpleMode = true;
+    settings.effectsEnabled = false;
+    settings.slowMiracleEffects = false;
+    settings.mobileCompactMode = true;
+    settings.showRecentMiracles = false;
+    settings.cameraShakeEnabled = false;
+    settings.boardAnomalyEnabled = false;
+    settings.effectMode = "quiet";
+    if (pixiEnabled) {
+        pixiEnabled = false;
+        if (pixiApp) (pixiApp.canvas as HTMLCanvasElement).style.display = "none";
+    }
+    if (settings.activeLimit > 10) settings.activeLimit = 10;
+    activeBallInput.value = String(settings.activeLimit);
+    effectModeSelect.value = settings.effectMode;
+    updateSimpleModeButton();
+    updateEffectsButton();
+    updateSlowMiracleButton();
+    updateMobileCompactButton();
+    updateRecentMiracleDisplayButton();
+    updateCameraShakeButton();
+    updateBoardAnomalyButton();
+    pixiButton.textContent = t("Pixi背景: OFF", "Pixi BG: OFF");
+    applyMobileCompactMode();
 }
 
 function updateRecentMiracleDisplayButton(): void {
@@ -7155,6 +7338,7 @@ function showFinalResult(): void {
     const dailyCompleted = evaluateAndSaveDailyMissions();
     savedRecords.bestScore = Math.max(savedRecords.bestScore, runScore);
     savedRecords.totalScore += runScore;
+    const currentReport = saveCurrentResearchReport();
     saveRecords();
     const ranking = binCounts.map((count, index) => ({ label: labels[index], count, percent: finishedCount > 0 ? (count / finishedCount) * 100 : 0 })).sort((a, b) => b.count - a.count);
     const rankingHtml = ranking.map((item, index) => `<div style="margin:7px 0;">${index + 1}位：${item.label}　${item.count.toLocaleString()}回　${item.percent.toFixed(2)}%</div>`).join("");
@@ -7166,7 +7350,7 @@ function showFinalResult(): void {
             <div style="font-size:clamp(22px,4vw,40px);margin-bottom:18px;">${browserName} / 指定${settings.targetCount.toLocaleString()}回 / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime)}</div>
             <div style="font-size:clamp(20px,3vw,34px);margin-bottom:18px;">スコア <b>${runScore.toLocaleString()}</b> / ミッション ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length} / 奇跡コンボ最高 ${bestComboThisRun}</div>
             ${dailyCompleted.length > 0 ? `<div style="margin:0 auto 18px;max-width:760px;padding:14px;border-radius:18px;background:rgba(34,197,94,.16);border:1px solid rgba(134,239,172,.35);font-size:clamp(16px,2.4vw,24px);">デイリー研究達成: ${dailyCompleted.map(escapeHtml).join(" / ")}</div>` : ""}
-            <div style="margin:0 auto 18px;max-width:760px;padding:16px;border-radius:20px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);font-size:clamp(17px,2.6vw,28px);line-height:1.55;text-align:left;"><b>今回の研究評価: ${evaluation.grade}</b><br>観測タイプ: ${evaluation.type}<br>奇跡濃度: ${evaluation.density}%<br><span style="opacity:.82;">${evaluation.note}</span></div>
+            <div style="margin:0 auto 18px;max-width:760px;padding:16px;border-radius:20px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);font-size:clamp(17px,2.6vw,28px);line-height:1.55;text-align:left;"><b>今回の研究評価: ${evaluation.grade}</b><br>観測タイプ: ${evaluation.type}<br>奇跡濃度: ${evaluation.density}%<br><span style="opacity:.82;">${evaluation.note}</span><br><span style="opacity:.82;">研究レポート #${currentReport.runNo} を奇跡アルバムに保存しました。</span></div>
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の極秘イベント。出たら奇跡どころか、画面が伝説になります。</div>
             <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">発見済み種類: ${(SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length).toLocaleString()} / ${SPECIAL_EVENT_DEFS.length}　捨て区画: ${discardedCount.toLocaleString()}</div>
@@ -8027,6 +8211,8 @@ missionDefs = buildMissionDefs();
 markThemeUnlocked(currentTheme);
 applyAutoTheme("boot");
 applyTheme();
+if (settings.lowSpecMode) applyLowSpecMode();
+updateLowSpecButton();
 resetExperiment(false);
 ensureRenderLoop();
 void ensureAnimeReady();
@@ -8034,6 +8220,9 @@ void ensureGifReady();
 void ensureTippyReady();
 void loadRemoteMiracleAssets();
 hideBootOverlay();
+window.setTimeout(() => {
+    if (!isStarted && !isAppTerminated && helpOverlay.style.display === "none") showLabHome();
+}, bootMinimumDurationMs + 650);
 
 let resizeTimer: number | undefined;
 function scheduleResize(): void {

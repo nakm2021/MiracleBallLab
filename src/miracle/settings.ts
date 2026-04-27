@@ -36,6 +36,7 @@ export function createDefaultSettings(isMobile: boolean, defaultBackgroundImageU
         normalBallTraitsEnabled: true,
         timeBallSkinsEnabled: true,
         mobileCompactMode: false,
+        lowSpecMode: false,
         showRecentMiracles: false,
         blackModeEnabled: false,
         effectMode: "normal",

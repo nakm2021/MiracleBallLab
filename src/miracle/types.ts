@@ -119,6 +119,23 @@ export type ThemeCollectionEntry = {
     reason: string;
 };
 
+export type ResearchReportEntry = {
+    id: string;
+    createdAt: number;
+    runNo: number;
+    targetCount: number;
+    finishedCount: number;
+    discardedCount: number;
+    topLabel: string;
+    topCount: number;
+    grade: string;
+    type: string;
+    score: number;
+    bestMiracleLabel: string;
+    bestMiracleRank: string;
+    memo: string;
+};
+
 export type SavedRecords = {
     totalRuns: number;
     maxFinishedCount: number;
@@ -135,6 +152,7 @@ export type SavedRecords = {
     secretUnlocked: Record<string, number>;
     dailyMissionCompleted: Record<string, number>;
     unlockedThemes: Record<string, number>;
+    researchReports?: ResearchReportEntry[];
 };
 
 export type MissionDef = {
@@ -178,6 +196,7 @@ export type Settings = {
     normalBallTraitsEnabled: boolean;
     timeBallSkinsEnabled: boolean;
     mobileCompactMode: boolean;
+    lowSpecMode: boolean;
     showRecentMiracles: boolean;
     blackModeEnabled: boolean;
     effectMode: EffectMode;
