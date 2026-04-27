@@ -14,6 +14,7 @@ import { createInitialSkillState, createRandomBuckets } from "./miracle/state";
 import { getRankBaseScore, getRankScore } from "./miracle/rarity";
 import { applyThemePaletteToPanel } from "./miracle/ui";
 import { shouldPlayRemoteMiracleVideo } from "./miracle/videoEffects";
+import { FAMILIAR_DEFS, findFamiliarBySecretCode, gainFamiliarXp, getFamiliarDef, getFamiliarDropXp, getFamiliarLevelInfo, getFamiliarModeLabel, getFamiliarMood, loadFamiliarState, saveFamiliarState, unlockFamiliar } from "./miracle/familiar";
 import { getDailyMissions, getDailyMissionValue, getResearchRankInfo, getThemeCollection, getThemeForTime, pickRandomTheme } from "./miracle/progression";
 import type {
     DropKind,
@@ -55,6 +56,9 @@ import type {
     TutorialMissionDef,
     TapRipple,
     ResearchReportEntry,
+    FamiliarKind,
+    FamiliarMode,
+    FamiliarState,
 } from "./miracle/types";
 
 const Engine = Matter.Engine;
@@ -106,6 +110,11 @@ const SECRET_KEY_SEQUENCES: Record<string, { label: string; detail: string }> = 
     lab: { label: "LAB コード", detail: "研究所の短縮コードを入力しました。秘密研究員として記録します。" },
     neko: { label: "NEKO コード", detail: "ねこちゃんモードの気配を呼びました。" },
     sun: { label: "SUN コード", detail: "黒い太陽を探す研究者用の短縮コードです。" },
+    nekomata: { label: "使い魔契約 NEKOMATA", detail: "ねこ式使い魔と秘密契約しました。" },
+    kurohane: { label: "使い魔契約 KUROHANE", detail: "黒羽コウモリと秘密契約しました。" },
+    tokeikitsune: { label: "使い魔契約 TOKEI", detail: "時計キツネと秘密契約しました。" },
+    hoshikurage: { label: "使い魔契約 HOSHI", detail: "星くらげと秘密契約しました。" },
+    miko: { label: "使い魔契約 MIKO", detail: "秘密巫女うさぎと秘密契約しました。" },
 };
 const SECRET_KEY_MAX_LENGTH = Math.max(SECRET_KEY_SEQUENCE.length, ...Object.keys(SECRET_KEY_SEQUENCES).map((x) => x.length));
 
@@ -308,6 +317,7 @@ let labExplosionCreated = 0;
 
 let specialCreated: Record<string, number> = {};
 let savedRecords: SavedRecords = loadSavedRecords();
+let familiarState: FamiliarState = loadFamiliarState();
 let userProfile: UserProfile = loadUserProfile();
 let userPreferences: UserPreferences = loadUserPreferences();
 let adminLogApi: AdminLogApi;
@@ -397,6 +407,12 @@ let tapInterventionCount = 0;
 let nextSmallMiracleAt = 0;
 let tapRipples: TapRipple[] = [];
 let guideTimers: number[] = [];
+let familiarButton: HTMLButtonElement | null = null;
+let familiarToggleButton: HTMLButtonElement | null = null;
+let familiarMessage = "";
+let familiarMessageUntil = 0;
+let familiarPulseUntil = 0;
+let familiarSaveTimer: number | undefined;
 
 function initAdminLogApi(): void {
     adminLogApi = createAdminLogApi({
@@ -423,6 +439,7 @@ let mobileAudioPrimeElement: HTMLAudioElement | null = null;
 let confettiEnabled = true;
 applyUserPreferencesToCurrentState();
 initAdminLogApi();
+installGlobalErrorLogger();
 registerAppOpen();
 let pixiEnabled = false;
 let pixiReady = false;
@@ -608,6 +625,56 @@ globalStyle.textContent = `
   }
   body.miracle-theme-active .miracle-mobile-settings-header div {
     color: var(--miracle-theme-title) !important;
+  }
+
+  /* テーマ色を全体へ強めに反映する。
+     以前は一部パネル内だけが対象だったため、スマホ下部ボタンや動的に追加したボタンが
+     黄緑系のまま残ることがありました。 */
+  body.miracle-theme-active button:not([data-fixed-style="1"]) {
+    background: var(--miracle-theme-button-bg) !important;
+    color: var(--miracle-theme-button-text) !important;
+    border-color: var(--miracle-theme-button-border) !important;
+    text-shadow: none !important;
+  }
+  body.miracle-theme-active input,
+  body.miracle-theme-active textarea,
+  body.miracle-theme-active select {
+    background: var(--miracle-theme-field-bg) !important;
+    color: var(--miracle-theme-text) !important;
+    border-color: var(--miracle-theme-border) !important;
+  }
+  body.miracle-theme-active #miracle-info-area > div,
+  body.miracle-theme-active .miracle-section,
+  body.miracle-theme-active .miracle-user-card,
+  body.miracle-theme-active .miracle-record-hero,
+  body.miracle-theme-active .miracle-popup-panel,
+  body.miracle-theme-active .miracle-mobile-panel {
+    background: var(--miracle-theme-section) !important;
+    color: var(--miracle-theme-text) !important;
+    border-color: var(--miracle-theme-border) !important;
+  }
+
+  /* 画面・パネル・入力欄・ボタンの角丸を統一する。 */
+  #miracle-game-area,
+  #miracle-info-area,
+  #miracle-info-area > div,
+  .miracle-section,
+  .miracle-user-card,
+  .miracle-record-hero,
+  .miracle-popup-panel,
+  .miracle-mobile-panel,
+  .miracle-mobile-settings-header {
+    border-radius: 26px !important;
+  }
+  #miracle-info-area {
+    border-radius: 30px 30px 0 0 !important;
+    overflow: auto;
+  }
+  button, input, textarea, select {
+    border-radius: 999px !important;
+  }
+  textarea {
+    border-radius: 22px !important;
   }
 `;
 document.head.appendChild(globalStyle);
@@ -1274,6 +1341,8 @@ utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("今日の運�
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("デイリー研究", () => showDailyMissionPopup()), "デイリー研究", "Daily"), "今日だけの強化ミッションを表示します。", "Show enhanced daily missions."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("研究員ランク", () => showResearchRankPopup()), "研究員ランク", "Rank"), "研究員ランクと次の称号を表示します。", "Show researcher rank and progress."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("テーマ図鑑", () => showThemeBookPopup()), "テーマ図鑑", "Themes"), "テーマの一覧と解放条件を表示します。", "Show themes and unlock conditions."));
+familiarButton = setTooltip(setButtonLabel(createButton(`使い魔 Lv.${familiarState.level}`, () => showFamiliarPopup()), `使い魔 Lv.${familiarState.level}`, `Familiar Lv.${familiarState.level}`), "使い魔の育成・呼び出し・秘密契約を開きます。", "Open familiar training, summon, and secret contracts.");
+utilityButtons.appendChild(familiarButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡合成", () => showFusionPopup()), "奇跡合成", "Fusion"), "奇跡同士の合成・派生記録を表示します。", "Show miracle fusion records."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("秘密", () => showSecretPopup()), "秘密", "Secret"), "裏コマンドの解放状況を表示します。", "Show secret command unlocks."));
 adminButton = setTooltip(setButtonLabel(createButton(isAdminMode ? "主任モード" : "合言葉", () => showAdminGateOrPanel()), isAdminMode ? "主任モード" : "合言葉", isAdminMode ? "Admin" : "Passcode"), "合言葉で研究主任モードを開きます。", "Open the admin mode with a passcode.");
@@ -1428,6 +1497,15 @@ const timeBallSkinButton = setTooltip(setButtonLabel(createButton("時間帯玉:
     showSoftToast(settings.timeBallSkinsEnabled ? t("時間帯で玉の見た目を変えます", "Time ball skins enabled") : t("時間帯玉をOFFにしました", "Time ball skins disabled"));
 }), "時間帯玉: ON", "Time skins: ON"), "時刻や曜日で通常玉の見た目だけを変えます。物理挙動は変わりません。デフォルトはONです。", "Change only normal-ball appearance by time/day. Physics does not change. Default is on.");
 displayButtons.appendChild(timeBallSkinButton);
+
+familiarToggleButton = setTooltip(setButtonLabel(createButton("使い魔: ON", () => {
+    settings.familiarEnabled = !settings.familiarEnabled;
+    updateFamiliarButton();
+    updateInfo();
+    persistUserPreferencesSoon();
+    showSoftToast(settings.familiarEnabled ? t("使い魔表示をONにしました", "Familiar enabled") : t("使い魔表示をOFFにしました", "Familiar disabled"));
+}), "使い魔: ON", "Familiar: ON"), "使い魔の表示と自動補助をON/OFFします。", "Toggle familiar display and auto assist.");
+displayButtons.appendChild(familiarToggleButton);
 
 const mobileCompactButton = setTooltip(setButtonLabel(createButton("スマホ簡易: OFF", () => {
     settings.mobileCompactMode = !settings.mobileCompactMode;
@@ -2011,6 +2089,67 @@ function showAdminStatsPopup(): void {
     adminLogApi?.showAdminStatsPopup();
 }
 
+let globalErrorLogCount = 0;
+const MAX_GLOBAL_ERROR_LOGS_PER_SESSION = 80;
+
+function stringifyErrorForAdminLog(value: unknown): string {
+    try {
+        if (value instanceof Error) {
+            return [value.name, value.message, value.stack].filter(Boolean).join(" | ").slice(0, 900);
+        }
+        if (typeof value === "string") return value.slice(0, 900);
+        const json = JSON.stringify(value, (_key, current) => {
+            if (typeof current === "function") return `[Function ${current.name || "anonymous"}]`;
+            if (current instanceof Error) return { name: current.name, message: current.message, stack: current.stack };
+            return current;
+        });
+        return (json || String(value)).slice(0, 900);
+    } catch {
+        return String(value).slice(0, 900);
+    }
+}
+
+function writeRuntimeErrorToAdminLog(label: string, detail: string): void {
+    if (globalErrorLogCount >= MAX_GLOBAL_ERROR_LOGS_PER_SESSION) return;
+    globalErrorLogCount += 1;
+    try {
+        recordAdminEvent({
+            type: "video_fail",
+            at: Date.now(),
+            label,
+            rank: "ERROR",
+            detail,
+        });
+    } catch {
+        // ログ保存自体の失敗でさらにエラーを増やさない。
+    }
+}
+
+function installGlobalErrorLogger(): void {
+    const originalConsoleError = console.error.bind(console);
+    let logging = false;
+
+    window.addEventListener("error", (event) => {
+        const detail = `${event.message || "runtime error"} @ ${event.filename || "unknown"}:${event.lineno || 0}:${event.colno || 0}${event.error ? " | " + stringifyErrorForAdminLog(event.error) : ""}`;
+        writeRuntimeErrorToAdminLog("runtime_error", detail);
+    });
+
+    window.addEventListener("unhandledrejection", (event) => {
+        writeRuntimeErrorToAdminLog("unhandled_rejection", stringifyErrorForAdminLog(event.reason));
+    });
+
+    console.error = (...args: unknown[]) => {
+        originalConsoleError(...args);
+        if (logging) return;
+        logging = true;
+        try {
+            writeRuntimeErrorToAdminLog("console_error", args.map(stringifyErrorForAdminLog).join(" / "));
+        } finally {
+            logging = false;
+        }
+    };
+}
+
 function applyUserPreferencesToCurrentState(): void {
     const prefs = userPreferences;
     if (!prefs || typeof prefs !== "object") return;
@@ -2044,6 +2183,7 @@ function saveUserPreferencesFromCurrentState(): void {
         mobileCompactMode: settings.mobileCompactMode,
         lowSpecMode: settings.lowSpecMode,
         showRecentMiracles: settings.showRecentMiracles,
+        familiarEnabled: settings.familiarEnabled,
         blackModeEnabled: settings.blackModeEnabled,
         effectMode: settings.effectMode,
         probabilityMode: settings.probabilityMode,
@@ -2610,6 +2750,7 @@ function updateUiLanguage(): void {
         if (item.button === normalTraitButton) continue;
         if (item.button === mobileCompactButton) continue;
         if (item.button === lowSpecButton) continue;
+        if (item.button === familiarToggleButton) continue;
         if (item.button === soundButton) continue;
         if (item.button === confettiButton) continue;
         if (item.button === pixiButton) continue;
@@ -2906,6 +3047,207 @@ function getDiscoveredCount(): number {
 function addScore(amount: number, reason: string, x = geometry.width / 2, y = Math.max(80 * geometry.scale, geometry.height * 0.18)): void {
     runScore += Math.max(0, Math.floor(amount));
     if (!settings.simpleMode && amount > 0) addFloatingText(`+${Math.floor(amount).toLocaleString()} ${reason}`, x, y, "#14532d");
+}
+
+function persistFamiliarSoon(): void {
+    if (familiarSaveTimer !== undefined) window.clearTimeout(familiarSaveTimer);
+    familiarSaveTimer = window.setTimeout(() => saveFamiliarState(familiarState), 250);
+}
+
+function getCurrentFamiliarDef() {
+    return getFamiliarDef(familiarState.kind) ?? FAMILIAR_DEFS[0];
+}
+
+function setFamiliarMessage(message: string, durationMs = 3500): void {
+    familiarMessage = message;
+    familiarMessageUntil = Date.now() + durationMs;
+}
+
+function awardFamiliarXp(amount: number, reason: string, affection = 1): void {
+    const before = familiarState.level;
+    familiarState = gainFamiliarXp(familiarState, amount, affection);
+    persistFamiliarSoon();
+    if (familiarState.level > before) {
+        familiarPulseUntil = Date.now() + 2200;
+        addScore(2500 * familiarState.level, "FAMILIAR LV" + familiarState.level);
+        setFamiliarMessage(`使い魔 Lv.${familiarState.level} / ${reason}`, 5200);
+        playSecretSound();
+        triggerCameraShake(10 * geometry.scale, 240);
+    }
+}
+
+function contractFamiliar(kind: FamiliarKind, sourceLabel: string): void {
+    const def = getFamiliarDef(kind);
+    if (!def) return;
+    const result = unlockFamiliar(familiarState, kind);
+    familiarState = { ...result.state, kind, name: def.name };
+    saveFamiliarState(familiarState);
+    updateFamiliarButton();
+    updateInfo();
+    if (result.unlockedNow) {
+        unlockSecret(`familiar-${kind}`, `使い魔契約: ${def.name}`, `${sourceLabel}で${def.name}を解放しました。`, 14000);
+    } else {
+        showSoftToast(`${def.name}を呼び出しました`);
+    }
+    setFamiliarMessage(`${def.name} がついてきます`, 4200);
+}
+
+function setFamiliarMode(mode: FamiliarMode): void {
+    familiarState.mode = mode;
+    saveFamiliarState(familiarState);
+    updateFamiliarButton();
+    setFamiliarMessage(`使い魔モード: ${getFamiliarModeLabel(mode)}`, 3200);
+}
+
+function handleFamiliarDropResult(kind: DropKind, binIndex: number): void {
+    if (!settings.familiarEnabled) return;
+    const baseXp = getFamiliarDropXp(kind, binIndex);
+    const modeBonus = familiarState.mode === "lucky" && kind !== "normal" ? 8 : familiarState.mode === "guard" && binIndex < 0 ? 4 : 0;
+    if (baseXp + modeBonus > 0) awardFamiliarXp(baseXp + modeBonus, kind === "normal" ? "観測" : String(kind), kind === "normal" ? 1 : 3);
+    if (binIndex < 0 && familiarState.mode === "guard" && Date.now() - familiarState.lastAssistAt > 8000 && appRandom() < 0.13) {
+        familiarState.lastAssistAt = Date.now();
+        familiarState.assistCount++;
+        addScore(1200 + familiarState.level * 80, "FAMILIAR GUARD");
+        addFloatingText("使い魔見張り", geometry.width / 2, geometry.ballCountY - 90 * geometry.scale, getCurrentFamiliarDef().accent);
+        setFamiliarMessage("使い魔が捨て区画を見張りました", 2800);
+        persistFamiliarSoon();
+    }
+}
+
+function maybeFamiliarAssist(): void {
+    if (!settings.familiarEnabled || !isStarted || isFinished || isPaused || isMiraclePaused) return;
+    const now = Date.now();
+    const minInterval = familiarState.mode === "chaos" ? 10500 : familiarState.mode === "lucky" ? 13500 : 18000;
+    if (now - familiarState.lastAssistAt < minInterval) return;
+    const chance = Math.min(0.006 + familiarState.level * 0.00075, 0.035);
+    if (appRandom() > chance) return;
+    familiarState.lastAssistAt = now;
+    familiarState.assistCount++;
+    familiarPulseUntil = now + 900;
+    const def = getCurrentFamiliarDef();
+    if (familiarState.mode === "chaos") {
+        triggerCameraShake(8 * geometry.scale, 160);
+        addFloatingText(`${def.name} 暴走`, geometry.width / 2, geometry.height * 0.28, def.accent);
+        for (const body of engine.world.bodies) {
+            const plugin = (body as any).plugin;
+            if (!plugin?.isDrop) continue;
+            Body.applyForce(body, body.position, { x: (appRandom() - 0.5) * 0.000055, y: -0.000018 });
+        }
+    } else if (familiarState.mode === "lucky") {
+        maybeTriggerMiracleOmen(true);
+        familiarState.jackpotWhisperCount++;
+        addScore(1000 + familiarState.level * 120, "FAMILIAR LUCK");
+        addFloatingText(`${def.name} 予兆`, geometry.width / 2, geometry.height * 0.24, def.accent);
+    } else {
+        addScore(650 + familiarState.level * 90, "FAMILIAR ASSIST");
+        addFloatingText(`${def.name} 補助`, geometry.width / 2, geometry.height * 0.24, def.accent);
+    }
+    awardFamiliarXp(3 + Math.floor(familiarState.level / 2), "補助発動", 2);
+}
+
+function drawFamiliar(context: CanvasRenderingContext2D): void {
+    if (!settings.familiarEnabled) return;
+    const def = getCurrentFamiliarDef();
+    const now = Date.now();
+    const scale = geometry.scale;
+    const baseX = isMobile ? geometry.width - 52 * scale : geometry.width - 72 * scale;
+    const baseY = isMobile ? 70 * scale : 82 * scale;
+    const bob = Math.sin(now / 420) * 5 * scale;
+    const pulse = now < familiarPulseUntil ? 1 + Math.sin(now / 80) * 0.09 : 1;
+    const r = Math.max(24 * scale, isMobile ? 30 : 28) * pulse;
+    context.save();
+    context.globalAlpha = settings.lowSpecMode ? 0.88 : 0.96;
+    context.shadowColor = def.accent;
+    context.shadowBlur = settings.lowSpecMode ? 0 : 18 * scale;
+    context.fillStyle = def.color;
+    context.beginPath();
+    context.arc(baseX, baseY + bob, r, 0, Math.PI * 2);
+    context.fill();
+    context.lineWidth = Math.max(2, 3 * scale);
+    context.strokeStyle = def.accent;
+    context.stroke();
+    context.shadowBlur = 0;
+    context.font = `900 ${Math.round(r * 1.05)}px "Segoe UI Emoji", "Noto Sans JP", sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = "#ffffff";
+    context.fillText(def.emoji, baseX, baseY + bob + 1 * scale);
+    context.font = `900 ${Math.round(clamp(12 * scale, 11, 18))}px "Noto Sans JP", sans-serif`;
+    context.fillStyle = settings.blackModeEnabled ? "#f8fafc" : "#111827";
+    context.fillText(`Lv.${familiarState.level}`, baseX, baseY + bob + r + 13 * scale);
+    if (familiarMessage && now < familiarMessageUntil) {
+        const w = Math.min(geometry.width * 0.72, 360 * scale);
+        const h = 34 * scale;
+        const x = Math.max(12 * scale, baseX - w + 22 * scale);
+        const y = baseY + bob + r + 28 * scale;
+        context.globalAlpha = 0.92;
+        context.fillStyle = settings.blackModeEnabled ? "rgba(15,23,42,.92)" : "rgba(255,255,255,.92)";
+        roundRect(context, x, y, w, h, 14 * scale);
+        context.fill();
+        context.globalAlpha = 1;
+        context.fillStyle = def.accent;
+        context.font = `900 ${Math.round(clamp(13 * scale, 12, 19))}px "Noto Sans JP", sans-serif`;
+        context.fillText(familiarMessage, x + w / 2, y + h / 2);
+    }
+    context.restore();
+}
+
+function updateFamiliarButton(): void {
+    if (familiarButton) familiarButton.textContent = t(`使い魔 Lv.${familiarState.level}`, `Familiar Lv.${familiarState.level}`);
+    if (familiarToggleButton) familiarToggleButton.textContent = settings.familiarEnabled ? t("使い魔: ON", "Familiar: ON") : t("使い魔: OFF", "Familiar: OFF");
+}
+
+function showFamiliarPopup(): void {
+    const def = getCurrentFamiliarDef();
+    const level = getFamiliarLevelInfo(familiarState.xp);
+    const unlockedRows = FAMILIAR_DEFS.map((item) => {
+        const unlocked = Boolean(familiarState.unlocked[item.kind]);
+        return `<div style="border-radius:16px;padding:12px;margin:8px 0;background:${unlocked ? "rgba(255,255,255,.72)" : "rgba(15,23,42,.08)"};border:1px solid rgba(15,23,42,.12);">
+            <div style="font-weight:900;font-size:1.05em;">${item.emoji} ${item.name} ${unlocked ? "" : "🔒"}</div>
+            <div style="opacity:.86;">${escapeHtml(item.description)}</div>
+            <div style="margin-top:6px;font-size:.9em;opacity:.8;">秘密契約ヒント: ${item.secretCode ? "専用コードあり" : "最初から同行"}</div>
+            ${unlocked ? `<button data-familiar-call="${item.kind}" style="margin-top:8px;font-weight:900;padding:8px 14px;border-radius:999px;">呼び出す</button>` : ""}
+        </div>`;
+    }).join("");
+    showPopup("使い魔研究室", `
+        <p><b>${def.emoji} ${escapeHtml(familiarState.name)}</b> が同行中です。</p>
+        <div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
+            <div><b>Lv</b>: ${familiarState.level}</div>
+            <div><b>経験値</b>: ${familiarState.xp.toLocaleString()} / 次 ${level.nextXp.toLocaleString()}</div>
+            <div><b>なつき度</b>: ${familiarState.affection.toLocaleString()} / ${getFamiliarMood(familiarState)}</div>
+            <div><b>補助回数</b>: ${familiarState.assistCount.toLocaleString()}</div>
+        </div>
+        <div style="margin:12px 0;height:14px;border-radius:999px;background:rgba(15,23,42,.12);overflow:hidden;"><div style="width:${level.progressPercent.toFixed(1)}%;height:100%;background:linear-gradient(90deg,${def.color},${def.accent});"></div></div>
+        <p><b>超機能:</b> 実験中に使い魔が自動補助します。幸運は予兆、見張りは捨て区画、暴走は盤面干渉が強めです。</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
+            <button data-familiar-mode="assist">補助</button>
+            <button data-familiar-mode="lucky">幸運</button>
+            <button data-familiar-mode="guard">見張り</button>
+            <button data-familiar-mode="chaos">暴走</button>
+        </div>
+        <p><b>スマホ用秘密契約:</b> PCのキーボードがなくても下の入力で秘密コードを試せます。</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <input id="familiar-secret-input" placeholder="秘密コード" style="flex:1;min-width:160px;padding:12px;border-radius:14px;border:1px solid #b8c1d1;font-size:16px;">
+            <button id="familiar-secret-button">契約</button>
+        </div>
+        <h3 style="margin-top:16px;">使い魔図鑑</h3>
+        ${unlockedRows}
+    `);
+    document.querySelectorAll<HTMLButtonElement>("[data-familiar-mode]").forEach((button) => {
+        button.onclick = () => setFamiliarMode((button.dataset.familiarMode as FamiliarMode) || "assist");
+    });
+    document.querySelectorAll<HTMLButtonElement>("[data-familiar-call]").forEach((button) => {
+        button.onclick = () => contractFamiliar(button.dataset.familiarCall as FamiliarKind, "図鑑");
+    });
+    const input = document.getElementById("familiar-secret-input") as HTMLInputElement | null;
+    const button = document.getElementById("familiar-secret-button") as HTMLButtonElement | null;
+    const tryContract = () => {
+        const found = findFamiliarBySecretCode(input?.value ?? "");
+        if (!found) { showSoftToast("秘密コードは反応しませんでした"); return; }
+        contractFamiliar(found.kind, "秘密コード");
+    };
+    button?.addEventListener("click", tryContract);
+    input?.addEventListener("keydown", (event) => { if (event.key === "Enter") tryContract(); });
 }
 
 function buildMissionDefs(): MissionDef[] {
@@ -3681,6 +4023,11 @@ function getSecretDefs(): SecretDef[] {
         { id: "favicon-five-taps", label: "favicon 5連打", hint: "起動画面のロゴを連打", detail: "起動ロゴを5回タップしました。ロード画面にも秘密がありました。", rewardScore: 7777 },
         { id: "pause-seven-taps", label: "時間停止ごっこ", hint: "一時停止を短時間に何度も操作", detail: "一時停止操作を短時間に7回行いました。時間を止めようとする研究記録です。", rewardScore: 9000 },
         { id: "settings-three-open", label: "設定室の常連", hint: "スマホの設定画面を何度か開く", detail: "スマホ設定画面を3回開きました。設定画面にも観測ログが残ります。", rewardScore: 6000 },
+        { id: "familiar-neko", label: "使い魔契約: ねこ式使い魔", hint: "使い魔研究室かPCキー入力で猫系コード", detail: "ねこ式使い魔を解放しました。", rewardScore: 14000 },
+        { id: "familiar-kuro", label: "使い魔契約: 黒羽コウモリ", hint: "使い魔研究室かPCキー入力で黒羽系コード", detail: "黒羽コウモリを解放しました。", rewardScore: 14000 },
+        { id: "familiar-tokei", label: "使い魔契約: 時計キツネ", hint: "使い魔研究室かPCキー入力で時計系コード", detail: "時計キツネを解放しました。", rewardScore: 14000 },
+        { id: "familiar-hoshi", label: "使い魔契約: 星くらげ", hint: "使い魔研究室かPCキー入力で星系コード", detail: "星くらげを解放しました。", rewardScore: 14000 },
+        { id: "familiar-miko", label: "使い魔契約: 秘密巫女うさぎ", hint: "使い魔研究室かPCキー入力で短い秘密コード", detail: "秘密巫女うさぎを解放しました。", rewardScore: 14000 },
         { id: "skill-combo-lab", label: "三種の介入", hint: "実験中に衝撃波→磁石→時止めの順で使う", detail: "盤面介入スキルを決まった順番で使いました。研究員が完全に介入しています。", rewardScore: 12000 },
     ];
 }
@@ -4005,8 +4352,10 @@ function handleSecretKey(event: KeyboardEvent): void {
     secretKeyBuffer = (secretKeyBuffer + key).slice(-SECRET_KEY_MAX_LENGTH);
     for (const [code, info] of Object.entries(SECRET_KEY_SEQUENCES)) {
         if (secretKeyBuffer.endsWith(code)) {
-            const id = "keyword-" + code;
-            unlockSecret(id, info.label, info.detail);
+            const familiarDef = findFamiliarBySecretCode(code);
+            if (familiarDef) contractFamiliar(familiarDef.kind, "PC秘密キー");
+            const id = familiarDef ? `familiar-${familiarDef.kind}` : "keyword-" + code;
+            if (!familiarDef) unlockSecret(id, info.label, info.detail);
             secretKeyBuffer = "";
             return;
         }
@@ -4088,6 +4437,7 @@ function applyTheme(): void {
     activeEffectBadge.style.color = palette.badgeText;
     recentMiracleMini.style.background = palette.section;
     recentMiracleMini.style.color = palette.fieldText;
+    repaintThemeDecorations(palette);
     updateAdminButton();
     updateSpeedButtons();
     updateBlackModeButton();
@@ -5219,6 +5569,7 @@ function resetExperiment(startNow = false): void {
     updateStatusMiniOverlays();
     updateTutorialMissions();
     updateResearchProgressPanel();
+    maybeFamiliarAssist();
     anomalyUntil = 0;
     anomalyHidePins = false;
     anomalyMode = "none";
@@ -5280,6 +5631,39 @@ function applyBlackMode(): void {
     }
     applyTheme();
     updateUiLanguage();
+}
+
+function repaintThemeDecorations(palette: ReturnType<typeof getThemeUiPalette>): void {
+    const panelSelectors = [
+        "#miracle-info-area > div",
+        ".miracle-section",
+        ".miracle-user-card",
+        ".miracle-record-hero",
+        ".miracle-popup-panel",
+        ".miracle-mobile-panel",
+        ".miracle-mobile-settings-header",
+    ].join(",");
+
+    document.querySelectorAll<HTMLElement>(panelSelectors).forEach((panel) => {
+        panel.style.background = palette.section;
+        panel.style.color = palette.fieldText;
+        panel.style.borderColor = palette.buttonBorder;
+        panel.style.borderRadius = "26px";
+    });
+
+    document.querySelectorAll<HTMLButtonElement>("button:not([data-fixed-style='1'])").forEach((button) => {
+        button.style.background = palette.buttonBg;
+        button.style.color = palette.buttonText;
+        button.style.borderColor = palette.buttonBorder;
+        button.style.borderRadius = "999px";
+    });
+
+    document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select").forEach((field) => {
+        field.style.background = palette.fieldBg;
+        field.style.color = palette.fieldText;
+        field.style.borderColor = palette.buttonBorder;
+        field.style.borderRadius = field.tagName.toLowerCase() === "textarea" ? "22px" : "999px";
+    });
 }
 
 function updateBlackModeButton(): void {
@@ -5502,7 +5886,7 @@ function updateStopButton(): void {
     if (mobileDockPauseButton) mobileDockPauseButton.textContent = isPaused ? t("再開", "Resume") : t("一時停止", "Pause");
 }
 
-async function startExperiment(): Promise<void> {
+function startExperiment(): void {
     if (!applySettingsFromInputs(true)) return;
     applyAutoTheme("run");
     userProfile.lastPlayedDateKey = getDateKey();
@@ -5510,9 +5894,10 @@ async function startExperiment(): Promise<void> {
     void ensureAnimeReady();
     void ensureTippyReady();
     void ensureGifReady();
-    // ブラウザの仕様上、音声開始はユーザー操作後が安全なので、実行ボタン押下時に準備する
-    await unlockMobileAudio(false);
-    if (soundEnabled && !toneReady) await enableSound(false);
+    // ブラウザの仕様上、音声開始はユーザー操作後が安全なので準備する。
+    // iPhoneでは音声解放のPromiseが長引くことがあるため、実験開始は待たずに即実行する。
+    void unlockMobileAudio(false);
+    if (soundEnabled && !toneReady) void enableSound(false);
     playUiSound("start");
     recordAdminEvent({ type: "run_start", at: Date.now(), targetCount: settings.targetCount, detail: `${settings.activeLimit} active / ${settings.binCount} bins / ${settings.pinRows} rows` });
     engine.timing.timeScale = getCurrentTimeScale();
@@ -7383,7 +7768,7 @@ function updateInfo(): void {
         <div>${t("奇跡ログ件数", "Miracle logs")}: <b>${miracleLogs.length}</b></div>
         <div>${t("スコア", "Score")}: <b>${runScore.toLocaleString()}</b></div>
         <div>${t("ミッション", "Missions")}: <b>${missionDoneCount}</b> / ${missionDefs.length}</div>
-        <div>${t("スキル", "Skills")}: <b>衝${skillState.shockwave} / 磁${skillState.magnet} / 時${skillState.timeStop}</b></div>\n        <div>${t("奇跡ブースト", "Miracle boost")}: <b>x${getPassiveMiracleBoost().toFixed(2)}</b></div>
+        <div>${t("スキル", "Skills")}: <b>衝${skillState.shockwave} / 磁${skillState.magnet} / 時${skillState.timeStop}</b></div>\n        <div>${t("使い魔", "Familiar")}: <b>${getCurrentFamiliarDef().emoji} Lv.${familiarState.level}</b> / ${getFamiliarModeLabel(familiarState.mode)} / ${settings.familiarEnabled ? "ON" : "OFF"}</div>\n        <div>${t("奇跡ブースト", "Miracle boost")}: <b>x${getPassiveMiracleBoost().toFixed(2)}</b></div>
         <div>${t("縦動画", "Vertical")}: <b>${isVerticalVideoMode ? "ON" : "OFF"}</b></div>
         <div>${t("OBSモード", "OBS mode")}: <b>${isObsMode ? "ON" : "OFF"}</b></div>
         <div>${t("演出", "Effects")}: <b>${settings.effectsEnabled ? "ON" : "OFF"}</b> / ${getEffectModeLabel()}</div>
@@ -8028,6 +8413,7 @@ Events.on(render, "afterRender", () => {
     drawSpecialGlows(context);
     drawTimeBallSkins(context);
     drawNormalTraitMarks(context);
+    drawFamiliar(context);
     context.textAlign = "center";
     context.textBaseline = "middle";
     drawDiscardBinLabel(context, 0);
@@ -8255,14 +8641,17 @@ Events.on(engine, "afterUpdate", () => {
 
         // 指定回数に到達した後も、画面に残っている玉は最後に強制回収してカウントする
         if (targetReachedTime !== null && Date.now() - targetReachedTime > FINAL_SWEEP_DELAY_MS) {
+            const kind = (plugin.kind ?? "normal") as DropKind;
             const binIndex = getBinIndex(body.position.x);
             finishedCount++;
             if (binIndex >= 0) {
                 binCounts[binIndex]++;
                 addScore(100, "DROP", body.position.x, geometry.ballCountY - 24 * geometry.scale);
                 if (!settings.simpleMode) hitFlash[binIndex] = 18;
+                handleFamiliarDropResult(kind, binIndex);
             } else {
                 discardedCount++;
+                handleFamiliarDropResult(kind, -1);
             }
             activeDropCount--;
             removeTargets.push(body);
@@ -8334,6 +8723,7 @@ Events.on(engine, "afterUpdate", () => {
                     fireConfetti(def.soundMode ?? "miracle");
                 }
 
+                handleFamiliarDropResult(kind, binIndex);
                 checkMissionProgress();
                 while (finishedCount >= nextMilestone && nextMilestone <= settings.targetCount) {
                     showMilestone(`${nextMilestone.toLocaleString()}回 達成！`);
@@ -8346,6 +8736,7 @@ Events.on(engine, "afterUpdate", () => {
                 }
             } else {
                 discardedCount++;
+                handleFamiliarDropResult(kind, -1);
             }
             activeDropCount--;
             removeTargets.push(body);
@@ -8388,6 +8779,7 @@ applyAutoTheme("boot");
 applyTheme();
 if (settings.lowSpecMode) applyLowSpecMode();
 updateLowSpecButton();
+updateFamiliarButton();
 resetExperiment(false);
 ensureRenderLoop();
 void ensureAnimeReady();

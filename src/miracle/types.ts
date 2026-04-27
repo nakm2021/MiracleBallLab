@@ -89,6 +89,32 @@ export type EffectMode = "quiet" | "normal" | "flashy" | "recording";
 export type WorldMode = "poseidon" | "zeusu" | "hadesu" | "heart" | "nekochan" | null;
 export type TimeBallTheme = "morning" | "day" | "evening" | "night" | "midnight";
 export type TimeBallSkin = "normal" | "gloss" | "drop" | "spark" | "star" | "moon" | "darkShard" | "swordShard" | "coin" | "heart" | "crown";
+export type FamiliarKind = "mame" | "neko" | "kuro" | "tokei" | "hoshi" | "miko";
+export type FamiliarMode = "assist" | "guard" | "lucky" | "chaos";
+
+export type FamiliarDef = {
+    kind: FamiliarKind;
+    name: string;
+    emoji: string;
+    color: string;
+    accent: string;
+    description: string;
+    secretCode: string;
+};
+
+export type FamiliarState = {
+    kind: FamiliarKind;
+    name: string;
+    level: number;
+    xp: number;
+    affection: number;
+    mode: FamiliarMode;
+    unlocked: Partial<Record<FamiliarKind, number>>;
+    secretContracts: Partial<Record<FamiliarKind, number>>;
+    lastAssistAt: number;
+    assistCount: number;
+    jackpotWhisperCount: number;
+};
 
 
 export type DailyMissionMetric = "run" | "finished" | "score" | "special" | "discard" | "center";
@@ -198,6 +224,7 @@ export type Settings = {
     mobileCompactMode: boolean;
     lowSpecMode: boolean;
     showRecentMiracles: boolean;
+    familiarEnabled: boolean;
     blackModeEnabled: boolean;
     effectMode: EffectMode;
     probabilityMode: ProbabilityMode;

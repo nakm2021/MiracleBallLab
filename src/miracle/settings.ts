@@ -38,6 +38,7 @@ export function createDefaultSettings(isMobile: boolean, defaultBackgroundImageU
         mobileCompactMode: false,
         lowSpecMode: false,
         showRecentMiracles: false,
+        familiarEnabled: true,
         blackModeEnabled: false,
         effectMode: "normal",
         probabilityMode: "normal",
