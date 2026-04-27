@@ -1258,7 +1258,6 @@ const runButton = setTooltip(setButtonLabel(createButton("実行", () => startEx
 utilityButtons.appendChild(runButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"), "このプログラムが何をするか説明します。", "Explain what this program does."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("ユーザー設定", () => showUserSettingsPopup()), "ユーザー設定", "User"), "ニックネーム、遊び方、保存データを確認します。", "Manage nickname, play style, and local data."));
-utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("アプリ情報", () => showAppInfoPopup()), "アプリ情報", "App info"), "オフライン、プライバシー、保存情報を表示します。", "Show offline, privacy, and saved data information."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("ボタン説明", () => showButtonHelpPopup()), "ボタン説明", "Buttons"), "各ボタンの役割を一覧表示します。", "Show a list of what each button does."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡図鑑", () => showMiracleBookPopup()), "奇跡図鑑", "Miracle book"), "レア玉の一覧と発見回数を見ます。", "View rare drops and discovery counts."));
 missionButton = setTooltip(setButtonLabel(createButton("ミッション", () => showMissionPopup()), "ミッション", "Missions"), "達成条件と報酬スコアを確認します。", "Check missions and score rewards.");
@@ -2080,15 +2079,6 @@ function getUserPlayStyleLabel(style: UserPlayStyle): string {
     return isEnglish ? en[style] : ja[style];
 }
 
-function getAppOnlineStatusHtml(): string {
-    const online = navigator.onLine;
-    const swReady = "serviceWorker" in navigator;
-    return `
-        <span class="miracle-status-pill">${online ? "オンライン" : "オフライン"}</span>
-        <span class="miracle-status-pill">${swReady ? "オフライン起動準備あり" : "Service Workerなし"}</span>
-        <span class="miracle-status-pill">v${APP_VERSION}</span>
-    `;
-}
 
 function markThemeUnlocked(theme: ThemeMode): void {
     savedRecords.unlockedThemes = savedRecords.unlockedThemes ?? {};
@@ -4832,39 +4822,6 @@ function showUserSettingsPopup(): void {
     });
     document.getElementById("export-user-data-button")?.addEventListener("click", () => exportLocalUserData());
     document.getElementById("reset-local-data-button")?.addEventListener("click", () => resetLocalUserData());
-}
-
-function showAppInfoPopup(): void {
-    const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
-    showPopup(t("アプリ情報", "App info"), `
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>MiracleBallLab</b></p>
-            <p>${getAppOnlineStatusHtml()}</p>
-            <p>表示モード: <b>${standalone ? "ホーム画面から起動中" : "ブラウザで利用中"}</b></p>
-            <p>バージョン: <b>${APP_VERSION}</b></p>
-        </div>
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>このアプリでできること</b></p>
-            <ul style="line-height:1.8;margin-bottom:0;">
-                <li>玉を落として、まれに発生する特別な演出や記録を楽しめます。</li>
-                <li>一時停止・終了ボタンで、スマホでも無理なく遊びやすくしています。</li>
-                <li>設定、図鑑、最高記録、ミッション、奇跡ログをこの端末に保存できます。</li>
-                <li>研究所ホーム、奇跡アルバム、実験レポート履歴から、今日の記録をあとで振り返れます。</li>
-                <li>一度読み込んだ主要ファイルは、通信が不安定な場所でも開きやすくなります。</li>
-                <li>ユーザー設定から保存データの確認や削除ができます。</li>
-            </ul>
-        </div>
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>保存される情報</b></p>
-            <p>ニックネーム、遊び方の設定、図鑑、記録、ミッション進行状況は、この端末のブラウザ保存領域に保存されます。</p>
-            <p>アカウント作成、位置情報取得、プレイ記録の外部送信は行いません。</p>
-        </div>
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>通信について</b></p>
-            <p>動画演出をONにしている場合、演出用動画を読み込むために通信が発生することがあります。</p>
-            <p>通信が不安定な場合は、設定から動画演出をOFFにすると軽く遊べます。</p>
-        </div>
-    `);
 }
 
 function showRecordsPopup(): void {
@@ -8251,4 +8208,4 @@ function scheduleResize(): void {
 window.addEventListener("resize", scheduleResize);
 window.visualViewport?.addEventListener("resize", scheduleResize);
 window.addEventListener("online", () => { showSoftToast(t("オンラインに戻りました", "Back online")); updateInfo(); });
-window.addEventListener("offline", () => { showSoftToast(t("オフラインです。保存済み範囲で動作します", "Offline. Cached app continues.")); updateInfo(); });
+window.addEventListener("offline", () => { showSoftToast(t("オフラインです", "Offline")); updateInfo(); });
