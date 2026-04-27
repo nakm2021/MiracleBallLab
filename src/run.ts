@@ -4352,23 +4352,31 @@ function showReplayPopup(): void {
     });
 }
 
-function getAppStoreDescriptionHtml(): string {
+function getUserGuideHtml(): string {
     return `
         <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>AppStore向け説明文</b></p>
-            <p style="line-height:1.85;">MiracleBallLabは、無数のボールが落下する確率実験を観察しながら、まれに発生する「奇跡」を収集していく実験型コレクションアプリです。</p>
-            <p style="line-height:1.85;">毎日の研究ミッション、研究員ランク、奇跡図鑑、テーマ解放、実験レポート機能により、自分だけの研究記録を積み上げることができます。</p>
-            <p style="line-height:1.85;">低スペックモード、終了ボタン、オフライン起動を想定した保存設計により、スマホでも遊びやすい形を目指しています。</p>
+            <p style="margin-top:0;"><b>これは何？</b></p>
+            <p style="line-height:1.85;">MiracleBallLabは、たくさんの玉を落として、まれに起きる「奇跡」を集めていく実験あそびです。</p>
+            <p style="line-height:1.85;">玉がどこに入るか、どんな演出が出るか、どの奇跡を発見できるかをゆっくり眺めながら楽しめます。</p>
         </div>
         <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>短い紹介文</b></p>
-            <p>確率実験 × 奇跡収集 × 研究員育成。落下するボールから、自分だけの研究レポートを作ろう。</p>
+            <p style="margin-top:0;"><b>楽しみ方</b></p>
+            <ul style="line-height:1.85;margin-bottom:0;">
+                <li>まずは「実験を開始」を押して、玉の動きを観察します。</li>
+                <li>特別な玉や演出が出ると、奇跡図鑑やアルバムに記録されます。</li>
+                <li>実験が終わると、今回の結果が研究レポートとして残ります。</li>
+                <li>毎日のミッションや研究員ランクを進めると、少しずつ遊びの幅が広がります。</li>
+            </ul>
+        </div>
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>スマホで重いとき</b></p>
+            <p style="line-height:1.85;">動きが重い、端末が熱くなる、演出が止まりやすい場合は、設定から「低スペック: ON」にしてください。動画や派手な演出を控えめにして遊びやすくします。</p>
         </div>
     `;
 }
 
-function showAppStoreDescriptionPopup(): void {
-    showPopup("AppStore説明文", getAppStoreDescriptionHtml());
+function showUserGuidePopup(): void {
+    showPopup("遊び方", getUserGuideHtml());
 }
 
 function showLabHome(): void {
@@ -4378,9 +4386,9 @@ function showLabHome(): void {
     const latestReport = reports[0];
     const homeHtml = `
         <div style="display:grid;gap:14px;">
-            <div class="miracle-user-card" style="background:linear-gradient(135deg, rgba(255,246,207,.96), rgba(220,238,194,.88));">
+            <div class="miracle-user-card miracle-home-hero">
                 <div style="font-size:clamp(28px,6vw,54px);font-weight:1000;line-height:1.1;">MiracleBallLab</div>
-                <div style="margin-top:8px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">確率実験 × 奇跡収集 × 研究員育成ゲーム</div>
+                <div style="margin-top:8px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">玉を落として、まれに起きる奇跡を集めよう</div>
                 <div style="margin-top:10px;line-height:1.75;">今日の研究テーマ：<b>${escapeHtml(getDailyFortune().title)}</b><br>研究員ランク：<b>Lv.${rank.level} ${escapeHtml(rank.label)}</b> / 図鑑：<b>${discoveredKinds}</b>種類 / 実験：<b>${savedRecords.totalRuns.toLocaleString()}</b>回</div>
             </div>
             <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:12px;">
@@ -4389,13 +4397,13 @@ function showLabHome(): void {
                 <div class="miracle-user-card"><b>おすすめ設定</b><br><span style="opacity:.82;line-height:1.7;">重い場合は「低スペック: ON」。録画時は演出モードを録画向けにします。</span></div>
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
-                <button data-home-action="start" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#fef3c7 0%,#facc15 100%);cursor:pointer;">実験を開始</button>
-                <button data-home-action="daily" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:#fff;cursor:pointer;">デイリー研究</button>
-                <button data-home-action="album" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:#fff;cursor:pointer;">奇跡アルバム</button>
-                <button data-home-action="book" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:#fff;cursor:pointer;">奇跡図鑑</button>
-                <button data-home-action="appstore" style="font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:#fff;cursor:pointer;">AppStore説明文</button>
+                <button data-home-action="start" class="miracle-home-button miracle-home-primary">実験を開始</button>
+                <button data-home-action="daily" class="miracle-home-button">デイリー研究</button>
+                <button data-home-action="album" class="miracle-home-button">奇跡アルバム</button>
+                <button data-home-action="book" class="miracle-home-button">奇跡図鑑</button>
+                <button data-home-action="guide" class="miracle-home-button">遊び方</button>
             </div>
-            ${getAppStoreDescriptionHtml()}
+            ${getUserGuideHtml()}
         </div>
     `;
     showPopup("研究所ホーム", homeHtml);
@@ -4403,7 +4411,7 @@ function showLabHome(): void {
     helpOverlay.querySelector('[data-home-action="daily"]')?.addEventListener("click", () => showDailyMissionPopup());
     helpOverlay.querySelector('[data-home-action="album"]')?.addEventListener("click", () => showMiracleAlbumPopup());
     helpOverlay.querySelector('[data-home-action="book"]')?.addEventListener("click", () => showMiracleBookPopup());
-    helpOverlay.querySelector('[data-home-action="appstore"]')?.addEventListener("click", () => showAppStoreDescriptionPopup());
+    helpOverlay.querySelector('[data-home-action="guide"]')?.addEventListener("click", () => showUserGuidePopup());
 }
 
 function getPlainResearchMemo(): string {
@@ -4717,13 +4725,20 @@ function showPopup(title: string, bodyHtml: string): void {
     const titleFont = isMobile ? "32px" : "clamp(30px,5vw,58px)";
     const bodyFont = isMobile ? "18px" : "clamp(16px,2.5vw,24px)";
     const closeSize = isMobile ? "54px" : "46px";
+    const palette = getThemeUiPalette(currentTheme);
 
     helpOverlay.innerHTML = `
-        <div class="miracle-popup-panel" style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:rgba(250,253,244,.98);box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid rgba(87,112,51,.24);overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
-            <button id="close-help-popup-button" aria-label="閉じる" style="position:sticky;float:right;right:0;top:0;width:${closeSize};height:${closeSize};border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;font-size:${isMobile ? "34px" : "28px"};font-weight:900;line-height:1;cursor:pointer;box-shadow:0 5px 14px rgba(87,112,51,.16);z-index:2;">×</button>
-            <div style="font-size:${titleFont};font-weight:900;margin:0 ${isMobile ? "64px" : "54px"} 18px 0;color:#26351f;line-height:1.18;word-break:keep-all;overflow-wrap:break-word;">${title}</div>
-            <div style="font-size:${bodyFont};line-height:${isMobile ? "1.62" : "1.72"};color:#2f3a2a;text-align:left;word-break:normal;overflow-wrap:break-word;">${bodyHtml}</div>
-            <div style="margin-top:24px;text-align:center;"><button id="bottom-close-help-popup-button" style="font-size:20px;padding:12px 28px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);color:#26351f;">閉じる</button></div>
+        <style>
+            .miracle-popup-panel .miracle-user-card{background:${palette.section};color:${palette.fieldText};border:1px solid ${palette.buttonBorder};}
+            .miracle-popup-panel .miracle-home-hero{background:${palette.section};color:${palette.fieldText};border:1px solid ${palette.buttonBorder};}
+            .miracle-popup-panel .miracle-home-button{font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid ${palette.buttonBorder};background:${palette.buttonBg};color:${palette.buttonText};cursor:pointer;}
+            .miracle-popup-panel .miracle-home-primary{background:${palette.badge};color:${palette.badgeText};}
+        </style>
+        <div class="miracle-popup-panel" style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:${palette.panel};color:${palette.fieldText};box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid ${palette.buttonBorder};overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
+            <button id="close-help-popup-button" aria-label="閉じる" style="position:sticky;float:right;right:0;top:0;width:${closeSize};height:${closeSize};border-radius:999px;border:1px solid ${palette.buttonBorder};background:${palette.buttonBg};color:${palette.buttonText};font-size:${isMobile ? "34px" : "28px"};font-weight:900;line-height:1;cursor:pointer;box-shadow:0 5px 14px rgba(87,112,51,.16);z-index:2;">×</button>
+            <div style="font-size:${titleFont};font-weight:900;margin:0 ${isMobile ? "64px" : "54px"} 18px 0;color:${palette.title};line-height:1.18;word-break:keep-all;overflow-wrap:break-word;">${title}</div>
+            <div style="font-size:${bodyFont};line-height:${isMobile ? "1.62" : "1.72"};color:${palette.fieldText};text-align:left;word-break:normal;overflow-wrap:break-word;">${bodyHtml}</div>
+            <div style="margin-top:24px;text-align:center;"><button id="bottom-close-help-popup-button" style="font-size:20px;padding:12px 28px;border-radius:999px;border:1px solid ${palette.buttonBorder};cursor:pointer;font-weight:900;background:${palette.buttonBg};box-shadow:0 5px 14px rgba(87,112,51,.16);color:${palette.buttonText};">閉じる</button></div>
         </div>`;
     helpOverlay.style.display = "flex";
     document.getElementById("close-help-popup-button")!.onclick = () => closeHelpPopup();
@@ -4834,7 +4849,7 @@ function showAppInfoPopup(): void {
                 <li>玉を落として、まれに発生する特別な演出や記録を楽しめます。</li>
                 <li>一時停止・終了ボタンで、スマホでも無理なく遊びやすくしています。</li>
                 <li>設定、図鑑、最高記録、ミッション、奇跡ログをこの端末に保存できます。</li>
-                <li>研究所ホーム、奇跡アルバム、実験レポート履歴で、ゲームアプリらしい導線にしています。</li>
+                <li>研究所ホーム、奇跡アルバム、実験レポート履歴から、今日の記録をあとで振り返れます。</li>
                 <li>一度読み込んだ主要ファイルは、通信が不安定な場所でも開きやすくなります。</li>
                 <li>ユーザー設定から保存データの確認や削除ができます。</li>
             </ul>
@@ -4871,7 +4886,7 @@ function showRecordsPopup(): void {
 function showAboutPopup(): void {
     showPopup("ミラクルボールラボについて", `
         <p><b>ミラクルボールラボ</b>は、玉が盤面を落ち、<b>START / 役物 / PREMIUM</b> を通過した瞬間だけ抽選するパチンコ風シミュレーションです。</p>
-        <p><b>新コンセプト:</b> 確率実験 × 奇跡収集 × 研究員育成。研究所ホーム、奇跡アルバム、実験レポート履歴、デイリー研究、研究員ランクを使って、自分だけの研究記録を積み上げるアプリとして楽しめます。</p>
+        <p>落ちていく玉を眺めながら、まれに起きる奇跡を集めて、自分だけの研究記録を増やしていく遊びです。研究所ホーム、奇跡アルバム、実験レポート履歴、デイリー研究、研究員ランクから進行状況を確認できます。</p>
         <p><b>低スペックモード:</b> スマホや古い端末で重い場合は、動画・揺れ・背景・派手な演出をまとめて軽くできます。</p>
         <p>玉を作った瞬間には基本的にレア抽選しません。役物センサーを通過した玉だけが当たり・激アツ・奇跡演出の抽選対象になります。</p>
         <p>通常玉にはたまに<b>個体差</b>が付きます。重い玉、跳ね玉、小粒玉、のんびり玉、早足玉、回転玉、うす玉などがあり、同じ通常玉でも少し違う落ち方をします。</p>
