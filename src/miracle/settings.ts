@@ -40,6 +40,7 @@ export function createDefaultSettings(isMobile: boolean, defaultBackgroundImageU
         blackModeEnabled: false,
         effectMode: "normal",
         probabilityMode: "normal",
+        themeAutoMode: "fixed",
     };
 }
 

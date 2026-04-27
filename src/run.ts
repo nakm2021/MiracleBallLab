@@ -14,6 +14,7 @@ import { createInitialSkillState, createRandomBuckets } from "./miracle/state";
 import { getRankBaseScore, getRankScore } from "./miracle/rarity";
 import { applyThemePaletteToPanel } from "./miracle/ui";
 import { shouldPlayRemoteMiracleVideo } from "./miracle/videoEffects";
+import { getDailyMissions, getDailyMissionValue, getResearchRankInfo, getThemeCollection, getThemeForTime, pickRandomTheme } from "./miracle/progression";
 import type {
     DropKind,
     ProbabilityMode,
@@ -26,6 +27,8 @@ import type {
     RemoteMiracleAssetSource,
     RemoteMiracleManifest,
     ThemeMode,
+    ThemeAutoMode,
+    DailyMissionDef,
     EffectMode,
     WorldMode,
     TimeBallTheme,
@@ -338,6 +341,7 @@ let pseudoFullscreenScrollY = 0;
 let isVerticalVideoMode = false;
 let isObsMode = false;
 let currentTheme: ThemeMode = "lab";
+let themeAutoMode: ThemeAutoMode = settings.themeAutoMode;
 let miracleLogs: MiracleLogEntry[] = [...(savedRecords.miracleLogs ?? [])];
 let currentDailyFortune: DailyFortune | null = null;
 let secretKeyBuffer = "";
@@ -1072,6 +1076,7 @@ function setSelectOptions(): void {
 `;
     probabilityModeSelect.value = settings.probabilityMode;
     effectModeSelect.value = settings.effectMode;
+    themeAutoModeSelect.value = themeAutoMode;
 }
 
 function t(ja: string, en: string): string {
@@ -1145,8 +1150,36 @@ themeSelect.innerHTML = getThemeOptions().map((x) => `<option value="${x.value}"
 themeSelect.value = currentTheme;
 themeSelect.onchange = () => {
     currentTheme = (themeSelect.value as ThemeMode) || "lab";
+    themeAutoMode = "fixed";
+    settings.themeAutoMode = themeAutoMode;
+    if (themeAutoModeSelect) themeAutoModeSelect.value = themeAutoMode;
+    markThemeUnlocked(currentTheme);
     applyTheme();
+    persistUserPreferencesSoon();
     showSoftToast(`${t("テーマ", "Theme")}: ${themeSelect.options[themeSelect.selectedIndex]?.text ?? themeSelect.value}`);
+};
+
+const themeAutoModeSelect = document.createElement("select");
+themeAutoModeSelect.style.width = "100%";
+themeAutoModeSelect.style.boxSizing = "border-box";
+themeAutoModeSelect.style.padding = isMobile ? "16px 16px" : "12px 14px";
+themeAutoModeSelect.style.borderRadius = "18px";
+themeAutoModeSelect.style.border = "1px solid #b8c1d1";
+themeAutoModeSelect.style.background = "#ffffff";
+themeAutoModeSelect.style.fontSize = `${uiFontPx}px`;
+themeAutoModeSelect.style.fontWeight = "800";
+function updateThemeAutoModeSelectLabels(): void {
+    themeAutoModeSelect.innerHTML = isEnglish
+        ? `<option value="fixed">Fixed theme</option><option value="time">Auto by time</option><option value="random">Random per run</option>`
+        : `<option value="fixed">固定テーマ</option><option value="time">時間帯で自動</option><option value="random">実験ごとにランダム</option>`;
+    themeAutoModeSelect.value = themeAutoMode;
+}
+updateThemeAutoModeSelectLabels();
+themeAutoModeSelect.onchange = () => {
+    themeAutoMode = (themeAutoModeSelect.value as ThemeAutoMode) || "fixed";
+    settings.themeAutoMode = themeAutoMode;
+    applyAutoTheme("select");
+    persistUserPreferencesSoon();
 };
 
 const effectModeSelect = document.createElement("select");
@@ -1168,6 +1201,8 @@ updateEffectModeSelectLabels();
 setSelectOptions();
 effectModeSelect.onchange = () => {
     settings.effectMode = (effectModeSelect.value as EffectMode) || "normal";
+    themeAutoMode = (themeAutoModeSelect.value as ThemeAutoMode) || themeAutoMode;
+    settings.themeAutoMode = themeAutoMode;
     showSoftToast(`${t("演出モード", "Effect mode")}: ${getEffectModeLabel()}`);
     updateStatusMiniOverlays();
 };
@@ -1191,6 +1226,8 @@ const probField = createField("確率モード", probabilityModeSelect);
 addField(probField.wrapper, probField.labelEl, "確率モード", "Probability mode");
 const themeField = createField("テーマ切替", themeSelect);
 addField(themeField.wrapper, themeField.labelEl, "テーマ切替", "Theme");
+const themeAutoField = createField("テーマ運用", themeAutoModeSelect);
+addField(themeAutoField.wrapper, themeAutoField.labelEl, "テーマ運用", "Theme mode");
 const effectModeField = createField("演出モード", effectModeSelect);
 addField(effectModeField.wrapper, effectModeField.labelEl, "演出モード", "Effect mode");
 
@@ -1211,6 +1248,9 @@ utilityButtons.appendChild(missionButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("最高記録", () => showRecordsPopup()), "最高記録", "Records"), "最高記録や通算記録を表示します。", "Show best and lifetime records."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡ログ", () => showMiracleLogPopup()), "奇跡ログ", "Miracle log"), "発生した奇跡の履歴を見ます。", "Show the history of miracles."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("今日の運勢", () => showDailyFortunePopup()), "今日の運勢", "Fortune"), "今日の奇跡率とラッキー受け皿を表示します。", "Show today's miracle rate and lucky bin."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("デイリー研究", () => showDailyMissionPopup()), "デイリー研究", "Daily"), "今日だけの強化ミッションを表示します。", "Show enhanced daily missions."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("研究員ランク", () => showResearchRankPopup()), "研究員ランク", "Rank"), "研究員ランクと次の称号を表示します。", "Show researcher rank and progress."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("テーマ図鑑", () => showThemeBookPopup()), "テーマ図鑑", "Themes"), "テーマの一覧と解放条件を表示します。", "Show themes and unlock conditions."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡合成", () => showFusionPopup()), "奇跡合成", "Fusion"), "奇跡同士の合成・派生記録を表示します。", "Show miracle fusion records."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("秘密", () => showSecretPopup()), "秘密", "Secret"), "裏コマンドの解放状況を表示します。", "Show secret command unlocks."));
 adminButton = setTooltip(setButtonLabel(createButton(isAdminMode ? "主任モード" : "合言葉", () => showAdminGateOrPanel()), isAdminMode ? "主任モード" : "合言葉", isAdminMode ? "Admin" : "Passcode"), "合言葉で研究主任モードを開きます。", "Open the admin mode with a passcode.");
@@ -1837,6 +1877,8 @@ function loadSavedRecords(): SavedRecords {
                 miracleLogs: Array.isArray(data.miracleLogs) ? data.miracleLogs.slice(0, 80) : [],
                 fusions: data.fusions ?? {},
                 secretUnlocked: data.secretUnlocked ?? {},
+                dailyMissionCompleted: data.dailyMissionCompleted ?? {},
+                unlockedThemes: data.unlockedThemes ?? {},
             };
         }
     }
@@ -1857,6 +1899,8 @@ function loadSavedRecords(): SavedRecords {
         miracleLogs: [],
         fusions: {},
         secretUnlocked: {},
+        dailyMissionCompleted: {},
+        unlockedThemes: {},
     };
 }
 
@@ -1938,6 +1982,8 @@ function applyUserPreferencesToCurrentState(): void {
     settings = { ...settings, ...prefs };
     if (prefs.speedLabelText) speedLabelText = prefs.speedLabelText;
     if (prefs.theme) currentTheme = prefs.theme;
+    if (prefs.themeAutoMode) themeAutoMode = prefs.themeAutoMode;
+    if (prefs.themeAutoMode) settings.themeAutoMode = prefs.themeAutoMode;
     if (typeof prefs.soundEnabled === "boolean") soundEnabled = prefs.soundEnabled;
     if (typeof prefs.confettiEnabled === "boolean") confettiEnabled = prefs.confettiEnabled;
     if (prefs.language === "en") isEnglish = true;
@@ -1967,6 +2013,7 @@ function saveUserPreferencesFromCurrentState(): void {
         probabilityMode: settings.probabilityMode,
         speedLabelText,
         theme: currentTheme,
+        themeAutoMode,
         soundEnabled,
         confettiEnabled,
         language: isEnglish ? "en" : "ja",
@@ -2009,6 +2056,161 @@ function getAppOnlineStatusHtml(): string {
         <span class="miracle-status-pill">${swReady ? "オフライン起動準備あり" : "Service Workerなし"}</span>
         <span class="miracle-status-pill">v${APP_VERSION}</span>
     `;
+}
+
+function markThemeUnlocked(theme: ThemeMode): void {
+    savedRecords.unlockedThemes = savedRecords.unlockedThemes ?? {};
+    if (!savedRecords.unlockedThemes[theme]) {
+        savedRecords.unlockedThemes[theme] = Date.now();
+        saveRecords();
+    }
+}
+
+function applyAutoTheme(reason: "boot" | "select" | "run" | "timer"): void {
+    if (themeAutoMode === "fixed") {
+        settings.themeAutoMode = themeAutoMode;
+        return;
+    }
+    const nextTheme = themeAutoMode === "time" ? getThemeForTime() : reason === "run" ? pickRandomTheme(String(Date.now()) + "-" + String(savedRecords.totalRuns)) : currentTheme;
+    if (nextTheme !== currentTheme) {
+        currentTheme = nextTheme;
+        themeSelect.value = currentTheme;
+        markThemeUnlocked(currentTheme);
+        applyTheme();
+        if (reason !== "boot") showSoftToast("テーマ自動切替: " + getThemeDisplayName(currentTheme));
+    }
+    settings.themeAutoMode = themeAutoMode;
+}
+
+function getThemeDisplayName(theme: ThemeMode): string {
+    const option = getThemeOptions().find((x) => x.value === theme);
+    return option ? (isEnglish ? option.en : option.ja) : theme;
+}
+
+function getDiscoveredKindCount(): number {
+    return SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length;
+}
+
+function getFusionCountForRank(): number {
+    return Object.keys(savedRecords.fusions ?? {}).length;
+}
+
+function getSecretCountForRank(): number {
+    return Object.keys(savedRecords.secretUnlocked ?? {}).length;
+}
+
+function getCurrentResearchRankInfo() {
+    return getResearchRankInfo(savedRecords, getDiscoveredKindCount(), getFusionCountForRank(), getSecretCountForRank());
+}
+
+function getDailyMissionContext() {
+    const centerIndex = Math.floor(settings.binCount / 2);
+    const centerHits = (binCounts[centerIndex] ?? 0) + (binCounts[Math.max(0, centerIndex - 1)] ?? 0);
+    const specialCount = Object.values(specialCreated).reduce((sum, count) => sum + count, 0);
+    return { finishedCount, runScore, specialCount, discardedCount, centerHits };
+}
+
+function evaluateAndSaveDailyMissions(): string[] {
+    const today = getDateKey();
+    const context = getDailyMissionContext();
+    const completed: string[] = [];
+    savedRecords.dailyMissionCompleted = savedRecords.dailyMissionCompleted ?? {};
+    for (const mission of getDailyMissions(today)) {
+        if (savedRecords.dailyMissionCompleted[mission.id]) continue;
+        const value = getDailyMissionValue(mission, context);
+        if (value < mission.target) continue;
+        savedRecords.dailyMissionCompleted[mission.id] = Date.now();
+        addScore(mission.rewardScore, "DAILY " + mission.title);
+        markThemeUnlocked(mission.themeHint);
+        completed.push(mission.title);
+    }
+    if (completed.length > 0) {
+        saveRecords();
+        showSoftToast("デイリー研究達成: " + completed.join(" / "));
+    }
+    return completed;
+}
+
+function showDailyMissionPopup(): void {
+    const today = getDateKey();
+    const context = getDailyMissionContext();
+    const completedMap = savedRecords.dailyMissionCompleted ?? {};
+    const rows = getDailyMissions(today).map((mission) => {
+        const value = Math.min(getDailyMissionValue(mission, context), mission.target);
+        const percent = mission.target > 0 ? Math.min(100, (value / mission.target) * 100) : 0;
+        const done = !!completedMap[mission.id] || value >= mission.target;
+        return `
+            <div class="miracle-user-card" style="margin:12px 0;">
+                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+                    <b>${done ? "✅" : "⬜"} ${escapeHtml(mission.title)}</b>
+                    <span class="miracle-status-pill">+${mission.rewardScore.toLocaleString()}</span>
+                </div>
+                <div style="margin-top:6px;opacity:.86;">${escapeHtml(mission.description)}</div>
+                <div style="margin-top:10px;height:12px;border-radius:999px;background:rgba(100,116,139,.22);overflow:hidden;"><div style="height:100%;width:${percent.toFixed(1)}%;background:linear-gradient(90deg,#86efac,#22d3ee);"></div></div>
+                <div style="margin-top:6px;font-size:.92em;opacity:.82;">${value.toLocaleString()} / ${mission.target.toLocaleString()}　報酬テーマ: ${getThemeDisplayName(mission.themeHint)}</div>
+            </div>`;
+    }).join("");
+    showPopup("デイリー研究", `
+        <p>毎日変わる研究ミッションです。達成するとスコアとテーマ解放が進みます。</p>
+        ${rows}
+        <p style="opacity:.75;">日付: ${today} / 実験完了時に自動判定します。</p>
+    `);
+}
+
+function showResearchRankPopup(): void {
+    const rank = getCurrentResearchRankInfo();
+    showPopup("研究員ランク", `
+        <div class="miracle-user-card">
+            <p style="font-size:1.3em;margin-top:0;"><b>Lv.${rank.level} ${escapeHtml(rank.label)}</b></p>
+            <div style="height:16px;border-radius:999px;background:rgba(100,116,139,.22);overflow:hidden;"><div style="height:100%;width:${rank.progressPercent.toFixed(1)}%;background:linear-gradient(90deg,#fbbf24,#a78bfa,#22d3ee);"></div></div>
+            <p>研究ポイント: <b>${rank.score.toLocaleString()}</b>${rank.progressPercent >= 100 ? " / 最高ランク到達" : ` / 次 ${rank.nextScore.toLocaleString()}`}</p>
+        </div>
+        <div class="miracle-user-card">
+            <p style="margin-top:0;"><b>ランクに影響するもの</b></p>
+            <ul style="line-height:1.8;margin-bottom:0;">
+                <li>通算スコア、最高スコア</li>
+                <li>実験完了回数</li>
+                <li>発見済み奇跡の種類</li>
+                <li>奇跡合成・秘密解放</li>
+                <li>最高レア度</li>
+            </ul>
+        </div>
+    `);
+}
+
+function showThemeBookPopup(): void {
+    const entries = getThemeCollection(savedRecords, getDiscoveredKindCount(), getFusionCountForRank(), getSecretCountForRank());
+    const rows = entries.map((entry) => `
+        <div class="miracle-user-card" style="margin:10px 0;opacity:${entry.unlocked ? "1" : ".62"};">
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+                <b>${entry.unlocked ? "🎨" : "🔒"} ${escapeHtml(isEnglish ? entry.en : entry.ja)}</b>
+                <span class="miracle-status-pill">${entry.unlocked ? "解放済み" : "未解放"}</span>
+            </div>
+            <div style="margin-top:6px;opacity:.84;">${escapeHtml(entry.reason)}</div>
+            ${entry.unlocked ? `<button style="margin-top:10px;" data-theme-book-select="${entry.value}">このテーマにする</button>` : ""}
+        </div>`).join("");
+    const unlocked = entries.filter((x) => x.unlocked).length;
+    showPopup("テーマ図鑑", `
+        <p>テーマの解放状況です。テーマは見た目のカスタマイズ・毎日の遊び直し要素として使えます。</p>
+        <p><b>${unlocked} / ${entries.length}</b> 解放済み</p>
+        ${rows}
+    `);
+    window.setTimeout(() => {
+        document.querySelectorAll<HTMLButtonElement>("[data-theme-book-select]").forEach((button) => {
+            button.onclick = () => {
+                const theme = button.dataset.themeBookSelect as ThemeMode;
+                currentTheme = theme;
+                themeAutoMode = "fixed";
+                settings.themeAutoMode = themeAutoMode;
+                themeSelect.value = theme;
+                themeAutoModeSelect.value = themeAutoMode;
+                markThemeUnlocked(theme);
+                applyTheme();
+                persistUserPreferencesSoon();
+                showSoftToast("テーマ: " + getThemeDisplayName(theme));
+            };
+        });
+    }, 0);
 }
 
 function exportLocalUserData(): void {
@@ -2377,6 +2579,7 @@ function updateUiLanguage(): void {
     for (const item of sectionTitles) item.el.textContent = isEnglish ? item.en : item.ja;
     setSelectOptions();
     updateThemeSelectLabels();
+    updateThemeAutoModeSelectLabels();
     updateEffectModeSelectLabels();
     updateSimpleModeButton();
     updateBlackModeButton();
@@ -4475,6 +4678,8 @@ function showRecordsPopup(): void {
         <p><b>最高レア:</b> ${savedRecords.bestRank} / ${savedRecords.bestLabel}</p>
         <p><b>最高スコア:</b> ${savedRecords.bestScore.toLocaleString()}</p>
         <p><b>通算スコア:</b> ${savedRecords.totalScore.toLocaleString()}</p>
+        <p><b>研究員ランク:</b> Lv.${getCurrentResearchRankInfo().level} ${getCurrentResearchRankInfo().label}</p>
+        <p><b>テーマ解放:</b> ${getThemeCollection(savedRecords, getDiscoveredKindCount(), getFusionCountForRank(), getSecretCountForRank()).filter((x) => x.unlocked).length} / ${getThemeOptions().length}</p>
         <p><b>ミッション達成種類:</b> ${Object.keys(savedRecords.missionCompleted).length} / ${missionDefs.length || buildMissionDefs().length}</p>
         <p>保存はブラウザ内です。別端末や別ブラウザでは共有されません。</p>
         <p style="opacity:.75;">消したい場合はブラウザのサイトデータ削除でリセットできます。</p>
@@ -5055,6 +5260,7 @@ function updateStopButton(): void {
 
 async function startExperiment(): Promise<void> {
     if (!applySettingsFromInputs(true)) return;
+    applyAutoTheme("run");
     userProfile.lastPlayedDateKey = getDateKey();
     saveUserProfile();
     void ensureAnimeReady();
@@ -6722,12 +6928,13 @@ function updateInfo(): void {
     const discoveredKinds = getDiscoveredCount();
     const missionDoneCount = Object.values(missionProgress).filter(Boolean).length;
     const levelInfo = getResearchLevelInfo();
+    const rankInfo = getCurrentResearchRankInfo();
     const fortune = currentDailyFortune ?? getDailyFortune();
     currentDailyFortune = fortune;
     recordHero.innerHTML = `
         <div style="font-size:${isMobile ? 24 : 22}px;">🏆 ${t("最高記録", "Best records")} / ${escapeHtml(userProfile.nickname)}</div>
         <div style="font-size:${isMobile ? 22 : 20}px;">${t("最高レア", "Best rarity")}: <b>${savedRecords.bestRank}</b> ${savedRecords.bestLabel}</div>
-        <div style="font-size:${isMobile ? 20 : 18}px;">研究Lv: <b>${levelInfo.level}</b> ${levelInfo.title} / ${t("今回スコア", "Run score")}: <b>${runScore.toLocaleString()}</b></div>
+        <div style="font-size:${isMobile ? 20 : 18}px;">研究Lv: <b>${levelInfo.level}</b> ${levelInfo.title} / ランク: <b>Lv.${rankInfo.level}</b> ${rankInfo.label} / ${t("今回スコア", "Run score")}: <b>${runScore.toLocaleString()}</b></div>
         <div style="font-size:${isMobile ? 18 : 16}px;opacity:.86;">${t("実験", "Runs")} ${savedRecords.totalRuns.toLocaleString()}${t("回", "")} / ${t("最大", "Max")} ${savedRecords.maxFinishedCount.toLocaleString()}${t("玉", " balls")} / 今日 x${fortune.rateBoost.toFixed(2)}</div>
     `;
 
@@ -6882,6 +7089,7 @@ function showFinalResult(): void {
     savedRecords.totalRuns++;
     savedRecords.maxFinishedCount = Math.max(savedRecords.maxFinishedCount, finishedCount);
     savedRecords.maxTargetCount = Math.max(savedRecords.maxTargetCount, settings.targetCount);
+    const dailyCompleted = evaluateAndSaveDailyMissions();
     savedRecords.bestScore = Math.max(savedRecords.bestScore, runScore);
     savedRecords.totalScore += runScore;
     saveRecords();
@@ -6894,6 +7102,7 @@ function showFinalResult(): void {
             <div style="font-size:clamp(38px,8vw,78px);font-weight:900;margin-bottom:18px;">実験完了</div>
             <div style="font-size:clamp(22px,4vw,40px);margin-bottom:18px;">${browserName} / 指定${settings.targetCount.toLocaleString()}回 / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime)}</div>
             <div style="font-size:clamp(20px,3vw,34px);margin-bottom:18px;">スコア <b>${runScore.toLocaleString()}</b> / ミッション ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length} / 奇跡コンボ最高 ${bestComboThisRun}</div>
+            ${dailyCompleted.length > 0 ? `<div style="margin:0 auto 18px;max-width:760px;padding:14px;border-radius:18px;background:rgba(34,197,94,.16);border:1px solid rgba(134,239,172,.35);font-size:clamp(16px,2.4vw,24px);">デイリー研究達成: ${dailyCompleted.map(escapeHtml).join(" / ")}</div>` : ""}
             <div style="margin:0 auto 18px;max-width:760px;padding:16px;border-radius:20px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);font-size:clamp(17px,2.6vw,28px);line-height:1.55;text-align:left;"><b>今回の研究評価: ${evaluation.grade}</b><br>観測タイプ: ${evaluation.type}<br>奇跡濃度: ${evaluation.density}%<br><span style="opacity:.82;">${evaluation.note}</span></div>
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の極秘イベント。出たら奇跡どころか、画面が伝説になります。</div>
@@ -7752,6 +7961,8 @@ Events.on(engine, "afterUpdate", () => {
 
 geometry = calculateGeometry();
 missionDefs = buildMissionDefs();
+markThemeUnlocked(currentTheme);
+applyAutoTheme("boot");
 applyTheme();
 resetExperiment(false);
 ensureRenderLoop();

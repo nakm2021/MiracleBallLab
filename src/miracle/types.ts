@@ -84,11 +84,40 @@ export type RemoteMiracleManifest = {
 };
 
 export type ThemeMode = "lab" | "midnight" | "retro" | "gold" | "ocean" | "space" | "sakura" | "snow" | "volcano" | "forest" | "cyber" | "candy" | "poison" | "temple" | "sunset" | "neon" | "monochrome" | "wafuu" | "glacier" | "thunder";
+export type ThemeAutoMode = "fixed" | "time" | "random";
 export type EffectMode = "quiet" | "normal" | "flashy" | "recording";
 export type WorldMode = "poseidon" | "zeusu" | "hadesu" | "heart" | "nekochan" | null;
 export type TimeBallTheme = "morning" | "day" | "evening" | "night" | "midnight";
 export type TimeBallSkin = "normal" | "gloss" | "drop" | "spark" | "star" | "moon" | "darkShard" | "swordShard" | "coin" | "heart" | "crown";
 
+
+export type DailyMissionMetric = "run" | "finished" | "score" | "special" | "discard" | "center";
+
+export type DailyMissionDef = {
+    id: string;
+    title: string;
+    description: string;
+    metric: DailyMissionMetric;
+    target: number;
+    rewardScore: number;
+    themeHint: ThemeMode;
+};
+
+export type ResearchRankInfo = {
+    label: string;
+    level: number;
+    score: number;
+    nextScore: number;
+    progressPercent: number;
+};
+
+export type ThemeCollectionEntry = {
+    value: ThemeMode;
+    ja: string;
+    en: string;
+    unlocked: boolean;
+    reason: string;
+};
 
 export type SavedRecords = {
     totalRuns: number;
@@ -104,6 +133,8 @@ export type SavedRecords = {
     miracleLogs: MiracleLogEntry[];
     fusions: Record<string, number>;
     secretUnlocked: Record<string, number>;
+    dailyMissionCompleted: Record<string, number>;
+    unlockedThemes: Record<string, number>;
 };
 
 export type MissionDef = {
@@ -151,6 +182,7 @@ export type Settings = {
     blackModeEnabled: boolean;
     effectMode: EffectMode;
     probabilityMode: ProbabilityMode;
+    themeAutoMode: ThemeAutoMode;
 };
 
 export type UserPlayStyle = "standard" | "viewer" | "collector" | "recording";
@@ -171,6 +203,7 @@ export type UserPreferences = Partial<Settings> & {
     version: number;
     speedLabelText?: string;
     theme?: ThemeMode;
+    themeAutoMode?: ThemeAutoMode;
     soundEnabled?: boolean;
     confettiEnabled?: boolean;
     language?: "ja" | "en";
