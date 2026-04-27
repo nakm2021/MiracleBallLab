@@ -8,6 +8,50 @@ import * as Tone from "tone";
 import confetti from "canvas-confetti";
 import { Application, Graphics } from "pixi.js";
 import { createAdminLogApi, type AdminLogApi, type AdminLogEntry } from "./miracle/adminLog";
+import { ADMIN_UNLOCK_STORAGE_KEY, verifyAdminPasscode } from "./miracle/admin";
+import { createDefaultSettings, getThemeOptions, getThemeUiPalette } from "./miracle/settings";
+import { createInitialSkillState, createRandomBuckets } from "./miracle/state";
+import { getRankBaseScore, getRankScore } from "./miracle/rarity";
+import { applyThemePaletteToPanel } from "./miracle/ui";
+import { shouldPlayRemoteMiracleVideo } from "./miracle/videoEffects";
+import type {
+    DropKind,
+    ProbabilityMode,
+    SpecialEventDef,
+    MiracleLogEntry,
+    FusionDef,
+    DailyFortune,
+    MiracleClip,
+    RemoteMiracleAsset,
+    RemoteMiracleAssetSource,
+    RemoteMiracleManifest,
+    ThemeMode,
+    EffectMode,
+    WorldMode,
+    TimeBallTheme,
+    TimeBallSkin,
+    SavedRecords,
+    MissionDef,
+    SkillKind,
+    SecretDef,
+    SkillState,
+    Settings,
+    UserPlayStyle,
+    UserProfile,
+    UserPreferences,
+    Geometry,
+    FloatingText,
+    NormalBallTraitKind,
+    NormalBallTraitDef,
+    MiracleChainDef,
+    BoardAnomalyMode,
+    RarePinKind,
+    RarePinDef,
+    PachinkoYakumonoKind,
+    PachinkoYakumonoDef,
+    TutorialMissionDef,
+    TapRipple,
+} from "./miracle/types";
 
 const Engine = Matter.Engine;
 const Render = Matter.Render;
@@ -15,289 +59,6 @@ const Runner = Matter.Runner;
 const Bodies = Matter.Bodies;
 const Body = Matter.Body;
 const Composite = Matter.Composite;
-
-type DropKind = string;
-
-type ProbabilityMode = "normal" | "festival" | "hard" | "hell";
-
-type SpecialEventDef = {
-    kind: DropKind;
-    label: string;
-    rank: string;
-    rate: number;
-    denominator: number;
-    symbol: string;
-    emoji: string;
-    fillStyle: string;
-    radiusScale: number;
-    soundMode: "miracle" | "black" | "cosmic";
-};
-
-type MiracleLogEntry = {
-    label: string;
-    rank: string;
-    denominator: number;
-    finishedAt: number;
-    finishedCount: number;
-    mode: ProbabilityMode;
-    speedLabel: string;
-    combo: number;
-    note?: string;
-};
-
-type FusionDef = {
-    id: string;
-    label: string;
-    rank: string;
-    sourceKinds: DropKind[];
-    requiredCount: number;
-    description: string;
-    rewardScore: number;
-};
-
-type DailyFortune = {
-    dateKey: string;
-    title: string;
-    rateBoost: number;
-    luckyKind: string;
-    luckyBin: number;
-    advice: string;
-    seed: number;
-};
-
-type MiracleClip = {
-    id: string;
-    label: string;
-    rank: string;
-    denominator: number;
-    finishedCount: number;
-    createdAt: number;
-    subtitle: string;
-    frames: string[];
-};
-
-type RemoteMiracleAssetSource = {
-    url: string;
-    mimeType?: string;
-};
-
-type RemoteMiracleAsset = {
-    id: string;
-    kind: "video" | "audio";
-    rank?: string;
-    url?: string;
-    mimeType?: string;
-    sources?: RemoteMiracleAssetSource[];
-    seconds?: number;
-    opacity?: number;
-    weight?: number;
-    volume?: number;
-    tags?: string[];
-};
-
-type RemoteMiracleManifest = {
-    version: number;
-    updatedAt?: string;
-    assets: RemoteMiracleAsset[];
-};
-
-type ThemeMode = "lab" | "space" | "sunset" | "retro" | "midnight";
-type EffectMode = "quiet" | "normal" | "flashy" | "recording";
-type WorldMode = "poseidon" | "zeusu" | "hadesu" | "heart" | "nekochan" | null;
-type TimeBallTheme = "morning" | "day" | "evening" | "night" | "midnight";
-type TimeBallSkin = "normal" | "gloss" | "drop" | "spark" | "star" | "moon" | "darkShard" | "swordShard" | "coin" | "heart" | "crown";
-
-
-type SavedRecords = {
-    totalRuns: number;
-    maxFinishedCount: number;
-    maxTargetCount: number;
-    bestRank: string;
-    bestLabel: string;
-    discovered: Record<string, number>;
-    discoveredFirstAt: Record<string, number>;
-    bestScore: number;
-    totalScore: number;
-    missionCompleted: Record<string, number>;
-    miracleLogs: MiracleLogEntry[];
-    fusions: Record<string, number>;
-    secretUnlocked: Record<string, number>;
-};
-
-type MissionDef = {
-    id: string;
-    title: string;
-    description: string;
-    rewardScore: number;
-    oncePerRun: boolean;
-    evaluate: () => boolean;
-};
-
-type SkillKind = "shockwave" | "magnet" | "timeStop";
-
-type SecretDef = {
-    id: string;
-    label: string;
-    hint: string;
-    detail: string;
-    rewardScore: number;
-};
-
-type SkillState = {
-    shockwave: number;
-    magnet: number;
-    timeStop: number;
-};
-
-type Settings = {
-    targetCount: number;
-    activeLimit: number;
-    binCount: number;
-    pinRows: number;
-    labelText: string;
-    backgroundImage: string;
-    simpleMode: boolean;
-    cameraShakeEnabled: boolean;
-    slowMiracleEffects: boolean;
-    effectsEnabled: boolean;
-    commentaryEnabled: boolean;
-    boardAnomalyEnabled: boolean;
-    normalBallTraitsEnabled: boolean;
-    timeBallSkinsEnabled: boolean;
-    mobileCompactMode: boolean;
-    showRecentMiracles: boolean;
-    blackModeEnabled: boolean;
-    effectMode: EffectMode;
-    probabilityMode: ProbabilityMode;
-};
-
-type UserPlayStyle = "standard" | "viewer" | "collector" | "recording";
-
-type UserProfile = {
-    nickname: string;
-    playStyle: UserPlayStyle;
-    favoriteMiracle: string;
-    createdAt: number;
-    lastOpenedAt: number;
-    openCount: number;
-    lastPlayedDateKey: string;
-    consecutiveDays: number;
-    totalSafeStops: number;
-};
-
-type UserPreferences = Partial<Settings> & {
-    version: number;
-    speedLabelText?: string;
-    theme?: ThemeMode;
-    soundEnabled?: boolean;
-    confettiEnabled?: boolean;
-    language?: "ja" | "en";
-};
-
-type Geometry = {
-    width: number;
-    height: number;
-    infoHeight: number;
-    scale: number;
-    pixelRatio: number;
-    wallWidth: number;
-    groundHeight: number;
-    groundTop: number;
-    totalBinCount: number;
-    binLeft: number;
-    binRight: number;
-    binWidth: number;
-    visibleStart: number;
-    ballRadius: number;
-    pinRadius: number;
-    dividerWidth: number;
-    dividerHeight: number;
-    dividerY: number;
-    ballCountY: number;
-    labelY: number;
-    countY: number;
-    percentY: number;
-    barY: number;
-    labelFont: number;
-    countFont: number;
-    percentFont: number;
-    infoFont: number;
-    binCenters: number[];
-};
-
-type FloatingText = {
-    text: string;
-    x: number;
-    y: number;
-    life: number;
-    maxLife: number;
-    color: string;
-};
-
-type NormalBallTraitKind = "standard" | "heavy" | "bouncy" | "tiny" | "sleepy" | "sprinter" | "spinner" | "ghost";
-
-type NormalBallTraitDef = {
-    kind: NormalBallTraitKind;
-    label: string;
-    mark: string;
-    description: string;
-    rate: number;
-    radiusScale: number;
-    restitution: number;
-    density: number;
-    frictionAir: number;
-    strokeStyle: string;
-};
-
-type MiracleChainDef = {
-    id: string;
-    label: string;
-    rank: string;
-    sequence: DropKind[];
-    description: string;
-    rewardScore: number;
-};
-
-type BoardAnomalyMode = "none" | "sideGravity" | "stickyTime" | "dimPins" | "tremor" | "updraft" | "blackHole" | "pinPulse" | "reverseRain";
-
-type RarePinKind = "red" | "blue" | "black" | "rainbow";
-
-type RarePinDef = {
-    kind: RarePinKind;
-    label: string;
-    description: string;
-    fillStyle: string;
-    strokeStyle: string;
-    rate: number;
-};
-
-type PachinkoYakumonoKind = "start" | "center" | "premium";
-
-type PachinkoYakumonoDef = {
-    kind: PachinkoYakumonoKind;
-    label: string;
-    xRatio: number;
-    yRatio: number;
-    widthRatio: number;
-    height: number;
-    oddsScale: number;
-    score: number;
-    color: string;
-};
-
-type TutorialMissionDef = {
-    id: string;
-    label: string;
-    description: string;
-    evaluate: () => boolean;
-};
-
-type TapRipple = {
-    x: number;
-    y: number;
-    life: number;
-    maxLife: number;
-};
 
 const BASE_WIDTH = 800;
 const BASE_HEIGHT = 600;
@@ -329,7 +90,7 @@ const SWORD_IMPACT_RATE = 0.0000002; // 1/5,000,000
 const RECORD_STORAGE_KEY = "miracle-ball-lab-records-v3";
 const USER_PROFILE_STORAGE_KEY = "miracle-ball-lab-user-profile-v1";
 const USER_PREFERENCES_STORAGE_KEY = "miracle-ball-lab-user-preferences-v1";
-const APP_VERSION = "1.0.0-web-appstore-ready";
+const APP_VERSION = "1.0.0";
 const SECRET_KEY_SEQUENCE = "miracle";
 const MIRACLE_ASSET_BASE_URL = "https://pub-53a4b50cc39c4d7882f67fc9340fe6e8.r2.dev";
 const MIRACLE_MANIFEST_URL = `${MIRACLE_ASSET_BASE_URL}/manifest.json`;
@@ -497,27 +258,7 @@ const uiButtonFontPx = isMobile ? 26 : 20;
 const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
 const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
 
-let settings: Settings = {
-    targetCount: 500,
-    activeLimit: 15,
-    binCount: isMobile ? 6 : 8,
-    pinRows: isMobile ? 6 : 7,
-    labelText: isMobile ? "１\n２\n３\n４\n５\n６" : "１\n２\n３\n４\n５\n６\n７\n８",
-    backgroundImage: DEFAULT_BACKGROUND_IMAGE_URL,
-    simpleMode: false,
-    cameraShakeEnabled: false,
-    slowMiracleEffects: false,
-    effectsEnabled: true,
-    commentaryEnabled: true,
-    boardAnomalyEnabled: true,
-    normalBallTraitsEnabled: true,
-    timeBallSkinsEnabled: true,
-    mobileCompactMode: false,
-    showRecentMiracles: false,
-    blackModeEnabled: false,
-    effectMode: "normal",
-    probabilityMode: "normal",
-};
+let settings: Settings = createDefaultSettings(isMobile, DEFAULT_BACKGROUND_IMAGE_URL);
 
 let selectedBackgroundObjectUrl = "";
 let geometry: Geometry;
@@ -570,7 +311,7 @@ let missionDefs: MissionDef[] = [];
 let missionProgress: Record<string, boolean> = {};
 let runScore = 0;
 let bestComboThisRun = 0;
-let skillState: SkillState = { shockwave: 2, magnet: 2, timeStop: 1 };
+let skillState: SkillState = createInitialSkillState();
 let magnetUntil = 0;
 let lastSkillUsedAt = 0;
 
@@ -584,7 +325,7 @@ let heartHits: number[] = [];
 let blackSunHits: number[] = [];
 let cosmicEggHits: number[] = [];
 
-let randomBuckets = Array.from({ length: RANDOM_BUCKET_COUNT }, () => 0);
+let randomBuckets = createRandomBuckets(RANDOM_BUCKET_COUNT);
 let randomCallCount = 0;
 let floatingTexts: FloatingText[] = [];
 let shakeUntil = 0;
@@ -689,8 +430,6 @@ let missionButton: HTMLButtonElement | null = null;
 let shareButton: HTMLButtonElement | null = null;
 let skillButtons: Partial<Record<SkillKind, HTMLButtonElement>> = {};
 let adminButton: HTMLButtonElement | null = null;
-const ADMIN_UNLOCK_STORAGE_KEY = "miracleAdminUnlocked";
-const ADMIN_PASSCODE_SHA256 = "e8a86901814993b1da9c180e735c2064c95886b8aeb7f70819d8201a4fbcb60d";
 let isAdminMode = localStorage.getItem(ADMIN_UNLOCK_STORAGE_KEY) === "1";
 let adminForceNextMiracleEffect = false;
 let activeRemoteMiracleVideoRankScore = -1;
@@ -713,6 +452,17 @@ const render = Render.create({
 });
 
 const runner = Runner.create();
+
+function ensureRenderLoop(): void {
+    // Render.stop() 後に再開できない状態を避けるため、
+    // 実行開始・リセット時は一度止めてから必ず描画ループを張り直す。
+    try { Render.stop(render); } catch {}
+    Render.run(render);
+}
+
+function stopRenderLoop(): void {
+    try { Render.stop(render); } catch {}
+}
 
 // ======================================================
 // HTML / UI
@@ -783,6 +533,56 @@ globalStyle.textContent = `
   }
   body.miracle-black-mode button:hover { filter:brightness(1.15); }
   body.miracle-black-mode canvas { background-color:#020617 !important; }
+
+  body.miracle-theme-active #miracle-info-area {
+    background: var(--miracle-theme-panel) !important;
+    color: var(--miracle-theme-text) !important;
+  }
+  body.miracle-theme-active #miracle-info-area .miracle-section,
+  body.miracle-theme-active #miracle-info-area .miracle-user-card,
+  body.miracle-theme-active #miracle-info-area .miracle-record-hero,
+  body.miracle-theme-active .miracle-popup-panel,
+  body.miracle-theme-active .miracle-mobile-panel {
+    background: var(--miracle-theme-section) !important;
+    color: var(--miracle-theme-text) !important;
+    border-color: var(--miracle-theme-border) !important;
+  }
+  body.miracle-theme-active #miracle-info-area button:not([data-fixed-style="1"]),
+  body.miracle-theme-active .miracle-popup-panel button:not([data-fixed-style="1"]),
+  body.miracle-theme-active .miracle-mobile-panel button:not([data-fixed-style="1"]) {
+    background: var(--miracle-theme-button-bg) !important;
+    color: var(--miracle-theme-button-text) !important;
+    border-color: var(--miracle-theme-button-border) !important;
+    text-shadow: none !important;
+  }
+  body.miracle-theme-active #miracle-info-area input,
+  body.miracle-theme-active #miracle-info-area textarea,
+  body.miracle-theme-active #miracle-info-area select,
+  body.miracle-theme-active .miracle-popup-panel input,
+  body.miracle-theme-active .miracle-popup-panel textarea,
+  body.miracle-theme-active .miracle-popup-panel select,
+  body.miracle-theme-active .miracle-mobile-panel input,
+  body.miracle-theme-active .miracle-mobile-panel textarea,
+  body.miracle-theme-active .miracle-mobile-panel select {
+    background: var(--miracle-theme-field-bg) !important;
+    color: var(--miracle-theme-text) !important;
+    border-color: var(--miracle-theme-border) !important;
+  }
+  body.miracle-theme-active #miracle-info-area label,
+  body.miracle-theme-active #miracle-info-area .miracle-section > div:first-child,
+  body.miracle-theme-active .miracle-popup-panel h1,
+  body.miracle-theme-active .miracle-popup-panel h2,
+  body.miracle-theme-active .miracle-popup-panel h3 {
+    color: var(--miracle-theme-title) !important;
+  }
+  body.miracle-theme-active .miracle-popup-panel,
+  body.miracle-theme-active .miracle-popup-panel div,
+  body.miracle-theme-active .miracle-popup-panel p,
+  body.miracle-theme-active .miracle-popup-panel li,
+  body.miracle-theme-active .miracle-popup-panel td,
+  body.miracle-theme-active .miracle-popup-panel th {
+    color: var(--miracle-theme-text) !important;
+  }
 `;
 document.head.appendChild(globalStyle);
 
@@ -930,6 +730,7 @@ appRoot.style.overflow = "hidden";
 document.body.appendChild(appRoot);
 
 const gameArea = document.createElement("div");
+gameArea.id = "miracle-game-area";
 gameArea.style.flex = "1";
 gameArea.style.minHeight = "0";
 gameArea.style.display = "flex";
@@ -1017,6 +818,7 @@ pcPauseButton.addEventListener("click", (event) => {
 gameArea.appendChild(pcPauseButton);
 
 const info = document.createElement("div");
+info.id = "miracle-info-area";
 info.style.flex = "0 0 auto";
 info.style.width = "100%";
 info.style.maxWidth = "100%";
@@ -1029,6 +831,7 @@ info.style.overflow = "auto";
 appRoot.appendChild(info);
 
 const appHeader = document.createElement("div");
+appHeader.className = "miracle-user-card";
 appHeader.style.display = "flex";
 appHeader.style.alignItems = "center";
 appHeader.style.justifyContent = "space-between";
@@ -1053,6 +856,7 @@ appHeaderNote.style.color = "#56663f";
 appHeader.appendChild(appHeaderNote);
 
 const recordHero = document.createElement("div");
+recordHero.className = "miracle-record-hero";
 recordHero.style.margin = "0 0 12px 0";
 recordHero.style.padding = isMobile ? "14px 18px" : "12px 18px";
 recordHero.style.borderRadius = "24px";
@@ -1215,6 +1019,7 @@ function setButtonLabel(button: HTMLButtonElement, ja: string, en: string): HTML
 
 function createSection(titleJa: string, titleEn: string): HTMLDivElement {
     const section = document.createElement("div");
+    section.className = "miracle-section";
     section.style.display = "flex";
     section.style.flexDirection = "column";
     section.style.gap = "10px";
@@ -1334,12 +1139,7 @@ themeSelect.style.border = "1px solid #b8c1d1";
 themeSelect.style.background = "#ffffff";
 themeSelect.style.fontSize = `${uiFontPx}px`;
 themeSelect.style.fontWeight = "800";
-themeSelect.innerHTML = `
-<option value="lab">研究所</option>
-<option value="space">宇宙</option>
-<option value="sunset">夕焼け</option>
-<option value="retro">レトロ</option>
-<option value="midnight">深夜</option>`;
+themeSelect.innerHTML = getThemeOptions().map((x) => `<option value="${x.value}">${isEnglish ? x.en : x.ja}</option>`).join("");
 themeSelect.value = currentTheme;
 themeSelect.onchange = () => {
     currentTheme = (themeSelect.value as ThemeMode) || "lab";
@@ -1401,7 +1201,7 @@ const runButton = setTooltip(setButtonLabel(createButton("実行", () => startEx
 utilityButtons.appendChild(runButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"), "このプログラムが何をするか説明します。", "Explain what this program does."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("ユーザー設定", () => showUserSettingsPopup()), "ユーザー設定", "User"), "ニックネーム、遊び方、保存データを確認します。", "Manage nickname, play style, and local data."));
-utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("アプリ情報", () => showAppInfoPopup()), "アプリ情報", "App info"), "オフライン、プライバシー、AppStore向け情報を表示します。", "Show offline, privacy, and app information."));
+utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("アプリ情報", () => showAppInfoPopup()), "アプリ情報", "App info"), "オフライン、プライバシー、保存情報を表示します。", "Show offline, privacy, and saved data information."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("ボタン説明", () => showButtonHelpPopup()), "ボタン説明", "Buttons"), "各ボタンの役割を一覧表示します。", "Show a list of what each button does."));
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("奇跡図鑑", () => showMiracleBookPopup()), "奇跡図鑑", "Miracle book"), "レア玉の一覧と発見回数を見ます。", "View rare drops and discovery counts."));
 missionButton = setTooltip(setButtonLabel(createButton("ミッション", () => showMissionPopup()), "ミッション", "Missions"), "達成条件と報酬スコアを確認します。", "Check missions and score rewards.");
@@ -1433,14 +1233,19 @@ utilityButtons.appendChild(fullScreenButton);
 const speedButtonRefs: Record<string, HTMLButtonElement> = {};
 
 function updateSpeedButtons(): void {
+    const themePalette = getThemeUiPalette(currentTheme);
     const uiAccent = getUiAccentPaletteByKind(getCurrentUiAccentKind());
+    const onBg = uiAccent?.badge ?? themePalette.badge;
+    const onText = uiAccent?.badgeText ?? themePalette.badgeText;
+    const onBorder = uiAccent?.border ?? themePalette.buttonBorder;
+    const offBg = settings.blackModeEnabled ? "linear-gradient(180deg,#172033 0%,#0f172a 100%)" : themePalette.buttonBg;
+    const offText = settings.blackModeEnabled ? "#f8fafc" : themePalette.buttonText;
+    const offBorder = settings.blackModeEnabled ? "#64748b" : themePalette.buttonBorder;
     for (const [label, button] of Object.entries(speedButtonRefs)) {
         const selected = speedLabelText === label;
-        button.style.background = selected
-            ? (uiAccent?.badge ?? "linear-gradient(180deg,#4b8cff 0%,#1d4ed8 100%)")
-            : (settings.blackModeEnabled ? "linear-gradient(180deg,#172033 0%,#0f172a 100%)" : "linear-gradient(180deg,#ececec 0%,#d7d7d7 100%)");
-        button.style.color = selected ? (uiAccent?.badgeText ?? "#ffffff") : (settings.blackModeEnabled ? "#f8fafc" : "#444444");
-        button.style.borderColor = selected ? (uiAccent?.border ?? "#1d4ed8") : (settings.blackModeEnabled ? "#64748b" : "rgba(70,80,110,.28)");
+        button.style.background = selected ? onBg : offBg;
+        button.style.color = selected ? onText : offText;
+        button.style.borderColor = selected ? onBorder : offBorder;
         button.style.boxShadow = selected ? "inset 0 3px 10px rgba(0,0,0,.34), 0 0 0 2px rgba(255,255,255,.28)" : "0 6px 16px rgba(0,0,0,.12)";
         button.style.transform = selected ? "translateY(2px)" : "translateY(0)";
         button.style.filter = selected ? "brightness(.96)" : "";
@@ -2741,21 +2546,6 @@ function applyDynamicUiPalette(): void {
     }
 }
 
-function getRankScore(rank: string): number {
-    const order = ["N", "R", "SR", "SSR", "UR", "EX", "GOD"];
-    return order.indexOf(rank);
-}
-
-function getRankBaseScore(rank: string): number {
-    if (rank === "GOD") return 250000;
-    if (rank === "EX") return 120000;
-    if (rank === "UR") return 60000;
-    if (rank === "SSR") return 18000;
-    if (rank === "SR") return 6000;
-    if (rank === "R") return 1800;
-    return 100;
-}
-
 function formatDateTime(ts: number | undefined): string {
     if (!ts) return "-";
     try {
@@ -3575,15 +3365,12 @@ function showAdminGateOrPanel(): void {
 
 function updateAdminButton(): void {
     if (!adminButton) return;
+    const palette = getThemeUiPalette(currentTheme);
     adminButton.textContent = isAdminMode ? t("主任モード", "Admin") : t("合言葉", "Passcode");
-    adminButton.style.background = isAdminMode ? "linear-gradient(180deg, #fee2e2 0%, #fecaca 100%)" : "linear-gradient(180deg, #f3f8e8 0%, #dceec2 100%)";
-    adminButton.style.color = isAdminMode ? "#7f1d1d" : "#26351f";
-}
-
-async function sha256Hex(value: string): Promise<string> {
-    const data = new TextEncoder().encode(value);
-    const digest = await crypto.subtle.digest("SHA-256", data);
-    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    adminButton.style.background = palette.buttonBg;
+    adminButton.style.color = palette.buttonText;
+    adminButton.style.borderColor = palette.buttonBorder;
+    adminButton.style.boxShadow = isAdminMode ? "0 0 0 3px rgba(248,113,113,.30)" : "";
 }
 
 function showAdminGatePopup(): void {
@@ -3602,8 +3389,8 @@ function showAdminGatePopup(): void {
         if (!input || !button) return;
         button.disabled = true;
         try {
-            const hash = await sha256Hex(input.value);
-            if (hash === ADMIN_PASSCODE_SHA256) {
+            const ok = await verifyAdminPasscode(input.value);
+            if (ok) {
                 isAdminMode = true;
                 localStorage.setItem(ADMIN_UNLOCK_STORAGE_KEY, "1");
                 recordAdminEvent({ type: "admin_unlock", at: Date.now(), detail: "passcode ok" });
@@ -3898,33 +3685,68 @@ function registerSkillSecretCombo(kind: SkillKind): void {
         skillComboBuffer = [];
     }
 }
-function getThemeOptions(): Array<{ value: ThemeMode; ja: string; en: string }> {
-    return [
-        { value: "lab", ja: "研究所", en: "Lab" },
-        { value: "space", ja: "宇宙", en: "Space" },
-        { value: "sunset", ja: "夕焼け", en: "Sunset" },
-        { value: "retro", ja: "レトロ", en: "Retro" },
-        { value: "midnight", ja: "深夜", en: "Midnight" },
-    ];
-}
-
 function updateThemeSelectLabels(): void {
     themeSelect.innerHTML = getThemeOptions().map((x) => `<option value="${x.value}">${isEnglish ? x.en : x.ja}</option>`).join("");
     themeSelect.value = currentTheme;
 }
 
+function setThemeCssVariables(palette: ReturnType<typeof getThemeUiPalette>): void {
+    document.body.classList.add("miracle-theme-active");
+    document.documentElement.style.setProperty("--miracle-theme-panel", palette.panel);
+    document.documentElement.style.setProperty("--miracle-theme-game", palette.game);
+    document.documentElement.style.setProperty("--miracle-theme-section", palette.section);
+    document.documentElement.style.setProperty("--miracle-theme-field-bg", palette.fieldBg);
+    document.documentElement.style.setProperty("--miracle-theme-text", palette.fieldText);
+    document.documentElement.style.setProperty("--miracle-theme-title", palette.title);
+    document.documentElement.style.setProperty("--miracle-theme-border", palette.buttonBorder);
+    document.documentElement.style.setProperty("--miracle-theme-button-bg", palette.buttonBg);
+    document.documentElement.style.setProperty("--miracle-theme-button-text", palette.buttonText);
+    document.documentElement.style.setProperty("--miracle-theme-button-border", palette.buttonBorder);
+}
+
 function applyTheme(): void {
-    const themeMap: Record<ThemeMode, { body: string; panel: string; game: string }> = {
-        lab: { body: "linear-gradient(180deg,#11131a 0%,#1b202b 100%)", panel: "linear-gradient(180deg, rgba(246,250,236,.96) 0%, rgba(227,240,204,.88) 100%)", game: "radial-gradient(circle at 50% 30%, rgba(30,36,52,.92), rgba(9,11,18,.98))" },
-        space: { body: "linear-gradient(180deg,#050814 0%,#0b1230 100%)", panel: "linear-gradient(180deg, rgba(232,241,255,.92) 0%, rgba(210,223,255,.84) 100%)", game: "radial-gradient(circle at 50% 20%, rgba(30,40,90,.92), rgba(3,6,18,.98))" },
-        sunset: { body: "linear-gradient(180deg,#2b1020 0%,#6d2d3d 46%,#f07f43 100%)", panel: "linear-gradient(180deg, rgba(255,245,232,.94) 0%, rgba(255,220,198,.88) 100%)", game: "radial-gradient(circle at 50% 18%, rgba(255,154,96,.50), rgba(45,11,28,.96))" },
-        retro: { body: "linear-gradient(180deg,#14313a 0%,#08161c 100%)", panel: "linear-gradient(180deg, rgba(234,255,241,.94) 0%, rgba(202,241,219,.88) 100%)", game: "radial-gradient(circle at 50% 18%, rgba(74,220,198,.24), rgba(9,18,18,.98))" },
-        midnight: { body: "linear-gradient(180deg,#060606 0%,#13131f 100%)", panel: "linear-gradient(180deg, rgba(245,244,255,.94) 0%, rgba(220,219,245,.88) 100%)", game: "radial-gradient(circle at 50% 18%, rgba(98,79,255,.22), rgba(3,3,8,.98))" },
-    };
-    const theme = themeMap[currentTheme];
-    document.body.style.background = theme.body;
-    info.style.background = theme.panel;
-    if (!activeRareBackgroundKind) gameArea.style.background = theme.game;
+    const palette = getThemeUiPalette(currentTheme);
+    setThemeCssVariables(palette);
+    document.body.style.background = palette.body;
+    appRoot.style.background = palette.body;
+    info.style.background = palette.panel;
+    info.style.color = palette.fieldText;
+    // 盤面側は背景画像・Matter.js描画を優先する。
+    // テーマCSSで gameArea の background を強制すると、実行中にピンや玉が見えづらくなるため、
+    // 盤面背景は applyBackgroundImage() に集約する。
+    if (!activeRareBackgroundKind) applyBackgroundImage();
+    appHeader.style.background = palette.section;
+    appHeader.style.color = palette.fieldText;
+    appHeader.style.borderColor = palette.buttonBorder;
+    appHeaderNote.style.color = palette.mutedText;
+    recordHero.style.background = palette.section;
+    recordHero.style.color = palette.fieldText;
+    recordHero.style.borderColor = palette.buttonBorder;
+    controlArea.style.background = palette.section;
+    buttonArea.style.background = palette.section;
+    randomGraphArea.style.background = palette.section;
+    applyThemePaletteToPanel(info, palette);
+    for (const item of sectionTitles) item.el.style.color = palette.title;
+    for (const item of uiFieldRefs) item.labelEl.style.color = palette.fieldText;
+    activeEffectBadge.style.background = palette.badge;
+    activeEffectBadge.style.color = palette.badgeText;
+    recentMiracleMini.style.background = palette.section;
+    recentMiracleMini.style.color = palette.fieldText;
+    updateAdminButton();
+    updateSpeedButtons();
+    updateBlackModeButton();
+    updateSimpleModeButton();
+    updateCameraShakeButton();
+    updateSlowMiracleButton();
+    updateEffectsButton();
+    updateCommentaryButton();
+    updateBoardAnomalyButton();
+    updateNormalTraitButton();
+    updateTimeBallSkinButton();
+    updateMobileCompactButton();
+    updateRecentMiracleDisplayButton();
+    updateVerticalVideoButton();
+    updateObsButton();
     applyDynamicUiPalette();
 }
 
@@ -4432,7 +4254,7 @@ function showPopup(title: string, bodyHtml: string): void {
     const closeSize = isMobile ? "54px" : "46px";
 
     helpOverlay.innerHTML = `
-        <div style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:rgba(250,253,244,.98);box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid rgba(87,112,51,.24);overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
+        <div class="miracle-popup-panel" style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:rgba(250,253,244,.98);box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid rgba(87,112,51,.24);overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
             <button id="close-help-popup-button" aria-label="閉じる" style="position:sticky;float:right;right:0;top:0;width:${closeSize};height:${closeSize};border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;font-size:${isMobile ? "34px" : "28px"};font-weight:900;line-height:1;cursor:pointer;box-shadow:0 5px 14px rgba(87,112,51,.16);z-index:2;">×</button>
             <div style="font-size:${titleFont};font-weight:900;margin:0 ${isMobile ? "64px" : "54px"} 18px 0;color:#26351f;line-height:1.18;word-break:keep-all;overflow-wrap:break-word;">${title}</div>
             <div style="font-size:${bodyFont};line-height:${isMobile ? "1.62" : "1.72"};color:#2f3a2a;text-align:left;word-break:normal;overflow-wrap:break-word;">${bodyHtml}</div>
@@ -4538,29 +4360,28 @@ function showAppInfoPopup(): void {
         <div class="miracle-user-card">
             <p style="margin-top:0;"><b>MiracleBallLab</b></p>
             <p>${getAppOnlineStatusHtml()}</p>
-            <p>表示モード: <b>${standalone ? "ホーム画面アプリ表示" : "ブラウザ表示"}</b></p>
+            <p>表示モード: <b>${standalone ? "ホーム画面から起動中" : "ブラウザで利用中"}</b></p>
             <p>バージョン: <b>${APP_VERSION}</b></p>
-            <p>Bundle ID予定: <b>com.nakm2021.miracleballlab</b></p>
         </div>
         <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>AppStore化を見据えた機能</b></p>
+            <p style="margin-top:0;"><b>このアプリでできること</b></p>
             <ul style="line-height:1.8;margin-bottom:0;">
-                <li>一時停止・終了ボタンでスマホの発熱を抑えやすくする</li>
-                <li>設定保存により、次回起動時も前回の遊び方を復元する</li>
-                <li>ユーザー設定、図鑑、記録、ミッション、奇跡ログを端末内に保存する</li>
-                <li>オフライン時も読み込み済みのWeb資産で起動しやすくする</li>
-                <li>プライバシー説明とローカルデータ削除をアプリ内に用意する</li>
+                <li>玉を落として、まれに発生する特別な演出や記録を楽しめます。</li>
+                <li>一時停止・終了ボタンで、スマホでも無理なく遊びやすくしています。</li>
+                <li>設定、図鑑、最高記録、ミッション、奇跡ログをこの端末に保存できます。</li>
+                <li>一度読み込んだ主要ファイルは、通信が不安定な場所でも開きやすくなります。</li>
+                <li>ユーザー設定から保存データの確認や削除ができます。</li>
             </ul>
         </div>
         <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>プライバシー</b></p>
-            <p>このWeb版は、ユーザー名・設定・記録をブラウザの localStorage に保存します。現時点ではアカウント作成、位置情報取得、外部サーバーへのプレイ記録送信は行いません。</p>
-            <p>動画演出を使う場合は、設定された動画URLから素材を読み込みます。AppStore提出前には素材の権利確認とプライバシーポリシーURLの準備が必要です。</p>
+            <p style="margin-top:0;"><b>保存される情報</b></p>
+            <p>ニックネーム、遊び方の設定、図鑑、記録、ミッション進行状況は、この端末のブラウザ保存領域に保存されます。</p>
+            <p>アカウント作成、位置情報取得、プレイ記録の外部送信は行いません。</p>
         </div>
         <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>オフライン確認</b></p>
-            <p>ホーム画面追加後に一度オンラインで起動しておくと、service-worker.js により主要ファイルがキャッシュされます。完全な初回オフライン起動はできません。</p>
-            <p style="opacity:.75;">Cloudflare Pagesで公開後、iPhoneの機内モードで起動確認するとAppStore化前の確認として有効です。</p>
+            <p style="margin-top:0;"><b>通信について</b></p>
+            <p>動画演出をONにしている場合、演出用動画を読み込むために通信が発生することがあります。</p>
+            <p>通信が不安定な場合は、設定から動画演出をOFFにすると軽く遊べます。</p>
         </div>
     `);
 }
@@ -4793,6 +4614,7 @@ function applyBackgroundImage(): void {
 }
 
 function resetExperiment(startNow = false): void {
+    ensureRenderLoop();
     geometry = calculateGeometry();
     info.style.height = `${geometry.infoHeight}px`;
     const sidePadding = isMobile ? Math.round(clamp(12 * geometry.scale, 10, 16)) : Math.round(20 * geometry.scale);
@@ -4917,9 +4739,15 @@ function resetExperiment(startNow = false): void {
 
     Composite.add(engine.world, [...createWallsAndFloor(), ...createPins(), ...createDividers(), ...createPachinkoYakumonoSensors()]);
     applyWorldModeBodyStyles();
+
+    // Matter.js の描画ループをここで必ず再開する。
+    // これがないと、背景だけ表示されてピン・玉・受け皿が描画されないことがある。
+    ensureRenderLoop();
+
     if (startNow) {
         scheduleFirstRunShowcase();
         for (let i = 0; i < settings.activeLimit; i++) Composite.add(engine.world, createDrop());
+        Runner.stop(runner);
         if (!isMiraclePaused) Runner.run(runner, engine);
     } else {
         Runner.stop(runner);
@@ -4955,40 +4783,53 @@ function applyBlackMode(): void {
 }
 
 function updateBlackModeButton(): void {
-    const uiAccent = getUiAccentPaletteByKind(getCurrentUiAccentKind());
+    const themePalette = getThemeUiPalette(currentTheme);
     blackModeButton.textContent = settings.blackModeEnabled ? t("ブラック: ON", "Black: ON") : t("ブラック: OFF", "Black: OFF");
-    blackModeButton.style.background = settings.blackModeEnabled ? "linear-gradient(180deg,#000 0%,#171717 100%)" : (uiAccent?.badge ?? "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)");
-    blackModeButton.style.color = settings.blackModeEnabled ? "#f8fafc" : (uiAccent?.badgeText ?? "#444444");
-    blackModeButton.style.borderColor = settings.blackModeEnabled ? "#64748b" : (uiAccent?.border ?? "rgba(70,80,110,.28)");
+    blackModeButton.style.background = settings.blackModeEnabled ? "linear-gradient(180deg,#000 0%,#171717 100%)" : themePalette.buttonBg;
+    blackModeButton.style.color = settings.blackModeEnabled ? "#f8fafc" : themePalette.buttonText;
+    blackModeButton.style.borderColor = settings.blackModeEnabled ? "#64748b" : themePalette.buttonBorder;
     blackModeButton.style.boxShadow = settings.blackModeEnabled ? "inset 0 3px 10px rgba(0,0,0,.42), 0 0 0 2px rgba(255,255,255,.22)" : "0 6px 16px rgba(0,0,0,.12)";
     blackModeButton.style.transform = settings.blackModeEnabled ? "translateY(2px)" : "translateY(0)";
 }
 
 function updateSimpleModeButton(): void {
+    const themePalette = getThemeUiPalette(currentTheme);
     simpleModeButton.textContent = settings.simpleMode ? t("シンプル: ON", "Simple: ON") : t("シンプル: OFF", "Simple: OFF");
-    simpleModeButton.style.background = settings.simpleMode ? "linear-gradient(180deg, #222 0%, #444 100%)" : "linear-gradient(180deg, #f3f8e8 0%, #dceec2 100%)";
-    simpleModeButton.style.color = settings.simpleMode ? "#ffffff" : "#222222";
+    simpleModeButton.style.background = settings.simpleMode ? themePalette.badge : themePalette.buttonBg;
+    simpleModeButton.style.color = settings.simpleMode ? themePalette.badgeText : themePalette.buttonText;
+    simpleModeButton.style.borderColor = themePalette.buttonBorder;
     simpleModeButton.style.boxShadow = settings.simpleMode ? "inset 0 3px 10px rgba(0,0,0,.34), 0 0 0 2px rgba(255,255,255,.22)" : "0 6px 16px rgba(0,0,0,.12)";
     simpleModeButton.style.transform = settings.simpleMode ? "translateY(2px)" : "translateY(0)";
 }
 
 function updateCameraShakeButton(): void {
+    const themePalette = getThemeUiPalette(currentTheme);
     cameraShakeButton.textContent = settings.cameraShakeEnabled ? t("画面揺れ: ON", "Shake: ON") : t("画面揺れ: OFF", "Shake: OFF");
-    cameraShakeButton.style.background = settings.cameraShakeEnabled ? "linear-gradient(180deg, #f3f8e8 0%, #dceec2 100%)" : "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)";
-    cameraShakeButton.style.color = settings.cameraShakeEnabled ? "#26351f" : "#444444";
+    cameraShakeButton.style.background = settings.cameraShakeEnabled ? themePalette.badge : themePalette.buttonBg;
+    cameraShakeButton.style.color = settings.cameraShakeEnabled ? themePalette.badgeText : themePalette.buttonText;
+    cameraShakeButton.style.borderColor = themePalette.buttonBorder;
 }
 
 function updateSlowMiracleButton(): void {
+    const themePalette = getThemeUiPalette(currentTheme);
     slowMiracleButton.textContent = settings.slowMiracleEffects ? t("演出ゆっくり: ON", "Slow effects: ON") : t("演出ゆっくり: OFF", "Slow effects: OFF");
-    slowMiracleButton.style.background = settings.slowMiracleEffects ? "linear-gradient(180deg, #fff7ed 0%, #fed7aa 100%)" : "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)";
-    slowMiracleButton.style.color = settings.slowMiracleEffects ? "#7c2d12" : "#444444";
+    slowMiracleButton.style.background = settings.slowMiracleEffects ? themePalette.badge : themePalette.buttonBg;
+    slowMiracleButton.style.color = settings.slowMiracleEffects ? themePalette.badgeText : themePalette.buttonText;
+    slowMiracleButton.style.borderColor = themePalette.buttonBorder;
 }
 
 function paintToggleButton(button: HTMLButtonElement, enabled: boolean, onColor = "linear-gradient(180deg, #f3f8e8 0%, #dceec2 100%)"): void {
+    const themePalette = getThemeUiPalette(currentTheme);
     const uiAccent = getUiAccentPaletteByKind(getCurrentUiAccentKind());
-    button.style.background = enabled ? (uiAccent?.badge ?? onColor) : (settings.blackModeEnabled ? "linear-gradient(180deg,#172033 0%, #0f172a 100%)" : "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)");
-    button.style.color = enabled ? (uiAccent?.badgeText ?? "#26351f") : (settings.blackModeEnabled ? "#f8fafc" : "#444444");
-    button.style.borderColor = settings.blackModeEnabled ? "#64748b" : (uiAccent?.border ?? "rgba(70,80,110,.28)");
+    const onBg = uiAccent?.badge ?? themePalette.badge ?? onColor;
+    const onText = uiAccent?.badgeText ?? themePalette.badgeText;
+    const onBorder = uiAccent?.border ?? themePalette.buttonBorder;
+    const offBg = settings.blackModeEnabled ? "linear-gradient(180deg,#172033 0%, #0f172a 100%)" : themePalette.buttonBg;
+    const offText = settings.blackModeEnabled ? "#f8fafc" : themePalette.buttonText;
+    const offBorder = settings.blackModeEnabled ? "#64748b" : themePalette.buttonBorder;
+    button.style.background = enabled ? onBg : offBg;
+    button.style.color = enabled ? onText : offText;
+    button.style.borderColor = enabled ? onBorder : offBorder;
     button.style.boxShadow = enabled ? "inset 0 3px 10px rgba(0,0,0,.24), 0 0 0 2px rgba(255,255,255,.22)" : "0 6px 16px rgba(0,0,0,.12)";
     button.style.transform = enabled ? "translateY(2px)" : "translateY(0)";
 }
@@ -5384,7 +5225,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
     const nextRankScore = getRemoteAssetRankScore(asset);
     const nextLabel = getRemoteMiracleAssetLabel(asset);
-    if (!force && activeRemoteMiracleVideo && remoteMiracleVideoOverlay.style.display !== "none" && nextRankScore < activeRemoteMiracleVideoRankScore) {
+    if (!shouldPlayRemoteMiracleVideo(nextRankScore, activeRemoteMiracleVideoRankScore, !!activeRemoteMiracleVideo && remoteMiracleVideoOverlay.style.display !== "none", force)) {
         recordAdminEvent({ type: "video_skip_lower_rank", at: Date.now(), label: nextLabel, rank: String(asset.rank ?? "common").toUpperCase(), detail: `active ${activeRemoteMiracleVideoLabel}` });
         return false;
     }
@@ -5788,7 +5629,7 @@ function terminateExperimentSafely(): void {
     isStarted = false;
     isFinished = true;
     try { Runner.stop(runner); } catch {}
-    try { Render.stop(render); } catch {}
+    stopRenderLoop();
     try { Engine.clear(engine); } catch {}
     try { Composite.clear(engine.world, false); } catch {}
     for (const timer of [miracleOverlayTimer, miraclePauseTimer, subtitleTimer, comboTimer, rareBackgroundTimer, lifeQuoteOverlayTimer, commentaryTimer, toastTimer, resizeTimer]) {
@@ -7477,15 +7318,18 @@ Events.on(render, "afterRender", () => {
     drawDiscardBinLabel(context, 0);
     drawDiscardBinLabel(context, settings.binCount + 1);
     const maxCount = Math.max(...binCounts, 0);
-    for (let i = 0; i < settings.binCount; i++) {
+    const visibleBinCount = Math.min(settings.binCount, geometry.binCenters.length);
+    for (let i = 0; i < visibleBinCount; i++) {
         const x = geometry.binCenters[i];
-        const count = binCounts[i];
+        if (x === undefined) continue;
+        const count = binCounts[i] ?? 0;
+        const label = labels[i] ?? String(i + 1);
         const percent = finishedCount > 0 ? (count / finishedCount) * 100 : 0;
-        if (!settings.simpleMode && hitFlash[i] > 0) {
-            const alpha = hitFlash[i] / 18;
+        if (!settings.simpleMode && (hitFlash[i] ?? 0) > 0) {
+            const alpha = (hitFlash[i] ?? 0) / 18;
             context.fillStyle = `rgba(255,160,80,${alpha * 0.45})`;
             context.fillRect(x - geometry.binWidth / 2, geometry.groundTop - 118 * geometry.scale, geometry.binWidth, 118 * geometry.scale);
-            if (!isPaused) hitFlash[i]--;
+            if (!isPaused) hitFlash[i] = Math.max(0, (hitFlash[i] ?? 0) - 1);
         }
         if (!settings.simpleMode && count === maxCount && maxCount > 0) {
             context.beginPath();
@@ -7495,7 +7339,7 @@ Events.on(render, "afterRender", () => {
         }
         context.font = `900 ${geometry.labelFont}px "Segoe UI", "Noto Sans JP", sans-serif`;
         context.fillStyle = activeWorldMode === "poseidon" ? "#e7f6ff" : activeWorldMode === "zeusu" ? "#3e2f00" : activeWorldMode === "hadesu" ? "#ffffff" : activeWorldMode === "heart" ? "#fff4fb" : activeWorldMode === "nekochan" ? "#4a2a11" : "#222";
-        context.fillText(labels[i], x, geometry.labelY);
+        context.fillText(label, x, geometry.labelY);
         context.font = `800 ${geometry.countFont}px "Segoe UI", "Noto Sans JP", sans-serif`;
         context.fillStyle = activeWorldMode === "poseidon" ? "#d7efff" : activeWorldMode === "zeusu" ? "#5a4300" : activeWorldMode === "hadesu" ? "#ffb1b1" : activeWorldMode === "heart" ? "#fff0f8" : activeWorldMode === "nekochan" ? "#5a3416" : "#003366";
         context.fillText(count.toLocaleString(), x, geometry.countY);
@@ -7826,7 +7670,7 @@ geometry = calculateGeometry();
 missionDefs = buildMissionDefs();
 applyTheme();
 resetExperiment(false);
-Render.run(render);
+ensureRenderLoop();
 void ensureAnimeReady();
 void ensureGifReady();
 void ensureTippyReady();

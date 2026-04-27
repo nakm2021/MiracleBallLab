@@ -1,3 +1,4 @@
+import { saveJsonToStorage } from "./storage";
 export type AdminLogEventType =
     | "app_open"
     | "run_start"
@@ -122,10 +123,10 @@ export function createAdminLogApi(deps: AdminLogDependencies): AdminLogApi {
     function saveAdminStats(): void {
         adminStats.updatedAt = Date.now();
         try {
-            localStorage.setItem(ADMIN_STATS_STORAGE_KEY, JSON.stringify(adminStats));
+            saveJsonToStorage(ADMIN_STATS_STORAGE_KEY, adminStats);
         } catch {
             adminStats.lastEvents = adminStats.lastEvents.slice(0, 40);
-            try { localStorage.setItem(ADMIN_STATS_STORAGE_KEY, JSON.stringify(adminStats)); } catch {}
+            saveJsonToStorage(ADMIN_STATS_STORAGE_KEY, adminStats);
         }
     }
 
