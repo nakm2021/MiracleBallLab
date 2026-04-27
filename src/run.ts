@@ -333,6 +333,8 @@ let shakePower = 0;
 let speedLabelText = "通常";
 let isEnglish = false;
 let isFullscreenMode = false;
+let isPseudoFullscreenMode = false;
+let pseudoFullscreenScrollY = 0;
 let isVerticalVideoMode = false;
 let isObsMode = false;
 let currentTheme: ThemeMode = "lab";
@@ -2402,19 +2404,98 @@ function updateUiLanguage(): void {
     if (mobileDockSettingsButton) mobileDockSettingsButton.textContent = t("設定", "Settings");
 }
 
+function updateFullscreenButtonState(): void {
+    const active = isPseudoFullscreenMode || document.fullscreenElement === gameArea;
+    isFullscreenMode = active;
+    gameFullscreenButton.textContent = active ? "🗗" : "⛶";
+    gameFullscreenButton.title = active ? t("全画面を解除", "Exit fullscreen") : t("全画面", "Fullscreen");
+}
+
+function enterPseudoGameFullscreen(): void {
+    if (isPseudoFullscreenMode) return;
+    pseudoFullscreenScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    isPseudoFullscreenMode = true;
+    isFullscreenMode = true;
+
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    gameArea.style.position = "fixed";
+    gameArea.style.left = "0";
+    gameArea.style.top = "0";
+    gameArea.style.right = "0";
+    gameArea.style.bottom = "0";
+    gameArea.style.width = "100vw";
+    gameArea.style.height = "100dvh";
+    gameArea.style.maxWidth = "100vw";
+    gameArea.style.maxHeight = "100dvh";
+    gameArea.style.zIndex = "99999";
+    gameArea.style.borderRadius = "0";
+    canvas.style.borderRadius = "0";
+
+    updateFullscreenButtonState();
+    window.setTimeout(scheduleResize, 50);
+}
+
+function exitPseudoGameFullscreen(): void {
+    if (!isPseudoFullscreenMode) return;
+    isPseudoFullscreenMode = false;
+    isFullscreenMode = false;
+
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
+    document.body.style.touchAction = "";
+
+    gameArea.style.position = "relative";
+    gameArea.style.left = "";
+    gameArea.style.top = "";
+    gameArea.style.right = "";
+    gameArea.style.bottom = "";
+    gameArea.style.width = "";
+    gameArea.style.height = "";
+    gameArea.style.maxWidth = "";
+    gameArea.style.maxHeight = "";
+    gameArea.style.zIndex = "";
+    gameArea.style.borderRadius = "";
+    canvas.style.borderRadius = isMobile ? "24px" : "26px";
+
+    updateFullscreenButtonState();
+    window.setTimeout(() => {
+        window.scrollTo(0, pseudoFullscreenScrollY);
+        scheduleResize();
+    }, 50);
+}
+
 async function toggleGameFullscreen(): Promise<void> {
     try {
+        if (isPseudoFullscreenMode) {
+            exitPseudoGameFullscreen();
+            return;
+        }
+
         if (document.fullscreenElement === gameArea) {
             await document.exitFullscreen();
-        } else if (!document.fullscreenElement) {
+            return;
+        }
+
+        if (isMobile) {
+            enterPseudoGameFullscreen();
+            return;
+        }
+
+        if (!document.fullscreenElement) {
             await gameArea.requestFullscreen();
         }
-    } catch {}
+    } catch {
+        enterPseudoGameFullscreen();
+    }
 }
 
 document.addEventListener("fullscreenchange", () => {
-    isFullscreenMode = document.fullscreenElement === gameArea;
-    gameFullscreenButton.textContent = isFullscreenMode ? "🗗" : "⛶";
+    if (!document.fullscreenElement && isPseudoFullscreenMode) return;
+    updateFullscreenButtonState();
+    window.setTimeout(scheduleResize, 50);
 });
 
 function getProbabilityModeLabel(): string {
@@ -4544,11 +4625,14 @@ function calculateGeometry(): Geometry {
     const viewportWidth = Math.max(320, Math.floor(visual?.width ?? window.innerWidth));
     const viewportHeight = Math.max(480, Math.floor(visual?.height ?? window.innerHeight));
     const small = isMobile || viewportWidth < 700;
-    const infoHeight = isMobile
-        ? Math.round(clamp(viewportHeight * 0.115, 96, 116))
-        : Math.round(clamp(viewportHeight * (small ? 0.24 : 0.40), small ? 170 : 300, small ? 270 : 500));
+    const fullscreenLike = isFullscreenMode || isPseudoFullscreenMode;
+    const infoHeight = fullscreenLike
+        ? 0
+        : isMobile
+            ? Math.round(clamp(viewportHeight * 0.115, 96, 116))
+            : Math.round(clamp(viewportHeight * (small ? 0.24 : 0.40), small ? 170 : 300, small ? 270 : 500));
     const width = viewportWidth;
-    const height = Math.max(360, viewportHeight - infoHeight);
+    const height = fullscreenLike ? viewportHeight : Math.max(360, viewportHeight - infoHeight);
     const scale = clamp(Math.min(width / BASE_WIDTH, height / BASE_HEIGHT), 0.56, 2.4);
     const pixelRatio = clamp(window.devicePixelRatio || 1, 1, 3);
 
