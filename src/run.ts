@@ -586,8 +586,23 @@ globalStyle.textContent = `
   body.miracle-theme-active .miracle-popup-panel p,
   body.miracle-theme-active .miracle-popup-panel li,
   body.miracle-theme-active .miracle-popup-panel td,
-  body.miracle-theme-active .miracle-popup-panel th {
+  body.miracle-theme-active .miracle-popup-panel th,
+  body.miracle-theme-active .miracle-mobile-panel,
+  body.miracle-theme-active .miracle-mobile-panel div,
+  body.miracle-theme-active .miracle-mobile-panel p,
+  body.miracle-theme-active .miracle-mobile-panel li,
+  body.miracle-theme-active .miracle-mobile-panel td,
+  body.miracle-theme-active .miracle-mobile-panel th,
+  body.miracle-theme-active .miracle-mobile-panel label {
     color: var(--miracle-theme-text) !important;
+  }
+  body.miracle-theme-active .miracle-mobile-settings-header {
+    background: var(--miracle-theme-section) !important;
+    color: var(--miracle-theme-title) !important;
+    border-color: var(--miracle-theme-border) !important;
+  }
+  body.miracle-theme-active .miracle-mobile-settings-header div {
+    color: var(--miracle-theme-title) !important;
   }
 `;
 document.head.appendChild(globalStyle);
@@ -1541,7 +1556,7 @@ remoteMiracleVideoOverlay.style.left = "0";
 remoteMiracleVideoOverlay.style.top = "0";
 remoteMiracleVideoOverlay.style.width = "100vw";
 remoteMiracleVideoOverlay.style.height = "100dvh";
-remoteMiracleVideoOverlay.style.zIndex = "118";
+remoteMiracleVideoOverlay.style.zIndex = "100002";
 remoteMiracleVideoOverlay.style.pointerEvents = "none";
 remoteMiracleVideoOverlay.style.display = "none";
 remoteMiracleVideoOverlay.style.overflow = "hidden";
@@ -2499,6 +2514,7 @@ function setupMobileLayout(): void {
     };
 
     mobileSettingsPanel = document.createElement("div");
+    mobileSettingsPanel.className = "miracle-mobile-panel";
     mobileSettingsPanel.style.width = "100%";
     mobileSettingsPanel.style.height = "100dvh";
     mobileSettingsPanel.style.maxHeight = "100dvh";
@@ -2516,6 +2532,7 @@ function setupMobileLayout(): void {
     mobileSettingsOverlay.appendChild(mobileSettingsPanel);
 
     const closeRow = document.createElement("div");
+    closeRow.className = "miracle-mobile-settings-header";
     closeRow.style.display = "flex";
     closeRow.style.justifyContent = "space-between";
     closeRow.style.alignItems = "center";
@@ -2810,6 +2827,11 @@ function applyDynamicUiPalette(): void {
     controlArea.style.background = palette.section;
     buttonArea.style.background = palette.section;
     randomGraphArea.style.background = palette.section;
+    if (mobileSettingsPanel) {
+        mobileSettingsPanel.style.background = palette.panel;
+        mobileSettingsPanel.style.color = palette.fieldText;
+        applyThemePaletteToPanel(mobileSettingsPanel, palette);
+    }
     recentMiracleMini.style.background = 'rgba(255,255,255,.84)';
     recentMiracleMini.style.color = palette.fieldText;
     activeEffectBadge.style.background = palette.badge;
@@ -3011,7 +3033,7 @@ function updateTutorialMissions(forceExpand = false): void {
         try { localStorage.setItem(FIRST_RUN_GUIDE_STORAGE_KEY, "1"); } catch {}
         window.setTimeout(() => {
             if (!isAppTerminated && tutorialMissionPanelVisible) tutorialMissionPanel.style.display = "none";
-        }, 5000);
+        }, isMobile ? 8000 : 5000);
     }
 }
 
@@ -4010,6 +4032,18 @@ function applyTheme(): void {
     buttonArea.style.background = palette.section;
     randomGraphArea.style.background = palette.section;
     applyThemePaletteToPanel(info, palette);
+    if (mobileSettingsPanel) {
+        mobileSettingsPanel.style.background = palette.panel;
+        mobileSettingsPanel.style.color = palette.fieldText;
+        mobileSettingsPanel.style.borderColor = palette.buttonBorder;
+        applyThemePaletteToPanel(mobileSettingsPanel, palette);
+        const mobileHeader = mobileSettingsPanel.querySelector<HTMLElement>(".miracle-mobile-settings-header");
+        if (mobileHeader) {
+            mobileHeader.style.background = palette.section;
+            mobileHeader.style.color = palette.title;
+            mobileHeader.style.borderColor = palette.buttonBorder;
+        }
+    }
     for (const item of sectionTitles) item.el.style.color = palette.title;
     for (const item of uiFieldRefs) item.labelEl.style.color = palette.fieldText;
     activeEffectBadge.style.background = palette.badge;
@@ -5475,7 +5509,9 @@ function pauseRemoteMiracleVideo(): void {
 function resumeRemoteMiracleVideo(): void {
     if (!activeRemoteMiracleVideo) return;
     try {
-        activeRemoteMiracleVideo.muted = !soundEnabled;
+        activeRemoteMiracleVideo.muted = isMobile || !soundEnabled;
+        activeRemoteMiracleVideo.defaultMuted = isMobile || !soundEnabled;
+        activeRemoteMiracleVideo.volume = isMobile || !soundEnabled ? 0 : Math.max(0, Math.min(1, activeRemoteMiracleVideo.volume || 0.45));
         void activeRemoteMiracleVideo.play();
     } catch {
         // 自動再生制限などは無視
@@ -5523,12 +5559,17 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     stopRemoteMiracleVideo();
 
     const video = document.createElement("video");
+    const shouldMuteRemoteVideo = isMobile || !soundEnabled;
     video.autoplay = true;
-    video.muted = !soundEnabled;
-    video.volume = getRemoteMiracleVideoVolume(asset);
+    video.muted = shouldMuteRemoteVideo;
+    video.defaultMuted = shouldMuteRemoteVideo;
+    video.volume = shouldMuteRemoteVideo ? 0 : getRemoteMiracleVideoVolume(asset);
     video.loop = false;
     video.playsInline = true;
-    video.preload = "auto";
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    if (shouldMuteRemoteVideo) video.setAttribute("muted", "");
+    video.preload = isMobile ? "metadata" : "auto";
 
     video.style.position = "absolute";
     video.style.left = "0";
@@ -5548,6 +5589,13 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
         video.appendChild(source);
     }
 
+    // iPhone/Safari はDOMに載っていない video を読み込み開始しない場合があるため、
+    // 先にオーバーレイへ載せてから load/play を試します。
+    remoteMiracleVideoOverlay.innerHTML = "";
+    remoteMiracleVideoOverlay.appendChild(video);
+    remoteMiracleVideoOverlay.style.display = "block";
+    remoteMiracleVideoOverlay.style.background = isMobile ? "rgba(0,0,0,.02)" : "transparent";
+
     const ready = await new Promise<boolean>((resolve) => {
         let settled = false;
         let timer: number | undefined;
@@ -5562,6 +5610,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
             video.removeEventListener("canplay", onReady);
             video.removeEventListener("loadeddata", onReady);
+            video.removeEventListener("loadedmetadata", onReady);
             video.removeEventListener("error", onError);
 
             resolve(ok);
@@ -5572,6 +5621,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
         video.addEventListener("canplay", onReady, { once: true });
         video.addEventListener("loadeddata", onReady, { once: true });
+        video.addEventListener("loadedmetadata", onReady, { once: true });
         video.addEventListener("error", onError, { once: true });
 
         timer = window.setTimeout(() => {
@@ -5588,7 +5638,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     if (!ready) {
         console.warn("[Miracle R2] video file not found or not ready", asset);
         recordAdminEvent({ type: "video_fail", at: Date.now(), label: getRemoteMiracleAssetLabel(asset), rank: String(asset.rank ?? "common").toUpperCase(), detail: "not ready" });
-        markRemoteMiracleAssetBad(asset);
+        if (!isMobile) markRemoteMiracleAssetBad(asset);
 
         if (force) {
             showSoftToast("R2動画の読み込みに失敗しました。manifest.json のファイル名を確認してください");
@@ -5619,9 +5669,6 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
         }
     }, { once: true });
 
-    remoteMiracleVideoOverlay.innerHTML = "";
-    remoteMiracleVideoOverlay.appendChild(video);
-    remoteMiracleVideoOverlay.style.display = "block";
     activeRemoteMiracleVideo = video;
     activeRemoteMiracleVideoRankScore = nextRankScore;
     activeRemoteMiracleVideoLabel = nextLabel;
@@ -5640,9 +5687,24 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
         return true;
     } catch (error) {
+        if (isMobile && !video.muted) {
+            try {
+                video.muted = true;
+                video.defaultMuted = true;
+                video.volume = 0;
+                await video.play();
+                recordAdminEvent({ type: "video_play", at: Date.now(), label: `${nextLabel} / mobile muted fallback`, rank: String(asset.rank ?? "common").toUpperCase() });
+                if (remoteMiracleVideoTimer !== undefined) window.clearTimeout(remoteMiracleVideoTimer);
+                remoteMiracleVideoTimer = window.setTimeout(() => {
+                    stopRemoteMiracleVideo();
+                }, REMOTE_MIRACLE_VIDEO_DISPLAY_MS);
+                return true;
+            } catch {}
+        }
+
         console.warn("[Miracle R2] video autoplay/load failed", error);
         recordAdminEvent({ type: "video_fail", at: Date.now(), label: getRemoteMiracleAssetLabel(asset), rank: String(asset.rank ?? "common").toUpperCase(), detail: "autoplay failed" });
-        markRemoteMiracleAssetBad(asset);
+        if (!isMobile) markRemoteMiracleAssetBad(asset);
         stopRemoteMiracleVideo();
 
         if (force) {
@@ -5651,6 +5713,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
         return false;
     }
+
 }
 
 async function playFirstRunShowcaseVideo(): Promise<void> {
