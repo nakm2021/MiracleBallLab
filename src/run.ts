@@ -119,8 +119,8 @@ const uiFontPx = isMobile ? 25 : 20;
 const uiButtonFontPx = isMobile ? 26 : 20;
 const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
 const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
-const MIRACLE_GACHA_ONCE_COST = 100;
-const MIRACLE_GACHA_TEN_COST = 900;
+const MIRACLE_GACHA_ONCE_COST = 100000;
+const MIRACLE_GACHA_TEN_COST = 900000;
 type GachaPointSavedRecords = SavedRecords & { gachaPoint?: number };
 
 
@@ -147,6 +147,14 @@ let isMiraclePaused = false;
 let miraclePauseTimer: number | undefined;
 let miraclePauseEndsAt = 0;
 let miraclePauseRemainingMs = 0;
+let tiltExperimentEnabled = false;
+let tiltExperimentButton: HTMLButtonElement | null = null;
+let lastTiltGravityX = 0;
+let magicCircleModeEnabled = false;
+let magicCircleDrawing = false;
+let magicCirclePoints: Array<{ x: number; y: number; t: number }> = [];
+let temporaryPinPlacementEnabled = false;
+const temporaryPinBodies = new Set<Matter.Body>();
 
 let labels: string[] = [];
 let binCounts: number[] = [];
@@ -711,7 +719,48 @@ canvas.style.backgroundColor = "rgba(245,245,245,0.88)";
 canvas.style.backgroundSize = "cover";
 canvas.style.backgroundPosition = "center";
 canvas.style.backgroundRepeat = "no-repeat";
-canvas.addEventListener("pointerdown", (event) => activateNearestPin(event));
+canvas.addEventListener("pointerdown", (event) => {
+    if (temporaryPinPlacementEnabled) {
+        event.preventDefault();
+        const pt = getCanvasPointFromEvent(event);
+        createTemporaryPinAt(pt.x, pt.y);
+        temporaryPinPlacementEnabled = false;
+        return;
+    }
+    if (magicCircleModeEnabled) {
+        event.preventDefault();
+        magicCircleDrawing = true;
+        magicCirclePoints = [{ ...getCanvasPointFromEvent(event), t: performance.now() }];
+        try { canvas.setPointerCapture(event.pointerId); } catch {}
+        return;
+    }
+    activateNearestPin(event);
+}, { passive: false });
+canvas.addEventListener("pointermove", (event) => {
+    if (!magicCircleModeEnabled || !magicCircleDrawing) return;
+    event.preventDefault();
+    const pt = getCanvasPointFromEvent(event);
+    const last = magicCirclePoints[magicCirclePoints.length - 1];
+    if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) > 8 * geometry.scale) {
+        magicCirclePoints.push({ ...pt, t: performance.now() });
+        if (!settings.simpleMode && magicCirclePoints.length % 4 === 0) createTapRipple(pt.x, pt.y, false);
+    }
+}, { passive: false });
+canvas.addEventListener("pointerup", (event) => {
+    if (!magicCircleModeEnabled || !magicCircleDrawing) return;
+    event.preventDefault();
+    magicCircleDrawing = false;
+    magicCircleModeEnabled = false;
+    const pt = getCanvasPointFromEvent(event);
+    magicCirclePoints.push({ ...pt, t: performance.now() });
+    const def = classifyMagicCircle(magicCirclePoints);
+    activateMagicCircle(def, magicCirclePoints);
+    magicCirclePoints = [];
+}, { passive: false });
+canvas.addEventListener("pointercancel", () => {
+    magicCircleDrawing = false;
+    magicCirclePoints = [];
+});
 gameArea.appendChild(canvas);
 
 const gameFullscreenButton = document.createElement("button");
@@ -1186,6 +1235,14 @@ const homeButton = setTooltip(setButtonLabel(createButton("研究所ホーム", 
 utilityButtons.appendChild(homeButton);
 const miracleGachaButton = setTooltip(setButtonLabel(createButton("奇跡ガチャ", () => showMiracleGachaPopup()), "奇跡ガチャ", "Gacha"), "保存動画や超レア演出と連動するド派手なガチャを開きます。", "Open the dramatic miracle gacha.");
 utilityButtons.appendChild(miracleGachaButton);
+const magicCircleButton = setTooltip(setButtonLabel(createButton("魔法陣を書く", () => enableMagicCircleMode()), "魔法陣を書く", "Magic circle"), "画面を指やマウスでなぞって、15種類以上の盤面魔法を発動します。", "Draw on the board to trigger magic effects.");
+utilityButtons.appendChild(magicCircleButton);
+tiltExperimentButton = setTooltip(setButtonLabel(createButton("傾き実験: OFF", () => { void toggleTiltExperimentMode(); }), "傾き実験: OFF", "Tilt: OFF"), "スマホを傾けて玉の流れを少し変えます。", "Tilt your phone to influence gravity.");
+utilityButtons.appendChild(tiltExperimentButton);
+const outsideBallButton = setTooltip(setButtonLabel(createButton("外から玉侵入", () => spawnExternalIntruderBalls(14, "button")), "外から玉侵入", "Intruder balls"), "画面外から玉を侵入させます。", "Spawn balls from outside the screen.");
+utilityButtons.appendChild(outsideBallButton);
+const temporaryPinButton = setTooltip(setButtonLabel(createButton("観測ピン設置", () => enableTemporaryPinPlacement()), "観測ピン設置", "Temp pin"), "次に盤面をタップした場所へ一時ピンを置きます。", "Place a temporary pin on the board.");
+utilityButtons.appendChild(temporaryPinButton);
 const runButton = setTooltip(setButtonLabel(createButton("実行", () => startExperiment()), "実行", "Run"), "設定どおりに落下実験を開始します。", "Start the drop experiment with current settings.");
 utilityButtons.appendChild(runButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"), "このプログラムが何をするか説明します。", "Explain what this program does."));
@@ -1819,15 +1876,15 @@ function spendGachaPoint(point: number): boolean {
 
 function getGachaPointRewardForRank(rank: string): number {
     const score = getRankScore(rank);
-    if (rank === "GOD" || rank === "EX" || score >= getRankScore("GOD")) return 1000;
-    if (score >= getRankScore("SSR")) return 300;
-    if (score >= getRankScore("SR")) return 100;
+    if (rank === "GOD" || rank === "EX" || score >= getRankScore("GOD")) return 10;
+    if (score >= getRankScore("SSR")) return 3;
+    if (score >= getRankScore("SR")) return 1;
     return 0;
 }
 
 function awardExperimentFinishGachaPoint(): number {
-    let point = 30;
-    if (finishedCount >= 1000) point += 50;
+    let point = 1;
+    if (finishedCount >= 1000) point += 1;
     addGachaPoint(point, finishedCount >= 1000 ? "実験完了 + 1000玉以上投下" : "実験完了", false);
     return point;
 }
@@ -2056,9 +2113,9 @@ function evaluateAndSaveDailyMissions(): string[] {
         completed.push(mission.title);
     }
     if (completed.length > 0) {
-        addGachaPoint(completed.length * 200, `デイリー研究達成 ${completed.length}件`, false);
+        addGachaPoint(completed.length * 2, `デイリー研究達成 ${completed.length}件`, false);
         saveRecords();
-        showSoftToast("デイリー研究達成: " + completed.join(" / ") + ` / 奇跡ガチャP +${(completed.length * 200).toLocaleString()}`);
+        showSoftToast("デイリー研究達成: " + completed.join(" / ") + ` / 奇跡ガチャP +${(completed.length * 2).toLocaleString()}`);
     }
     return completed;
 }
@@ -3997,6 +4054,7 @@ function showAdminPanelPopup(): void {
             <button id="admin-all-effects-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#dcfce7 0%,#bbf7d0 100%);color:#14532d;cursor:pointer;">演出系を全部ON</button>
             <button id="admin-r2-video-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">R2動画確認</button>
             <button id="admin-log-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;cursor:pointer;">管理者ログ</button>
+            <button id="admin-magic-answer-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(88,28,135,.25);background:linear-gradient(180deg,#f3e8ff 0%,#ddd6fe 100%);color:#581c87;cursor:pointer;">魔法陣回答</button>
             <button id="admin-skill-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#eef2ff 0%,#c7d2fe 100%);color:#312e81;cursor:pointer;">スキル+99</button>
             <button id="admin-unlock-book-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#fef9c3 0%,#fde68a 100%);color:#713f12;cursor:pointer;">図鑑テスト解放</button>
             <button id="admin-lock-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(127,29,29,.25);background:linear-gradient(180deg,#fee2e2 0%,#fecaca 100%);color:#7f1d1d;cursor:pointer;">管理者解除</button>
@@ -4009,6 +4067,7 @@ function showAdminPanelPopup(): void {
     document.getElementById("admin-all-effects-button")!.onclick = () => adminEnableAllEffects();
     document.getElementById("admin-r2-video-button")!.onclick = () => { void showAdminRemoteVideoTestPopup(); };
     document.getElementById("admin-log-button")!.onclick = () => showAdminStatsPopup();
+    document.getElementById("admin-magic-answer-button")!.onclick = () => showAdminMagicCircleAnswerPopup();
     document.getElementById("admin-skill-button")!.onclick = () => adminAddSkillStock();
     document.getElementById("admin-unlock-book-button")!.onclick = () => adminUnlockMiracleBookForTest();
     document.getElementById("admin-lock-button")!.onclick = () => adminLockMode();
@@ -4326,6 +4385,7 @@ function applyTheme(): void {
     updateRecentMiracleDisplayButton();
     updateVerticalVideoButton();
     updateObsButton();
+    updateTiltButton();
     applyDynamicUiPalette();
 }
 
@@ -4614,22 +4674,25 @@ function showUserGuidePopup(): void {
 }
 
 function pickMiracleGachaDef(): SpecialEventDef {
-    const pool = SPECIAL_EVENT_DEFS.filter((def) => getRankScore(def.rank) >= getRankScore("SR"));
-    const weighted = pool.flatMap((def) => {
+    // ガチャは簡単に引けないポイント制にしたうえで、超レア排出もかなり低めにします。
+    const pool = SPECIAL_EVENT_DEFS.length > 0 ? SPECIAL_EVENT_DEFS : BASE_SPECIAL_EVENT_DEFS;
+    const weighted: SpecialEventDef[] = [];
+    for (const def of pool) {
         const score = getRankScore(def.rank);
-        const count = score >= getRankScore("GOD") ? 1 : score >= getRankScore("EX") ? 2 : score >= getRankScore("SSR") ? 4 : 7;
-        return Array.from({ length: count }, () => def);
-    });
-    const exChance = appRandom();
-    const godOrEx = pool.filter((def) => getRankScore(def.rank) >= getRankScore("EX"));
-    if (exChance < 0.18 && godOrEx.length > 0) return godOrEx[Math.floor(appRandom() * godOrEx.length)] ?? weighted[0]!;
-    return weighted[Math.floor(appRandom() * weighted.length)] ?? SPECIAL_EVENT_DEFS[0];
+        const weight = score >= getRankScore("GOD") ? 1
+            : score >= getRankScore("EX") ? 1
+            : score >= getRankScore("SSR") ? 4
+            : score >= getRankScore("SR") ? 28
+            : 220;
+        for (let i = 0; i < weight; i++) weighted.push(def);
+    }
+    return weighted[Math.floor(appRandom() * weighted.length)] ?? pool[0];
 }
 
 async function playGachaRemoteMiracleVideo(def: SpecialEventDef): Promise<void> {
     if (settings.simpleMode) return;
     try {
-        const assets = await loadRemoteMiracleAssets();
+        const assets = await loadRemoteMiracleAssets(true);
         for (let i = 0; i < 6; i++) {
             const asset = selectRemoteMiracleVideoAsset(assets, def);
             if (!asset) return;
@@ -4639,6 +4702,213 @@ async function playGachaRemoteMiracleVideo(def: SpecialEventDef): Promise<void> 
     } catch (error) {
         console.warn("[Miracle Gacha] video failed", error);
     }
+}
+
+type MagicCircleKind = "sun" | "moon" | "star" | "thunder" | "wave" | "earth" | "wind" | "gate" | "mirror" | "dragon" | "void" | "flower" | "gear" | "meteor" | "clock" | "crown";
+
+interface MagicCircleDef {
+    kind: MagicCircleKind;
+    label: string;
+    emoji: string;
+    color: string;
+    description: string;
+}
+
+const MAGIC_CIRCLE_DEFS: MagicCircleDef[] = [
+    { kind: "sun", label: "太陽輪", emoji: "☀️", color: "#facc15", description: "盤面を発光させ、外から銀玉を呼び込みます。" },
+    { kind: "moon", label: "月影輪", emoji: "🌙", color: "#bfdbfe", description: "重力を少し弱め、玉をふわっと流します。" },
+    { kind: "star", label: "星芒陣", emoji: "⭐", color: "#fde68a", description: "流れ星のように外側から玉が飛び込みます。" },
+    { kind: "thunder", label: "雷鳴陣", emoji: "⚡", color: "#fef08a", description: "落雷系の盤面崩壊を呼びます。" },
+    { kind: "wave", label: "水渦陣", emoji: "🌊", color: "#38bdf8", description: "津波のように盤面の流れを横へ押します。" },
+    { kind: "earth", label: "地脈陣", emoji: "🪨", color: "#d6d3d1", description: "大地震のように盤面を揺らします。" },
+    { kind: "wind", label: "旋風陣", emoji: "🌀", color: "#67e8f9", description: "横風で玉の流れを乱します。" },
+    { kind: "gate", label: "門陣", emoji: "🌀", color: "#c4b5fd", description: "左右の画面外から玉を侵入させます。" },
+    { kind: "mirror", label: "鏡陣", emoji: "🪞", color: "#e0f2fe", description: "反射世界のように盤面を反転気味に揺らします。" },
+    { kind: "dragon", label: "龍脈陣", emoji: "🐉", color: "#34d399", description: "龍脈崩壊を呼びます。" },
+    { kind: "void", label: "虚無陣", emoji: "⬛", color: "#e5e7eb", description: "虚無領域を開きます。" },
+    { kind: "flower", label: "花冠陣", emoji: "🌸", color: "#f9a8d4", description: "一時ピンを花のように配置します。" },
+    { kind: "gear", label: "歯車陣", emoji: "⚙️", color: "#cbd5e1", description: "ピンの反応を一時的に暴走させます。" },
+    { kind: "meteor", label: "隕石陣", emoji: "☄️", color: "#fb923c", description: "隕石玉を画面外から突入させます。" },
+    { kind: "clock", label: "時辰陣", emoji: "⏳", color: "#a78bfa", description: "時間断層崩壊を呼びます。" },
+    { kind: "crown", label: "王冠陣", emoji: "👑", color: "#facc15", description: "強い光とともに観測ピンを置きます。" },
+];
+
+function showAdminMagicCircleAnswerPopup(): void {
+    const rows = MAGIC_CIRCLE_DEFS.map((def, index) => `
+        <div style="padding:12px;border-radius:16px;background:rgba(255,255,255,.72);border:1px solid rgba(80,90,120,.16);">
+            <div style="font-weight:1000;font-size:1.05em;">${index + 1}. ${def.emoji} ${escapeHtml(def.label)}</div>
+            <div style="margin-top:4px;opacity:.76;line-height:1.65;">${escapeHtml(def.description)}</div>
+            <div style="margin-top:4px;font-size:.84em;opacity:.62;">内部ID: ${escapeHtml(def.kind)}</div>
+        </div>
+    `).join("");
+    showPopup("魔法陣の回答一覧", `
+        <p style="line-height:1.8;margin-top:0;">管理者確認用です。魔法陣は線の長さ、曲がり方、描いた範囲、閉じ具合、点数などから判定しています。完全な固定ジェスチャーではなく、描き方によって下記16種類のどれかに分類されます。</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(${isMobile ? "210px" : "260px"},1fr));gap:10px;">${rows}</div>
+        <p style="line-height:1.8;opacity:.72;margin-bottom:0;">確認したい場合は「魔法陣を書く」を押して、丸、ジグザグ、大きい円、小さい円、長い線などを描いてください。</p>
+    `);
+}
+
+function getCanvasPointFromEvent(event: PointerEvent): { x: number; y: number } {
+    const rect = canvas.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * geometry.width;
+    const y = ((event.clientY - rect.top) / Math.max(1, rect.height)) * geometry.height;
+    return { x: clamp(x, 0, geometry.width), y: clamp(y, 0, geometry.height) };
+}
+
+function classifyMagicCircle(points: Array<{ x: number; y: number; t: number }>): MagicCircleDef {
+    if (points.length < 2) return MAGIC_CIRCLE_DEFS[0];
+    let length = 0;
+    let turn = 0;
+    let minX = points[0].x, maxX = points[0].x, minY = points[0].y, maxY = points[0].y;
+    for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1];
+        const b = points[i];
+        length += Math.hypot(b.x - a.x, b.y - a.y);
+        minX = Math.min(minX, b.x); maxX = Math.max(maxX, b.x);
+        minY = Math.min(minY, b.y); maxY = Math.max(maxY, b.y);
+        if (i >= 2) {
+            const p = points[i - 2];
+            const ang1 = Math.atan2(a.y - p.y, a.x - p.x);
+            const ang2 = Math.atan2(b.y - a.y, b.x - a.x);
+            turn += Math.abs(Math.atan2(Math.sin(ang2 - ang1), Math.cos(ang2 - ang1)));
+        }
+    }
+    const w = maxX - minX;
+    const h = maxY - minY;
+    const close = Math.hypot(points[0].x - points[points.length - 1].x, points[0].y - points[points.length - 1].y);
+    const seed = Math.floor(length * 3 + turn * 97 + w * 5 + h * 7 + close * 11 + points.length * 13);
+    return MAGIC_CIRCLE_DEFS[Math.abs(seed) % MAGIC_CIRCLE_DEFS.length] ?? MAGIC_CIRCLE_DEFS[0];
+}
+
+function createTemporaryPinAt(x: number, y: number, label = "観測ピン", lifetimeMs = 14000): void {
+    const radius = Math.max(geometry.pinRadius * 1.35, 6 * geometry.scale);
+    const pin = Bodies.circle(x, y, radius, {
+        isStatic: true,
+        restitution: 1.08,
+        friction: 0,
+        render: { fillStyle: "rgba(250,204,21,.96)", strokeStyle: "rgba(255,255,255,.95)", lineWidth: Math.max(1, 2 * geometry.scale) } as any,
+    });
+    (pin as any).plugin = { isPin: true, isTempPin: true, label, wiggleFrames: 80 };
+    temporaryPinBodies.add(pin);
+    Composite.add(engine.world, pin);
+    addFloatingText(label, x, y - 22 * geometry.scale, "#facc15");
+    window.setTimeout(() => {
+        if (!temporaryPinBodies.has(pin)) return;
+        temporaryPinBodies.delete(pin);
+        Composite.remove(engine.world, pin);
+    }, lifetimeMs);
+}
+
+function enableTemporaryPinPlacement(): void {
+    temporaryPinPlacementEnabled = true;
+    magicCircleModeEnabled = false;
+    showSoftToast("盤面をタップすると一時的な観測ピンを設置します");
+}
+
+function createIntruderDrop(x: number, y: number, vx: number, vy: number, radiusScale = 1): Matter.Body {
+    const radius = geometry.ballRadius * radiusScale;
+    const body = Bodies.circle(x, y, radius, {
+        restitution: 0.92, friction: 0.01, frictionAir: 0.0018, density: 0.0011,
+        render: { fillStyle: "#d9e2ee", strokeStyle: "rgba(255,255,255,.95)", lineWidth: Math.max(1, 2.4 * geometry.scale) } as any,
+    });
+    (body as any).plugin = createDropPlugin("normal", x, y, radius, { intruder: true, timeBallSkin: "gloss", timeBallSkinLabel: "外部侵入玉" });
+    Body.setVelocity(body, { x: vx, y: vy });
+    Body.setAngularVelocity(body, (appRandom() - 0.5) * 0.55);
+    activeDropCount++;
+    return body;
+}
+
+function spawnExternalIntruderBalls(count = 12, reason = "event"): void {
+    const bodies: Matter.Body[] = [];
+    for (let i = 0; i < count; i++) {
+        const side = Math.floor(appRandom() * 4);
+        const speed = (5 + appRandom() * 7) * geometry.scale;
+        let x = -geometry.ballRadius * 3;
+        let y = geometry.height * (0.12 + appRandom() * 0.62);
+        let vx = speed;
+        let vy = (appRandom() - 0.35) * speed;
+        if (side === 1) { x = geometry.width + geometry.ballRadius * 3; vx = -speed; }
+        else if (side === 2) { x = geometry.width * appRandom(); y = -geometry.ballRadius * 4; vx = (appRandom() - 0.5) * speed; vy = speed; }
+        else if (side === 3) { x = geometry.width * appRandom(); y = geometry.height + geometry.ballRadius * 4; vx = (appRandom() - 0.5) * speed; vy = -speed * 0.7; }
+        bodies.push(createIntruderDrop(x, y, vx, vy, clamp(0.85 + appRandom() * 0.55, 0.85, 1.4)));
+    }
+    Composite.add(engine.world, bodies);
+    triggerCameraShake(18 * geometry.scale, 420);
+    addFloatingText("画面外から玉が侵入", geometry.width / 2, geometry.height * 0.18, "#dbeafe");
+    maybeShowCommentary(`外部侵入イベント「${reason}」`, true);
+}
+
+function activateMagicCircle(def: MagicCircleDef, points: Array<{ x: number; y: number; t: number }>): void {
+    const center = points.length > 0
+        ? points.reduce((acc, p) => ({ x: acc.x + p.x / points.length, y: acc.y + p.y / points.length }), { x: 0, y: 0 })
+        : { x: geometry.width / 2, y: geometry.height * 0.36 };
+    addFloatingText(`${def.emoji} ${def.label}`, center.x, center.y, def.color);
+    createTapRipple(center.x, center.y, true);
+    triggerCameraShake(16 * geometry.scale, 360);
+    switch (def.kind) {
+        case "sun": spawnExternalIntruderBalls(8, def.label); break;
+        case "moon": engine.gravity.y = 4.2; window.setTimeout(() => { if (tiltExperimentEnabled) return; engine.gravity.y = 8; }, 3600); break;
+        case "star": spawnExternalIntruderBalls(18, def.label); break;
+        case "thunder": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "lightning"); break;
+        case "wave": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "tsunami"); break;
+        case "earth": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "earthquake"); break;
+        case "wind": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "typhoon"); break;
+        case "gate": spawnExternalIntruderBalls(24, def.label); break;
+        case "mirror": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "mirror"); break;
+        case "dragon": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "dragon"); break;
+        case "void": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "void"); break;
+        case "flower": for (let i = 0; i < 6; i++) createTemporaryPinAt(center.x + Math.cos(i * Math.PI / 3) * 58 * geometry.scale, center.y + Math.sin(i * Math.PI / 3) * 58 * geometry.scale, "花冠ピン", 12000); break;
+        case "gear": for (const body of engine.world.bodies) { const plugin = (body as any).plugin; if (plugin?.isPin) plugin.wiggleFrames = Math.max(plugin.wiggleFrames ?? 0, 120); } break;
+        case "meteor": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "meteor"); spawnExternalIntruderBalls(10, def.label); break;
+        case "clock": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "timebreak"); break;
+        case "crown": createTemporaryPinAt(center.x, center.y, "王冠観測ピン", 20000); fireConfetti("miracle"); break;
+    }
+}
+
+function enableMagicCircleMode(): void {
+    magicCircleModeEnabled = true;
+    temporaryPinPlacementEnabled = false;
+    magicCirclePoints = [];
+    showSoftToast("盤面を指でなぞって魔法陣を描いてください");
+}
+
+function updateTiltButton(): void {
+    if (!tiltExperimentButton) return;
+    tiltExperimentButton.textContent = tiltExperimentEnabled ? "傾き実験: ON" : "傾き実験: OFF";
+}
+
+function handleDeviceOrientation(event: DeviceOrientationEvent): void {
+    if (!tiltExperimentEnabled) return;
+    const gamma = typeof event.gamma === "number" ? event.gamma : 0;
+    lastTiltGravityX = clamp(gamma / 45, -0.9, 0.9);
+    if (!rareBoardCatastrophe) engine.gravity.x = lastTiltGravityX;
+}
+
+async function toggleTiltExperimentMode(): Promise<void> {
+    if (!tiltExperimentEnabled) {
+        try {
+            const req = (DeviceOrientationEvent as any).requestPermission as undefined | (() => Promise<string>);
+            if (typeof req === "function") {
+                const result = await req.call(DeviceOrientationEvent);
+                if (result !== "granted") {
+                    showSoftToast("傾きセンサーの許可が必要です");
+                    return;
+                }
+            }
+        } catch {
+            // PCや非対応端末では許可APIが無い場合があります。
+        }
+        tiltExperimentEnabled = true;
+        window.addEventListener("deviceorientation", handleDeviceOrientation);
+        showSoftToast("スマホ傾き実験モードをONにしました");
+    } else {
+        tiltExperimentEnabled = false;
+        window.removeEventListener("deviceorientation", handleDeviceOrientation);
+        lastTiltGravityX = 0;
+        if (!rareBoardCatastrophe) engine.gravity.x = 0;
+        showSoftToast("スマホ傾き実験モードをOFFにしました");
+    }
+    updateTiltButton();
 }
 
 function showMiracleGachaPopup(): void {
@@ -4660,12 +4930,13 @@ function showMiracleGachaPopup(): void {
             <div class="miracle-user-card" style="text-align:left;">
                 <b>奇跡ガチャPの貯め方</b>
                 <ul style="line-height:1.85;margin:10px 0 0;padding-left:1.3em;">
-                    <li>実験完了：+30P</li>
-                    <li>1000玉以上投下：+50P</li>
-                    <li>SR以上発見：+100P</li>
-                    <li>SSR以上発見：+300P</li>
-                    <li>GOD/EX発見：+1000P</li>
-                    <li>デイリー研究達成：+200P</li>
+                    <li>実験完了：+1P</li>
+                    <li>1000玉以上投下：追加 +1P</li>
+                    <li>SR以上発見：+1P</li>
+                    <li>SSR以上発見：+3P</li>
+                    <li>GOD/EX発見：+10P</li>
+                    <li>デイリー研究達成：+2P</li>
+                    <li>超レア確率はかなり低めです。10連でも確定ではありません。</li>
                 </ul>
             </div>
             <p style="opacity:.72;line-height:1.8;margin:0;">ガチャ回転演出のあとに結果が表示されます。SSR以上では盤面崩壊イベントが発生し、EX/GOD級は動画演出を強めに狙います。</p>
@@ -5218,6 +5489,9 @@ function closeHelpPopup(): void {
 }
 
 function showPopup(title: string, bodyHtml: string): void {
+    if (mobileSettingsOverlay && mobileSettingsOverlay.style.display !== "none") {
+        mobileSettingsOverlay.style.display = "none";
+    }
     const panelWidth = isMobile ? "calc(100vw - 20px)" : "min(980px, 94vw)";
     const panelMaxHeight = isMobile ? "calc(100dvh - 20px)" : "88dvh";
     const panelPadding = isMobile ? "30px 24px 24px" : "42px 40px 36px";
@@ -5673,6 +5947,8 @@ function resetExperiment(startNow = false): void {
     canvas.style.height = `${geometry.height}px`;
     applyBackgroundImage();
 
+    for (const pin of temporaryPinBodies) Composite.remove(engine.world, pin);
+    temporaryPinBodies.clear();
     Composite.clear(engine.world, false);
     finishedCount = 0;
     activeDropCount = 0;
@@ -6300,6 +6576,10 @@ function stopRemoteMiracleVideo(): void {
     if (activeRemoteMiracleVideo) {
         try {
             activeRemoteMiracleVideo.pause();
+            activeRemoteMiracleVideo.querySelectorAll("source").forEach((source) => {
+                source.removeAttribute("src");
+                source.removeAttribute("type");
+            });
             activeRemoteMiracleVideo.removeAttribute("src");
             activeRemoteMiracleVideo.load();
         } catch {
@@ -6490,6 +6770,18 @@ function showMobileVideoSoundRetryButton(video: HTMLVideoElement | null, volume 
     document.body.appendChild(mobileVideoSoundRetryButton);
 }
 
+function getFreshRemoteVideoSourceUrl(url: string, asset: RemoteMiracleAsset): string {
+    if (!url || url.startsWith("blob:") || url.startsWith("data:")) return url;
+    try {
+        const u = new URL(url, window.location.href);
+        u.searchParams.set("mbl_video", `${asset.id || "asset"}_${remoteMiracleAssetsLoadedAt || Date.now()}`);
+        return u.toString();
+    } catch {
+        const sep = url.includes("?") ? "&" : "?";
+        return `${url}${sep}mbl_video=${encodeURIComponent(String(asset.id || Date.now()))}`;
+    }
+}
+
 function getRemoteMiracleAssetMainUrl(asset: RemoteMiracleAsset): string {
     return getRemoteMiracleAssetSources(asset)[0]?.url ?? "";
 }
@@ -6552,7 +6844,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
     for (const sourceDef of playbackSources) {
         const source = document.createElement("source");
-        source.src = sourceDef.url;
+        source.src = getFreshRemoteVideoSourceUrl(sourceDef.url, asset);
         if (sourceDef.mimeType) source.type = sourceDef.mimeType;
         video.appendChild(source);
     }
@@ -6613,6 +6905,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
             showSoftToast("R2動画の読み込みに失敗しました。manifest.json のファイル名を確認してください");
         }
 
+        hideMobileVideoSoundRetryButton();
         remoteMiracleVideoOverlay.innerHTML = "";
         remoteMiracleVideoOverlay.style.display = "none";
         return false;
@@ -8131,7 +8424,7 @@ function showFinalResult(): void {
     savedRecords.maxTargetCount = Math.max(savedRecords.maxTargetCount, settings.targetCount);
     const dailyCompleted = evaluateAndSaveDailyMissions();
     const finishGachaPoint = awardExperimentFinishGachaPoint();
-    const dailyGachaPoint = dailyCompleted.length * 200;
+    const dailyGachaPoint = dailyCompleted.length * 2;
     const totalGachaPointAward = finishGachaPoint + dailyGachaPoint;
     savedRecords.bestScore = Math.max(savedRecords.bestScore, runScore);
     savedRecords.totalScore += runScore;
