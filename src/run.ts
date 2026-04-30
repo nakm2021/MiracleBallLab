@@ -14,7 +14,7 @@ import { createInitialSkillState, createRandomBuckets } from "./miracle/state";
 import { getRankBaseScore, getRankScore } from "./miracle/rarity";
 import { applyThemePaletteToPanel } from "./miracle/ui";
 import { shouldPlayRemoteMiracleVideo } from "./miracle/videoEffects";
-import { buildOfflineMiracleVideoPlan, clearOfflineMiracleVideos, downloadOfflineMiracleVideos, formatOfflineBytes, getOfflineMiracleSummary, resolveOfflineMiracleSources, revokeOfflineObjectUrls } from "./miracle/offlineCache";
+import { buildOfflineMiracleVideoPlan, clearOfflineMiracleVideos, downloadOfflineMiracleVideos, filterOfflineMiracleDownloadPlan, formatOfflineBytes, getOfflineMiracleCatalog, getOfflineMiracleResearchRank, getOfflineMiracleSummary, resolveOfflineMiracleSources, revokeOfflineObjectUrls } from "./miracle/offlineCache";
 import { FAMILIAR_DEFS, findFamiliarBySecretCode, gainFamiliarXp, getFamiliarDef, getFamiliarDropXp, getFamiliarLevelInfo, getFamiliarModeLabel, getFamiliarMood, loadFamiliarState, saveFamiliarState, unlockFamiliar } from "./miracle/familiar";
 import { awardTicketsForRank, loadMiracleTicketState, saveMiracleTicketState, spendMiracleTickets, type MiracleTicketState } from "./miracle/miracleTicket";
 import { FAMILIAR_EXPEDITION_PLANS, claimFamiliarExpedition, getFamiliarExpeditionProgress, loadFamiliarExpeditionState, startFamiliarExpedition, type FamiliarExpeditionState } from "./miracle/familiarExpedition";
@@ -1350,6 +1350,8 @@ displayButtons.appendChild(lowSpecButton);
 
 const offlineVideoButton = setTooltip(setButtonLabel(createButton("動画保存", () => { void showOfflineVideoDownloadPopup(); }), "動画保存", "Save videos"), "動画演出をブラウザ内に保存して、オフラインでも再生しやすくします。", "Save video effects in this browser for offline playback.");
 displayButtons.appendChild(offlineVideoButton);
+const offlineBookButton = setTooltip(setButtonLabel(createButton("オフライン図鑑", () => { void showOfflineMiracleBookPopup(); }), "オフライン図鑑", "Offline book"), "保存済み動画、研究ランク、再生テストを表示します。", "Show saved videos, storage rank, and test playback.");
+displayButtons.appendChild(offlineBookButton);
 
 const recentMiracleDisplayButton = setTooltip(setButtonLabel(createButton("直近の奇跡: OFF", () => {
     settings.showRecentMiracles = !settings.showRecentMiracles;
@@ -6097,16 +6099,43 @@ function getOfflineUpdatedAtText(updatedAt: number): string {
     }
 }
 
-async function showOfflineVideoDownloadPopup(): Promise<void> {
+async function getOfflineVideoAssetsForUi(force = false): Promise<RemoteMiracleAsset[]> {
+    const assets = await loadRemoteMiracleAssets(force);
+    return assets.filter((asset) => asset.kind === "video");
+}
+
+function getOfflineDownloadModeLabel(mode: "recommended" | "rare" | "all"): string {
+    if (mode === "recommended") return "おすすめ保存";
+    if (mode === "rare") return "レア演出だけ保存";
+    return "全部保存";
+}
+
+function getOfflineRankBadgeStyle(rank?: string): string {
+    const r = String(rank ?? "common").toUpperCase();
+    if (r === "GOD" || r === "EX" || r === "SECRET") return "background:linear-gradient(135deg,#7c2d12,#facc15,#7e22ce);color:#fff;";
+    if (r === "UR" || r === "SSR") return "background:linear-gradient(135deg,#1e3a8a,#22d3ee);color:#fff;";
+    if (r === "SR" || r === "RARE") return "background:linear-gradient(135deg,#166534,#bef264);color:#102a10;";
+    return "background:rgba(100,116,139,.16);color:#334155;";
+}
+
+function getOfflineProgressHtml(percent: number): string {
+    const safePercent = clamp(percent, 0, 100);
+    return `
+        <div style="height:18px;border-radius:999px;background:rgba(15,23,42,.12);overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.18);">
+            <div style="width:${safePercent}%;height:100%;border-radius:999px;background:linear-gradient(90deg,#22c55e,#84cc16,#facc15);transition:width .25s ease;"></div>
+        </div>
+    `;
+}
+
+async function showOfflineVideoDownloadPopup(mode: "recommended" | "rare" | "all" = "recommended"): Promise<void> {
     showPopup("オフライン動画保存", `
-        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
-            <p style="margin:0;font-weight:900;">動画演出の容量を確認しています。</p>
-            <p style="margin:8px 0 0;opacity:.72;">R2 の manifest.json を読み込み、未保存動画のサイズを調べます。</p>
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;background:linear-gradient(135deg,rgba(15,23,42,.92),rgba(49,46,129,.82));color:#fff;">
+            <p style="margin:0;font-weight:1000;font-size:${isMobile ? "22px" : "20px"};">奇跡データを調査中...</p>
+            <p style="margin:8px 0 0;opacity:.82;line-height:1.7;">研究所の保管庫を開き、保存できる動画演出と必要容量を計算しています。</p>
         </div>
     `);
 
-    const assets = await loadRemoteMiracleAssets(true);
-    const videos = assets.filter((asset) => asset.kind === "video");
+    const videos = await getOfflineVideoAssetsForUi(true);
 
     if (videos.length === 0) {
         showPopup("オフライン動画保存", `
@@ -6118,8 +6147,10 @@ async function showOfflineVideoDownloadPopup(): Promise<void> {
         return;
     }
 
-    const plan = await buildOfflineMiracleVideoPlan(videos, getRemoteMiracleAssetSources);
+    const basePlan = await buildOfflineMiracleVideoPlan(videos, getRemoteMiracleAssetSources);
+    const plan = filterOfflineMiracleDownloadPlan(basePlan, mode);
     const summary = await getOfflineMiracleSummary();
+    const rank = getOfflineMiracleResearchRank(summary.cachedBytes);
 
     if (!plan.supported) {
         showPopup("オフライン動画保存", `
@@ -6135,29 +6166,49 @@ async function showOfflineVideoDownloadPopup(): Promise<void> {
         ? `<div style="margin-top:8px;color:#92400e;font-weight:900;">サイズ不明の動画が ${plan.unknownCount} 件あります。実際の通信量は表示より増える可能性があります。</div>`
         : "";
     const allCachedText = plan.downloadSources.length === 0
-        ? `<div style="margin-top:10px;padding:12px;border-radius:16px;background:rgba(34,197,94,.14);font-weight:900;">すべて保存済みです。オフライン時も保存済み動画を優先して再生します。</div>`
+        ? `<div style="margin-top:10px;padding:12px;border-radius:16px;background:rgba(34,197,94,.14);font-weight:900;">この保存モードの対象はすべて保管済みです。</div>`
         : "";
+    const nextRankText = rank.nextBytes === null
+        ? "最高ランク到達"
+        : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - summary.cachedBytes))}`;
 
     showPopup("オフライン動画保存", `
         <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
-            <p style="margin-top:0;">動画演出をブラウザ内に保存します。保存後は、通信できない状態でも保存済み動画を優先して再生します。</p>
+            <div style="padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(30,64,175,.90),rgba(124,58,237,.82));color:#fff;box-shadow:0 14px 34px rgba(30,41,59,.18);">
+                <div style="font-weight:1000;font-size:${isMobile ? "24px" : "22px"};">奇跡保管庫</div>
+                <div style="margin-top:6px;opacity:.86;line-height:1.6;">保存すると、通信がない場所でも保管済み動画演出を優先再生します。</div>
+                <div style="margin-top:12px;font-weight:1000;">現在ランク: ${escapeHtml(rank.label)}</div>
+                ${getOfflineProgressHtml(rank.progressRatio * 100)}
+                <div style="margin-top:6px;opacity:.86;font-size:.9em;">${nextRankText}</div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                <button id="offline-mode-recommended" class="miracle-home-button ${mode === "recommended" ? "miracle-home-primary" : ""}">おすすめ保存</button>
+                <button id="offline-mode-rare" class="miracle-home-button ${mode === "rare" ? "miracle-home-primary" : ""}">レア演出だけ保存</button>
+                <button id="offline-mode-all" class="miracle-home-button ${mode === "all" ? "miracle-home-primary" : ""}">全部保存</button>
+            </div>
             <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:12px;margin-top:14px;">
                 <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);"><div style="opacity:.68;">manifest内の動画URL</div><b style="font-size:26px;">${plan.sources.length}</b></div>
                 <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);"><div style="opacity:.68;">保存済み</div><b style="font-size:26px;">${plan.cachedCount}</b></div>
-                <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);"><div style="opacity:.68;">今回保存する件数</div><b style="font-size:26px;">${plan.downloadSources.length}</b></div>
+                <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);"><div style="opacity:.68;">${escapeHtml(getOfflineDownloadModeLabel(mode))}</div><b style="font-size:26px;">${plan.downloadSources.length} 件</b></div>
                 <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);"><div style="opacity:.68;">今回の推定容量</div><b style="font-size:26px;">${formatOfflineBytes(plan.knownBytes)}${plan.unknownCount > 0 ? "+α" : ""}</b></div>
             </div>
             ${unknownText}
             ${allCachedText}
             <div style="margin-top:12px;opacity:.72;">現在の保存容量: <b>${formatOfflineBytes(summary.cachedBytes)}</b> / 最終保存: ${escapeHtml(getOfflineUpdatedAtText(summary.updatedAt))}</div>
-            <div id="offline-video-progress" style="margin-top:14px;min-height:28px;font-weight:900;"></div>
+            <div id="offline-video-progress" style="margin-top:14px;min-height:42px;font-weight:900;"></div>
             <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;">
                 <button id="offline-video-download-button" class="miracle-home-button miracle-home-primary" ${plan.downloadSources.length === 0 ? "disabled" : ""}>確認して保存開始</button>
+                <button id="offline-video-book-button" class="miracle-home-button">図鑑を見る</button>
                 <button id="offline-video-clear-button" class="miracle-home-button">保存済み動画を削除</button>
             </div>
             <p style="margin-bottom:0;opacity:.66;font-size:.92em;">ブラウザのサイトデータ削除や容量不足があると、保存済み動画は消える場合があります。</p>
         </div>
     `);
+
+    (document.getElementById("offline-mode-recommended") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("recommended"); });
+    (document.getElementById("offline-mode-rare") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("rare"); });
+    (document.getElementById("offline-mode-all") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("all"); });
+    (document.getElementById("offline-video-book-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineMiracleBookPopup(); });
 
     const progress = document.getElementById("offline-video-progress") as HTMLDivElement | null;
     const downloadButton = document.getElementById("offline-video-download-button") as HTMLButtonElement | null;
@@ -6166,20 +6217,22 @@ async function showOfflineVideoDownloadPopup(): Promise<void> {
     if (downloadButton) {
         downloadButton.onclick = async () => {
             const confirmText = plan.unknownCount > 0
-                ? `推定 ${formatOfflineBytes(plan.knownBytes)} + サイズ不明 ${plan.unknownCount} 件を保存します。よろしいですか？`
-                : `推定 ${formatOfflineBytes(plan.knownBytes)} を保存します。よろしいですか？`;
+                ? `${getOfflineDownloadModeLabel(mode)}: 推定 ${formatOfflineBytes(plan.knownBytes)} + サイズ不明 ${plan.unknownCount} 件を保存します。よろしいですか？`
+                : `${getOfflineDownloadModeLabel(mode)}: 推定 ${formatOfflineBytes(plan.knownBytes)} を保存します。よろしいですか？`;
             if (!window.confirm(confirmText)) return;
 
             downloadButton.disabled = true;
             if (clearButton) clearButton.disabled = true;
-            if (progress) progress.textContent = "保存を開始しています...";
+            if (progress) progress.innerHTML = `<div>奇跡データを封印中...</div>${getOfflineProgressHtml(0)}<div style="margin-top:6px;opacity:.75;">研究所に動画演出を保管しています。</div>`;
 
             try {
                 const result = await downloadOfflineMiracleVideos(plan, (p) => {
                     if (!progress) return;
-                    progress.textContent = `保存中 ${p.done} / ${p.total} ... ${formatOfflineBytes(p.downloadedBytes)}`;
+                    const percent = p.total > 0 ? (p.done / p.total) * 100 : 100;
+                    progress.innerHTML = `<div>封印中 ${p.done} / ${p.total} ... ${formatOfflineBytes(p.downloadedBytes)}</div>${getOfflineProgressHtml(percent)}<div style="margin-top:6px;opacity:.72;word-break:break-all;font-size:.86em;">${escapeHtml(p.currentUrl.split("/").pop() ?? p.currentUrl)}</div>`;
                 });
-                if (progress) progress.textContent = `保存完了: ${result.cachedCount} 件 / ${formatOfflineBytes(result.cachedBytes)}`;
+                const newRank = getOfflineMiracleResearchRank(result.cachedBytes);
+                if (progress) progress.innerHTML = `<div>保存成功: ${result.cachedCount} 件 / ${formatOfflineBytes(result.cachedBytes)}</div>${getOfflineProgressHtml(100)}<div style="margin-top:6px;color:#166534;">研究ランク: ${escapeHtml(newRank.label)}</div>`;
                 showSoftToast("オフライン動画保存が完了しました");
             } catch (error) {
                 console.error("[Miracle Offline] video download failed", error);
@@ -6202,6 +6255,108 @@ async function showOfflineVideoDownloadPopup(): Promise<void> {
             if (downloadButton) downloadButton.disabled = false;
             clearButton.disabled = false;
         };
+    }
+}
+
+async function showOfflineMiracleBookPopup(): Promise<void> {
+    showPopup("オフライン演出図鑑", `
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            <p style="margin:0;font-weight:900;">保存済み動画を確認しています...</p>
+        </div>
+    `);
+
+    const videos = await getOfflineVideoAssetsForUi(false);
+    const catalog = await getOfflineMiracleCatalog(videos, getRemoteMiracleAssetSources);
+    const rank = getOfflineMiracleResearchRank(catalog.cachedBytes);
+
+    if (!catalog.supported) {
+        showPopup("オフライン演出図鑑", `
+            <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+                <p style="margin:0;font-weight:900;">このブラウザではオフライン図鑑を利用できません。</p>
+            </div>
+        `);
+        return;
+    }
+
+    const rankRows = Object.entries(catalog.rankCounts).sort(([a], [b]) => b.localeCompare(a)).map(([rankName, count]) => `
+        <div style="padding:12px;border-radius:16px;background:rgba(255,255,255,.68);display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;">
+            <span style="padding:5px 10px;border-radius:999px;font-weight:1000;${getOfflineRankBadgeStyle(rankName)}">${escapeHtml(rankName)}</span>
+            <div style="font-weight:900;">${count.cached} / ${count.total}<div style="font-size:.84em;opacity:.65;">${formatOfflineBytes(count.bytes)}</div></div>
+        </div>
+    `).join("") || `<div style="opacity:.7;">manifest情報がまだありません。</div>`;
+
+    const cachedRows = catalog.cachedItems.length === 0
+        ? `<div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);font-weight:900;">まだ保存済み動画がありません。「動画保存」から保管してください。</div>`
+        : catalog.cachedItems.slice(0, 80).map((item, index) => `
+            <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;">
+                <div style="min-width:0;">
+                    <div style="font-weight:1000;"><span style="padding:4px 9px;border-radius:999px;${getOfflineRankBadgeStyle(item.rank)}">${escapeHtml(String(item.rank ?? "common").toUpperCase())}</span> ${index + 1}. ${escapeHtml(item.assetId)}</div>
+                    <div style="margin-top:4px;opacity:.70;font-size:.88em;">${formatOfflineBytes(item.sizeBytes)} / ${escapeHtml(getOfflineUpdatedAtText(item.cachedAt))}</div>
+                    <div style="margin-top:4px;opacity:.52;font-size:.78em;word-break:break-all;">${escapeHtml(item.url)}</div>
+                </div>
+                <button class="offline-video-test-button miracle-home-button" data-asset-id="${escapeHtml(item.assetId)}">再生テスト</button>
+            </div>
+        `).join("");
+
+    const nextRankText = rank.nextBytes === null
+        ? "最高ランク到達"
+        : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - catalog.cachedBytes))}`;
+
+    showPopup("オフライン演出図鑑", `
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            <div style="padding:16px;border-radius:22px;background:linear-gradient(135deg,rgba(8,47,73,.92),rgba(88,28,135,.82));color:#fff;">
+                <div style="font-weight:1000;font-size:${isMobile ? "24px" : "22px"};">オフライン研究所</div>
+                <div style="margin-top:8px;display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:10px;">
+                    <div><div style="opacity:.74;">保存済み</div><b style="font-size:24px;">${catalog.cachedItems.length} / ${catalog.totalVideoSources}</b></div>
+                    <div><div style="opacity:.74;">保存容量</div><b style="font-size:24px;">${formatOfflineBytes(catalog.cachedBytes)}</b></div>
+                    <div><div style="opacity:.74;">研究ランク</div><b style="font-size:24px;">${escapeHtml(rank.label)}</b></div>
+                </div>
+                <div style="margin-top:12px;">${getOfflineProgressHtml(rank.progressRatio * 100)}</div>
+                <div style="margin-top:6px;opacity:.86;">${nextRankText}</div>
+            </div>
+            <h3 style="margin:18px 0 8px;">レア度別の保管状況</h3>
+            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${rankRows}</div>
+            <h3 style="margin:18px 0 8px;">保存済み動画の再生テスト</h3>
+            <div style="border-radius:18px;background:rgba(255,255,255,.70);padding:4px 14px;max-height:${isMobile ? "48vh" : "420px"};overflow:auto;">${cachedRows}</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+                <button id="offline-book-download-button" class="miracle-home-button miracle-home-primary">動画保存へ</button>
+                <button id="offline-book-stop-button" class="miracle-home-button">動画停止</button>
+            </div>
+        </div>
+    `);
+
+    (document.getElementById("offline-book-download-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("recommended"); });
+    (document.getElementById("offline-book-stop-button") as HTMLButtonElement | null)?.addEventListener("click", () => stopRemoteMiracleVideo());
+    document.querySelectorAll<HTMLButtonElement>(".offline-video-test-button").forEach((button) => {
+        button.onclick = () => {
+            const asset = videos.find((x) => x.id === button.dataset.assetId);
+            if (!asset) {
+                showSoftToast("対象動画が見つかりません");
+                return;
+            }
+            closeHelpPopup();
+            showSoftToast("保存済み動画を再生テストします");
+            void playRemoteMiracleVideoAsset(asset, true);
+        };
+    });
+}
+
+function showOfflineModeEventPopup(): void {
+    const text = navigator.onLine
+        ? "オンラインに復帰しました。通常研究モードに戻ります。"
+        : "オフライン研究モード 起動。保存済みの奇跡データだけで実験を続行します。";
+    showSoftToast(text);
+    if (!navigator.onLine && helpOverlay.style.display === "none") {
+        showPopup("オフライン研究モード", `
+            <div class="miracle-user-card" style="border-radius:22px;padding:18px;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(55,48,163,.86));color:#fff;">
+                <div style="font-size:${isMobile ? "26px" : "24px"};font-weight:1000;">通信断絶イベント発生</div>
+                <p style="line-height:1.7;opacity:.88;">保存済み動画演出を優先し、地下研究所モードで実験を継続します。</p>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                    <button id="offline-event-book-button" class="miracle-home-button miracle-home-primary">オフライン図鑑を見る</button>
+                </div>
+            </div>
+        `);
+        (document.getElementById("offline-event-book-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineMiracleBookPopup(); });
     }
 }
 
@@ -8679,5 +8834,8 @@ function scheduleResize(): void {
 }
 window.addEventListener("resize", scheduleResize);
 window.visualViewport?.addEventListener("resize", scheduleResize);
-window.addEventListener("online", () => { showSoftToast(t("オンラインに戻りました", "Back online")); updateInfo(); });
-window.addEventListener("offline", () => { showSoftToast(t("オフラインです。保存済み範囲で動作します", "Offline. Cached app continues.")); updateInfo(); });
+window.addEventListener("online", () => { showOfflineModeEventPopup(); updateInfo(); });
+window.addEventListener("offline", () => { showOfflineModeEventPopup(); updateInfo(); });
+if (!navigator.onLine) {
+    window.setTimeout(() => showOfflineModeEventPopup(), bootMinimumDurationMs + 1200);
+}

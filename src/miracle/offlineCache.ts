@@ -6,6 +6,7 @@ const OFFLINE_VIDEO_META_KEY = "miracleBallLab.offlineVideoMeta.v1";
 export type OfflineMiracleVideoSource = RemoteMiracleAssetSource & {
     assetId: string;
     rank?: string;
+    estimateBytes?: number | null;
 };
 
 export type OfflineMiracleDownloadPlan = {
@@ -29,6 +30,31 @@ export type OfflineMiracleSummary = {
     cachedCount: number;
     cachedBytes: number;
     updatedAt: number;
+};
+
+export type OfflineMiracleCatalogItem = {
+    url: string;
+    assetId: string;
+    rank?: string;
+    sizeBytes: number;
+    cachedAt: number;
+};
+
+export type OfflineMiracleCatalog = {
+    supported: boolean;
+    totalVideoSources: number;
+    cachedItems: OfflineMiracleCatalogItem[];
+    cachedBytes: number;
+    updatedAt: number;
+    rankCounts: Record<string, { total: number; cached: number; bytes: number }>;
+};
+
+export type OfflineMiracleResearchRank = {
+    label: string;
+    level: number;
+    nextLabel: string;
+    nextBytes: number | null;
+    progressRatio: number;
 };
 
 type OfflineMiracleMeta = {
@@ -128,6 +154,7 @@ export async function buildOfflineMiracleVideoPlan(
 
         downloadSources.push(source);
         const bytes = await fetchContentLength(source.url);
+        source.estimateBytes = bytes;
         if (bytes === null) {
             unknownCount++;
         } else {
@@ -216,6 +243,117 @@ export function revokeOfflineObjectUrls(urls: string[]): void {
             // 無視
         }
     }
+}
+
+
+export function getOfflineMiracleResearchRank(cachedBytes: number): OfflineMiracleResearchRank {
+    const thresholds = [
+        { bytes: 0, label: "見習い研究員" },
+        { bytes: 100 * 1024 * 1024, label: "奇跡保管員" },
+        { bytes: 500 * 1024 * 1024, label: "演出アーカイブ主任" },
+        { bytes: 1024 * 1024 * 1024, label: "オフライン研究所長" },
+        { bytes: 3 * 1024 * 1024 * 1024, label: "時空保存官" },
+        { bytes: 8 * 1024 * 1024 * 1024, label: "永久機関管理者" },
+    ];
+
+    let level = 0;
+    for (let i = 0; i < thresholds.length; i++) {
+        if (cachedBytes >= thresholds[i].bytes) level = i;
+    }
+
+    const current = thresholds[level] ?? { bytes: 0, label: "見習い研究員" };
+    const next = thresholds[level + 1];
+    const progressRatio = next
+        ? Math.max(0, Math.min(1, (cachedBytes - current.bytes) / Math.max(1, next.bytes - current.bytes)))
+        : 1;
+
+    return {
+        label: current.label,
+        level,
+        nextLabel: next?.label ?? "最高ランク",
+        nextBytes: next?.bytes ?? null,
+        progressRatio,
+    };
+}
+
+export async function getOfflineMiracleCatalog(
+    assets: RemoteMiracleAsset[],
+    getSources: (asset: RemoteMiracleAsset) => RemoteMiracleAssetSource[],
+): Promise<OfflineMiracleCatalog> {
+    if (!isCacheSupported()) {
+        return { supported: false, totalVideoSources: 0, cachedItems: [], cachedBytes: 0, updatedAt: 0, rankCounts: {} };
+    }
+
+    const sources = uniqueVideoSources(assets, getSources);
+    const meta = loadMeta();
+    const rankCounts: Record<string, { total: number; cached: number; bytes: number }> = {};
+
+    for (const source of sources) {
+        const rank = String(source.rank ?? "common").toUpperCase();
+        rankCounts[rank] ??= { total: 0, cached: 0, bytes: 0 };
+        rankCounts[rank].total++;
+    }
+
+    const cachedItems = Object.entries(meta.sources).map(([url, item]) => ({
+        url,
+        assetId: item.assetId,
+        rank: item.rank,
+        sizeBytes: Math.max(0, Number(item.sizeBytes ?? 0)),
+        cachedAt: Number(item.cachedAt ?? 0),
+    }));
+
+    for (const item of cachedItems) {
+        const rank = String(item.rank ?? "common").toUpperCase();
+        rankCounts[rank] ??= { total: 0, cached: 0, bytes: 0 };
+        rankCounts[rank].cached++;
+        rankCounts[rank].bytes += item.sizeBytes;
+    }
+
+    return {
+        supported: true,
+        totalVideoSources: sources.length,
+        cachedItems: cachedItems.sort((a, b) => b.cachedAt - a.cachedAt),
+        cachedBytes: cachedItems.reduce((sum, item) => sum + item.sizeBytes, 0),
+        updatedAt: meta.updatedAt,
+        rankCounts,
+    };
+}
+
+export function filterOfflineMiracleDownloadPlan(
+    plan: OfflineMiracleDownloadPlan,
+    mode: "recommended" | "rare" | "all",
+): OfflineMiracleDownloadPlan {
+    if (mode === "all") return plan;
+
+    const scoreRank = (rank?: string): number => {
+        const r = String(rank ?? "common").toUpperCase();
+        if (r === "GOD" || r === "SECRET") return 100;
+        if (r === "EX") return 90;
+        if (r === "UR") return 80;
+        if (r === "SSR") return 70;
+        if (r === "SR") return 60;
+        if (r === "RARE") return 50;
+        return 10;
+    };
+
+    const sorted = [...plan.downloadSources].sort((a, b) => {
+        const rankDiff = scoreRank(b.rank) - scoreRank(a.rank);
+        if (rankDiff !== 0) return rankDiff;
+        const aBytes = a.estimateBytes ?? Number.MAX_SAFE_INTEGER;
+        const bBytes = b.estimateBytes ?? Number.MAX_SAFE_INTEGER;
+        return aBytes - bBytes;
+    });
+
+    const selected = mode === "rare"
+        ? sorted.filter((source) => scoreRank(source.rank) >= 60)
+        : sorted.filter((source) => scoreRank(source.rank) >= 60 || (source.estimateBytes ?? Number.MAX_SAFE_INTEGER) <= 25 * 1024 * 1024).slice(0, 24);
+
+    return {
+        ...plan,
+        downloadSources: selected,
+        knownBytes: selected.reduce((sum, source) => sum + Math.max(0, Number(source.estimateBytes ?? 0)), 0),
+        unknownCount: selected.filter((source) => source.estimateBytes == null).length,
+    };
 }
 
 export async function getOfflineMiracleSummary(): Promise<OfflineMiracleSummary> {
