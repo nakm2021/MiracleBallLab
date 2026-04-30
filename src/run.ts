@@ -4567,7 +4567,7 @@ function showLabHome(): void {
     const reports = savedRecords.researchReports ?? [];
     const latestReport = reports[0];
     const homeHtml = `
-        <div style="display:grid;gap:18px;">
+        <div class="miracle-home-shell" style="display:grid;gap:18px;">
             <div class="miracle-user-card miracle-home-hero">
                 <div style="font-size:clamp(28px,6vw,54px);font-weight:1000;line-height:1.1;">MiracleBallLab</div>
                 <div style="margin-top:14px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">玉を落として、まれに起きる奇跡を集めよう</div>
@@ -4928,6 +4928,18 @@ function showPopup(title: string, bodyHtml: string): void {
                 padding:${isMobile ? "24px 24px 26px" : "34px 36px 36px"} !important;
                 border-radius:24px;
             }
+            .miracle-popup-panel .miracle-home-shell{
+                position:relative;
+                padding:${isMobile ? "12px" : "18px"};
+                border-radius:26px;
+                background-image:
+                    linear-gradient(rgba(255,255,255,.78), rgba(255,255,255,.72)),
+                    url(${DEFAULT_BACKGROUND_IMAGE_URL});
+                background-size:auto, ${isMobile ? "120px 120px" : "150px 150px"};
+                background-repeat:repeat;
+                background-position:center;
+                background-blend-mode:normal;
+            }
             .miracle-popup-panel .miracle-user-card > :first-child,
             .miracle-popup-panel .miracle-home-hero > :first-child{margin-top:0 !important;}
             .miracle-popup-panel .miracle-user-card > :last-child,
@@ -4938,6 +4950,7 @@ function showPopup(title: string, bodyHtml: string): void {
             @media (max-width: 640px){
                 .miracle-popup-panel .miracle-user-card{padding:20px !important;}
                 .miracle-popup-panel .miracle-home-hero{padding:22px 22px 24px !important;}
+                .miracle-popup-panel .miracle-home-shell{padding:10px !important;background-size:auto, 110px 110px !important;}
             }
         </style>
         <div class="miracle-popup-panel" style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:${palette.panel};color:${palette.fieldText};box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid ${palette.buttonBorder};overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
@@ -8095,6 +8108,7 @@ function drawTimeBallSkins(context: CanvasRenderingContext2D): void {
 }
 
 function draw3DBallShading(context: CanvasRenderingContext2D): void {
+    const timeSec = performance.now() * 0.001;
     context.save();
     for (const body of engine.world.bodies) {
         const plugin = (body as any).plugin;
@@ -8104,42 +8118,108 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
         const x = body.position.x;
         const y = body.position.y;
         const kind = plugin.kind as DropKind | undefined;
-        const isDarkBall = kind === "blackSun" || kind === "giant" || kind === "darkMatter";
-        const highlightAlpha = settings.simpleMode ? (isDarkBall ? 0.34 : 0.28) : (isDarkBall ? 0.52 : 0.42);
-        const shadowAlpha = settings.simpleMode ? 0.14 : 0.22;
+        const isDarkBall = kind === "blackSun" || kind === "darkMatter";
+        const metallicBall = kind !== "ghost";
+        const phase = timeSec * 1.65 + (body.id % 23) * 0.33;
+        const stripeShift = Math.sin(phase) * radius * 0.24;
+        const stripeShift2 = Math.cos(phase * 0.82 + 0.6) * radius * 0.18;
+        const edgeBright = settings.simpleMode ? 0.24 : 0.36;
+
+        if (!settings.simpleMode) {
+            context.fillStyle = 'rgba(0,0,0,.11)';
+            context.beginPath();
+            context.ellipse(x + radius * 0.08, y + radius * 0.88, radius * 0.76, radius * 0.25, 0, 0, Math.PI * 2);
+            context.fill();
+        }
 
         context.save();
         context.beginPath();
-        context.arc(x, y, radius * 0.98, 0, Math.PI * 2);
+        context.arc(x, y, radius * 0.987, 0, Math.PI * 2);
         context.clip();
 
-        const bodyShade = context.createLinearGradient(x - radius * 0.85, y - radius * 0.95, x + radius * 0.95, y + radius * 0.95);
-        bodyShade.addColorStop(0, `rgba(255,255,255,${highlightAlpha})`);
-        bodyShade.addColorStop(0.22, `rgba(255,255,255,${highlightAlpha * 0.34})`);
-        bodyShade.addColorStop(0.5, 'rgba(255,255,255,0)');
-        bodyShade.addColorStop(0.76, `rgba(0,0,0,${shadowAlpha * 0.55})`);
-        bodyShade.addColorStop(1, `rgba(0,0,0,${shadowAlpha})`);
-        context.fillStyle = bodyShade;
+        const silverSheen = context.createLinearGradient(x - radius * 1.04, y - radius * 1.08, x + radius * 1.02, y + radius * 1.06);
+        silverSheen.addColorStop(0, isDarkBall ? 'rgba(255,255,255,.32)' : 'rgba(255,255,255,.52)');
+        silverSheen.addColorStop(0.20, isDarkBall ? 'rgba(220,230,245,.10)' : 'rgba(225,232,242,.24)');
+        silverSheen.addColorStop(0.48, 'rgba(255,255,255,0)');
+        silverSheen.addColorStop(0.76, 'rgba(25,32,42,.10)');
+        silverSheen.addColorStop(1, 'rgba(0,0,0,.24)');
+        context.fillStyle = silverSheen;
         context.beginPath();
         context.arc(x, y, radius, 0, Math.PI * 2);
         context.fill();
 
+        if (metallicBall) {
+            const sweep = context.createLinearGradient(
+                x - radius * 0.94 + stripeShift,
+                y - radius * 0.12,
+                x + radius * 0.98 + stripeShift,
+                y + radius * 0.12
+            );
+            sweep.addColorStop(0, 'rgba(255,255,255,0)');
+            sweep.addColorStop(0.14, 'rgba(220,230,245,.16)');
+            sweep.addColorStop(0.30, 'rgba(250,252,255,.44)');
+            sweep.addColorStop(0.48, 'rgba(255,255,255,.94)');
+            sweep.addColorStop(0.58, 'rgba(208,220,240,.54)');
+            sweep.addColorStop(0.76, 'rgba(255,255,255,.08)');
+            sweep.addColorStop(1, 'rgba(255,255,255,0)');
+            context.fillStyle = sweep;
+            context.beginPath();
+            context.arc(x, y, radius, 0, Math.PI * 2);
+            context.fill();
+
+            const sweep2 = context.createLinearGradient(
+                x - radius * 0.84 + stripeShift2,
+                y - radius * 0.05,
+                x + radius * 0.84 + stripeShift2,
+                y + radius * 0.06
+            );
+            sweep2.addColorStop(0, 'rgba(255,255,255,0)');
+            sweep2.addColorStop(0.36, 'rgba(210,220,238,.08)');
+            sweep2.addColorStop(0.50, 'rgba(255,255,255,.50)');
+            sweep2.addColorStop(0.62, 'rgba(210,220,238,.10)');
+            sweep2.addColorStop(1, 'rgba(255,255,255,0)');
+            context.fillStyle = sweep2;
+            context.beginPath();
+            context.arc(x, y, radius, 0, Math.PI * 2);
+            context.fill();
+        }
+
+        const topCool = context.createLinearGradient(x, y - radius * 0.98, x, y + radius * 0.98);
+        topCool.addColorStop(0, 'rgba(214,230,255,.20)');
+        topCool.addColorStop(0.24, 'rgba(255,255,255,0)');
+        topCool.addColorStop(0.76, 'rgba(0,0,0,.06)');
+        topCool.addColorStop(1, 'rgba(0,0,0,.12)');
+        context.fillStyle = topCool;
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+
+        context.fillStyle = isDarkBall ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.86)';
+        context.beginPath();
+        context.ellipse(x - radius * 0.30, y - radius * 0.42, radius * 0.29, radius * 0.18, -0.56, 0, Math.PI * 2);
+        context.fill();
+
+        context.fillStyle = metallicBall ? 'rgba(255,255,255,.40)' : 'rgba(255,255,255,.16)';
+        context.beginPath();
+        context.ellipse(x - radius * 0.02 + stripeShift * 0.25, y - radius * 0.10, radius * 0.50, radius * 0.12, -0.38, 0, Math.PI * 2);
+        context.fill();
+
         if (!settings.simpleMode) {
-            context.fillStyle = isDarkBall ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.70)';
+            context.fillStyle = metallicBall ? 'rgba(255,255,255,.24)' : 'rgba(255,255,255,.12)';
             context.beginPath();
-            context.ellipse(x - radius * 0.28, y - radius * 0.34, radius * 0.26, radius * 0.18, -0.5, 0, Math.PI * 2);
+            context.ellipse(x + radius * 0.06, y + radius * 0.18, radius * 0.44, radius * 0.11, -0.18, 0, Math.PI * 2);
             context.fill();
 
-            context.fillStyle = 'rgba(255,255,255,.18)';
+            context.fillStyle = 'rgba(255,255,255,.24)';
             context.beginPath();
-            context.ellipse(x - radius * 0.08, y - radius * 0.10, radius * 0.42, radius * 0.28, -0.45, 0, Math.PI * 2);
+            context.ellipse(x + radius * 0.44, y - radius * 0.02, radius * 0.10, radius * 0.34, 0.2, 0, Math.PI * 2);
             context.fill();
 
-            const bottomShade = context.createRadialGradient(x + radius * 0.20, y + radius * 0.30, radius * 0.18, x + radius * 0.18, y + radius * 0.34, radius * 0.95);
-            bottomShade.addColorStop(0, 'rgba(0,0,0,0)');
-            bottomShade.addColorStop(0.72, 'rgba(0,0,0,.08)');
-            bottomShade.addColorStop(1, 'rgba(0,0,0,.22)');
-            context.fillStyle = bottomShade;
+            const lowerShade = context.createRadialGradient(x + radius * 0.22, y + radius * 0.40, radius * 0.18, x + radius * 0.16, y + radius * 0.42, radius * 1.02);
+            lowerShade.addColorStop(0, 'rgba(0,0,0,0)');
+            lowerShade.addColorStop(0.70, 'rgba(0,0,0,.08)');
+            lowerShade.addColorStop(1, 'rgba(0,0,0,.24)');
+            context.fillStyle = lowerShade;
             context.beginPath();
             context.arc(x, y, radius, 0, Math.PI * 2);
             context.fill();
@@ -8147,17 +8227,25 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
 
         context.restore();
 
-        context.strokeStyle = settings.simpleMode ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.30)';
-        context.lineWidth = Math.max(1, radius * 0.08);
+        context.strokeStyle = metallicBall ? `rgba(255,255,255,${edgeBright})` : 'rgba(255,255,255,.24)';
+        context.lineWidth = Math.max(1, radius * 0.085);
         context.beginPath();
-        context.arc(x, y, radius * 0.96, Math.PI * 0.82, Math.PI * 1.82);
+        context.arc(x, y, radius * 0.968, Math.PI * 0.80, Math.PI * 1.88);
         context.stroke();
 
-        context.strokeStyle = 'rgba(0,0,0,.14)';
+        context.strokeStyle = metallicBall ? 'rgba(16,22,30,.24)' : 'rgba(0,0,0,.14)';
         context.lineWidth = Math.max(1, radius * 0.06);
         context.beginPath();
-        context.arc(x, y, radius * 0.94, Math.PI * 0.02, Math.PI * 0.96);
+        context.arc(x, y, radius * 0.94, Math.PI * 0.04, Math.PI * 1.00);
         context.stroke();
+
+        if (!settings.simpleMode && metallicBall) {
+            context.strokeStyle = 'rgba(196,216,255,.22)';
+            context.lineWidth = Math.max(1, radius * 0.04);
+            context.beginPath();
+            context.arc(x, y, radius * 0.70, Math.PI * 1.10, Math.PI * 1.60);
+            context.stroke();
+        }
     }
     context.restore();
 }
