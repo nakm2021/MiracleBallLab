@@ -4567,18 +4567,18 @@ function showLabHome(): void {
     const reports = savedRecords.researchReports ?? [];
     const latestReport = reports[0];
     const homeHtml = `
-        <div style="display:grid;gap:14px;">
+        <div style="display:grid;gap:18px;">
             <div class="miracle-user-card miracle-home-hero">
                 <div style="font-size:clamp(28px,6vw,54px);font-weight:1000;line-height:1.1;">MiracleBallLab</div>
-                <div style="margin-top:8px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">玉を落として、まれに起きる奇跡を集めよう</div>
-                <div style="margin-top:10px;line-height:1.75;">今日の研究テーマ：<b>${escapeHtml(getDailyFortune().title)}</b><br>研究員ランク：<b>Lv.${rank.level} ${escapeHtml(rank.label)}</b> / 図鑑：<b>${discoveredKinds}</b>種類 / 実験：<b>${savedRecords.totalRuns.toLocaleString()}</b>回</div>
+                <div style="margin-top:14px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">玉を落として、まれに起きる奇跡を集めよう</div>
+                <div style="margin-top:16px;line-height:1.85;">今日の研究テーマ：<b>${escapeHtml(getDailyFortune().title)}</b><br>研究員ランク：<b>Lv.${rank.level} ${escapeHtml(rank.label)}</b> / 図鑑：<b>${discoveredKinds}</b>種類 / 実験：<b>${savedRecords.totalRuns.toLocaleString()}</b>回</div>
             </div>
-            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:12px;">
+            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:14px;">
                 <div class="miracle-user-card"><b>今日やること</b><br><span style="opacity:.82;line-height:1.7;">デイリー研究を確認して、研究レポートを1件作成しましょう。</span></div>
                 <div class="miracle-user-card"><b>最近の記録</b><br><span style="opacity:.82;line-height:1.7;">${latestReport ? `${new Date(latestReport.createdAt).toLocaleString()} / ${escapeHtml(latestReport.grade)} / ${latestReport.finishedCount.toLocaleString()}投下` : "まだ研究レポートはありません。"}</span></div>
                 <div class="miracle-user-card"><b>おすすめ設定</b><br><span style="opacity:.82;line-height:1.7;">重い場合は「低スペック: ON」。録画時は演出モードを録画向けにします。</span></div>
             </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:2px 0 2px;">
                 <button data-home-action="start" class="miracle-home-button miracle-home-primary">実験を開始</button>
                 <button data-home-action="daily" class="miracle-home-button">デイリー研究</button>
                 <button data-home-action="album" class="miracle-home-button">奇跡アルバム</button>
@@ -4903,7 +4903,7 @@ function closeHelpPopup(): void {
 function showPopup(title: string, bodyHtml: string): void {
     const panelWidth = isMobile ? "calc(100vw - 20px)" : "min(980px, 94vw)";
     const panelMaxHeight = isMobile ? "calc(100dvh - 20px)" : "88dvh";
-    const panelPadding = isMobile ? "22px 18px 18px" : "28px";
+    const panelPadding = isMobile ? "30px 24px 24px" : "42px 40px 36px";
     const titleFont = isMobile ? "32px" : "clamp(30px,5vw,58px)";
     const bodyFont = isMobile ? "18px" : "clamp(16px,2.5vw,24px)";
     const closeSize = isMobile ? "54px" : "46px";
@@ -4911,15 +4911,39 @@ function showPopup(title: string, bodyHtml: string): void {
 
     helpOverlay.innerHTML = `
         <style>
-            .miracle-popup-panel .miracle-user-card{background:${palette.section};color:${palette.fieldText};border:1px solid ${palette.buttonBorder};}
-            .miracle-popup-panel .miracle-home-hero{background:${palette.section};color:${palette.fieldText};border:1px solid ${palette.buttonBorder};}
+            .miracle-popup-panel .miracle-user-card{
+                background:${palette.section};
+                color:${palette.fieldText};
+                border:1px solid ${palette.buttonBorder};
+                box-sizing:border-box;
+                padding:${isMobile ? "22px" : "28px"} !important;
+                border-radius:22px;
+                line-height:1.72;
+            }
+            .miracle-popup-panel .miracle-home-hero{
+                background:${palette.section};
+                color:${palette.fieldText};
+                border:1px solid ${palette.buttonBorder};
+                box-sizing:border-box;
+                padding:${isMobile ? "24px 24px 26px" : "34px 36px 36px"} !important;
+                border-radius:24px;
+            }
+            .miracle-popup-panel .miracle-user-card > :first-child,
+            .miracle-popup-panel .miracle-home-hero > :first-child{margin-top:0 !important;}
+            .miracle-popup-panel .miracle-user-card > :last-child,
+            .miracle-popup-panel .miracle-home-hero > :last-child{margin-bottom:0 !important;}
+            .miracle-popup-panel .miracle-home-hero div:first-child{margin-bottom:${isMobile ? "14px" : "18px"};}
             .miracle-popup-panel .miracle-home-button{font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid ${palette.buttonBorder};background:${palette.buttonBg};color:${palette.buttonText};cursor:pointer;}
             .miracle-popup-panel .miracle-home-primary{background:${palette.badge};color:${palette.badgeText};}
+            @media (max-width: 640px){
+                .miracle-popup-panel .miracle-user-card{padding:20px !important;}
+                .miracle-popup-panel .miracle-home-hero{padding:22px 22px 24px !important;}
+            }
         </style>
         <div class="miracle-popup-panel" style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:${palette.panel};color:${palette.fieldText};box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid ${palette.buttonBorder};overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
             <button id="close-help-popup-button" aria-label="閉じる" style="position:sticky;float:right;right:0;top:0;width:${closeSize};height:${closeSize};border-radius:999px;border:1px solid ${palette.buttonBorder};background:${palette.buttonBg};color:${palette.buttonText};font-size:${isMobile ? "34px" : "28px"};font-weight:900;line-height:1;cursor:pointer;box-shadow:0 5px 14px rgba(87,112,51,.16);z-index:2;">×</button>
-            <div style="font-size:${titleFont};font-weight:900;margin:0 ${isMobile ? "64px" : "54px"} 18px 0;color:${palette.title};line-height:1.18;word-break:keep-all;overflow-wrap:break-word;">${title}</div>
-            <div style="font-size:${bodyFont};line-height:${isMobile ? "1.62" : "1.72"};color:${palette.fieldText};text-align:left;word-break:normal;overflow-wrap:break-word;">${bodyHtml}</div>
+            <div style="font-size:${titleFont};font-weight:900;margin:0 ${isMobile ? "76px" : "70px"} 26px 0;padding-left:${isMobile ? "4px" : "6px"};color:${palette.title};line-height:1.18;word-break:keep-all;overflow-wrap:break-word;">${title}</div>
+            <div style="font-size:${bodyFont};line-height:${isMobile ? "1.68" : "1.76"};color:${palette.fieldText};text-align:left;word-break:normal;overflow-wrap:break-word;padding:0 ${isMobile ? "2px" : "6px"};">${bodyHtml}</div>
             <div style="margin-top:24px;text-align:center;"><button id="bottom-close-help-popup-button" style="font-size:20px;padding:12px 28px;border-radius:999px;border:1px solid ${palette.buttonBorder};cursor:pointer;font-weight:900;background:${palette.buttonBg};box-shadow:0 5px 14px rgba(87,112,51,.16);color:${palette.buttonText};">閉じる</button></div>
         </div>`;
     helpOverlay.style.display = "flex";

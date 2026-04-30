@@ -1,7 +1,7 @@
 import { formatOfflineBytes, saveCustomOfflineMiracleVideo } from "./offlineCache";
 import { getNewlyUnlockedOfflineTitleLabels, recordOfflineMiracleAction } from "./offlineProgress";
 import type { RemoteMiracleAsset } from "./types";
-import { getOfflineCatalogDisplayName } from "./offlineUi";
+import { getOfflineCatalogDisplayName, getOfflineLabStyles } from "./offlineUi";
 import type { getOfflineMiracleCatalog } from "./offlineCache";
 
 type OfflineCatalog = Awaited<ReturnType<typeof getOfflineMiracleCatalog>>;
@@ -35,8 +35,9 @@ export function createOfflineCustomVideoController(deps: OfflineCustomVideoDepen
 
     function showCustomOfflineVideoPopup(): void {
         showPopup("自分の動画を演出に登録", `
-            <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
-                <div style="padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(30,64,175,.18),rgba(34,197,94,.14));">
+            ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
+                <div class="offline-lab-card" style="padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(30,64,175,.18),rgba(34,197,94,.14));">
                     <div style="font-weight:1000;font-size:${isMobile ? "24px" : "22px"};">ユーザー動画スロット</div>
                     <p style="line-height:1.75;margin:8px 0 0;">手元の mp4 / webm などの動画をブラウザ内に保存し、保存済み動画と同じようにテスト再生・ランダム鑑賞・ガチャ対象にできます。</p>
                 </div>
@@ -52,7 +53,7 @@ export function createOfflineCustomVideoController(deps: OfflineCustomVideoDepen
                     <option value="god">GOD</option>
                 </select>
                 <div id="offline-custom-video-status" style="margin-top:12px;min-height:28px;font-weight:900;"></div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                <div class="offline-lab-button-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
                     <button id="offline-custom-video-save-button" class="miracle-home-button miracle-home-primary">この動画を登録</button>
                     <button id="offline-custom-video-book-button" class="miracle-home-button">図鑑を見る</button>
                 </div>

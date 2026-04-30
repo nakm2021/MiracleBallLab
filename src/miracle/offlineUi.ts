@@ -72,3 +72,83 @@ export function createOfflineAssetFromCatalogItem(item: OfflineMiracleCatalogIte
 export function getOfflineCatalogDisplayName(item: OfflineMiracleCatalogItem): string {
     return item.label || item.assetId || item.url.split("/").pop() || "保存済み動画";
 }
+
+export function getOfflineLabStyles(isMobile: boolean): string {
+    const panelPadding = isMobile ? "18px" : "30px";
+    const cardPadding = isMobile ? "22px" : "34px";
+    const smallCardPadding = isMobile ? "20px" : "28px";
+    const rowPadding = isMobile ? "16px 10px" : "18px 12px";
+    const buttonPadding = isMobile ? "12px 18px" : "13px 24px";
+    return `
+        <style>
+            .offline-lab-panel{
+                padding:${panelPadding} !important;
+                box-sizing:border-box;
+                line-height:1.68;
+            }
+            .offline-lab-panel p{
+                line-height:1.75;
+            }
+            .offline-lab-panel h3{
+                margin:24px 0 14px !important;
+                padding-left:8px;
+                line-height:1.35;
+            }
+            .offline-lab-panel .offline-lab-card,
+            .offline-lab-panel > div[style*="border-radius"]{
+                padding:${cardPadding} !important;
+                box-sizing:border-box;
+            }
+            .offline-lab-panel .offline-lab-small-card{
+                padding:${smallCardPadding} !important;
+                box-sizing:border-box;
+                line-height:1.62;
+            }
+            .offline-lab-panel .offline-lab-button-row{
+                display:flex;
+                flex-wrap:wrap;
+                gap:12px !important;
+                margin:18px 0 20px !important;
+            }
+            .offline-lab-panel .miracle-home-button{
+                padding:${buttonPadding} !important;
+                box-sizing:border-box;
+                line-height:1.25;
+            }
+            .offline-lab-panel .offline-lab-scroll-box{
+                padding:18px 26px !important;
+                box-sizing:border-box;
+            }
+            .offline-lab-panel .offline-lab-list-row{
+                padding:${rowPadding} !important;
+                box-sizing:border-box;
+            }
+            .offline-lab-panel .offline-lab-muted{
+                line-height:1.7;
+            }
+            .offline-lab-panel .offline-lab-grid{
+                gap:14px !important;
+            }
+            .offline-lab-panel .offline-lab-card > :first-child,
+            .offline-lab-panel .offline-lab-small-card > :first-child{
+                margin-top:0 !important;
+            }
+            .offline-lab-panel .offline-lab-card > :last-child,
+            .offline-lab-panel .offline-lab-small-card > :last-child{
+                margin-bottom:0 !important;
+            }
+            @media (max-width: 640px){
+                .offline-lab-panel{
+                    padding:18px !important;
+                }
+                .offline-lab-panel .offline-lab-card,
+                .offline-lab-panel > div[style*="border-radius"]{
+                    padding:20px !important;
+                }
+                .offline-lab-panel .offline-lab-scroll-box{
+                    padding:14px 20px !important;
+                }
+            }
+        </style>
+    `;
+}

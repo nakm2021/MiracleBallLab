@@ -6,6 +6,7 @@ import { escapeHtml } from "./utils";
 import {
     createOfflineAssetFromCatalogItem,
     getOfflineCatalogDisplayName,
+    getOfflineLabStyles,
     type OfflineVideoDownloadMode,
 } from "./offlineUi";
 
@@ -96,7 +97,8 @@ export function createOfflineTheaterController(deps: OfflineTheaterDependencies)
         const item = await pickOfflineCatalogItem(true);
         if (!item) {
             showPopup("オフライン専用ガチャ", `
-                <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+                ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                     <p style="margin:0;font-weight:900;">保存済み動画がありません。</p>
                     <p style="margin:8px 0 0;opacity:.72;">先におすすめ保存を行うと、通信なしでもガチャ演出を楽しめます。</p>
                     <button id="offline-gacha-save-button" class="miracle-home-button miracle-home-primary" style="margin-top:12px;">おすすめ保存へ</button>
@@ -107,10 +109,11 @@ export function createOfflineTheaterController(deps: OfflineTheaterDependencies)
         }
 
         showPopup("オフライン専用ガチャ", `
-            <div class="miracle-user-card" style="border-radius:22px;padding:18px;text-align:center;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(88,28,135,.86));color:#fff;">
+            ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;text-align:center;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(88,28,135,.86));color:#fff;">
                 <div style="font-size:${isMobile ? "42px" : "56px"};font-weight:1000;text-shadow:0 0 20px rgba(250,204,21,.8);">封印解除</div>
                 <p style="line-height:1.8;opacity:.88;">保存済み奇跡データから、今回の演出を抽選しました。</p>
-                <div style="margin:14px auto;padding:14px;border-radius:20px;background:rgba(255,255,255,.12);max-width:620px;">
+                <div class="offline-lab-card" style="margin:14px auto;padding:14px;border-radius:20px;background:rgba(255,255,255,.12);max-width:620px;">
                     <div style="font-size:14px;opacity:.72;">RESULT</div>
                     <div style="font-size:${isMobile ? "22px" : "26px"};font-weight:1000;">${escapeHtml(String(item.rank ?? "OFFLINE").toUpperCase())} / ${escapeHtml(getOfflineCatalogDisplayName(item))}</div>
                     <div style="margin-top:5px;opacity:.72;">${formatOfflineBytes(item.sizeBytes)}</div>

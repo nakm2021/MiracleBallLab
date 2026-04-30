@@ -24,6 +24,7 @@ import type { RemoteMiracleAsset } from "./types";
 import { clamp, escapeHtml } from "./utils";
 import {
     getOfflineCatalogDisplayName,
+    getOfflineLabStyles,
     getOfflineDownloadModeLabel,
     getOfflineProgressHtml,
     getOfflineRankBadgeStyle,
@@ -57,7 +58,8 @@ async function getOfflineVideoAssetsForUi(force = false): Promise<RemoteMiracleA
 
 async function showOfflineVideoDownloadPopup(mode: OfflineVideoDownloadMode = "recommended"): Promise<void> {
     showPopup("オフライン動画保存", `
-        <div class="miracle-user-card" style="border-radius:22px;padding:18px;background:linear-gradient(135deg,rgba(15,23,42,.92),rgba(49,46,129,.82));color:#fff;">
+        ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;background:linear-gradient(135deg,rgba(15,23,42,.92),rgba(49,46,129,.82));color:#fff;">
             <p style="margin:0;font-weight:1000;font-size:${isMobile ? "22px" : "20px"};">奇跡データを調査中...</p>
             <p style="margin:8px 0 0;opacity:.82;line-height:1.7;">研究所の保管庫を開き、保存できる動画演出と必要容量を計算しています。</p>
         </div>
@@ -67,7 +69,8 @@ async function showOfflineVideoDownloadPopup(mode: OfflineVideoDownloadMode = "r
 
     if (videos.length === 0) {
         showPopup("オフライン動画保存", `
-            <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                 <p style="margin:0;font-weight:900;">保存対象の動画が見つかりませんでした。</p>
                 <p style="margin:8px 0 0;opacity:.72;">manifest.json に <code>kind: "video"</code> の素材があるか確認してください。</p>
             </div>
@@ -82,7 +85,8 @@ async function showOfflineVideoDownloadPopup(mode: OfflineVideoDownloadMode = "r
 
     if (!plan.supported) {
         showPopup("オフライン動画保存", `
-            <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                 <p style="margin:0;font-weight:900;">このブラウザでは動画保存を利用できません。</p>
                 <p style="margin:8px 0 0;opacity:.72;">Chrome / Edge / Safari の通常ブラウザ、またはHTTPS配信で試してください。</p>
             </div>
@@ -101,7 +105,8 @@ async function showOfflineVideoDownloadPopup(mode: OfflineVideoDownloadMode = "r
         : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - summary.cachedBytes))}`;
 
     showPopup("オフライン動画保存", `
-        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+        ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
             <div style="padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(30,64,175,.90),rgba(124,58,237,.82));color:#fff;box-shadow:0 14px 34px rgba(30,41,59,.18);">
                 <div style="font-weight:1000;font-size:${isMobile ? "24px" : "22px"};">奇跡保管庫</div>
                 <div style="margin-top:6px;opacity:.86;line-height:1.6;">保存すると、通信がない場所でも保管済み動画演出を優先再生します。</div>
@@ -109,7 +114,7 @@ async function showOfflineVideoDownloadPopup(mode: OfflineVideoDownloadMode = "r
                 ${getOfflineProgressHtml(rank.progressRatio * 100)}
                 <div style="margin-top:6px;opacity:.86;font-size:.9em;">${nextRankText}</div>
             </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+            <div class="offline-lab-button-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
                 <button id="offline-mode-recommended" class="miracle-home-button ${mode === "recommended" ? "miracle-home-primary" : ""}">おすすめ保存</button>
                 <button id="offline-mode-rare" class="miracle-home-button ${mode === "rare" ? "miracle-home-primary" : ""}">レア演出だけ保存</button>
                 <button id="offline-mode-all" class="miracle-home-button ${mode === "all" ? "miracle-home-primary" : ""}">全部保存</button>
@@ -192,7 +197,8 @@ async function showOfflineVideoDownloadPopup(mode: OfflineVideoDownloadMode = "r
 async function showOfflineMiracleBookPopup(): Promise<void> {
     recordOfflineMiracleAction("bookOpen");
     showPopup("オフライン演出図鑑", `
-        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+        ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
             <p style="margin:0;font-weight:900;">保存済み動画を確認しています...</p>
         </div>
     `);
@@ -203,7 +209,8 @@ async function showOfflineMiracleBookPopup(): Promise<void> {
 
     if (!catalog.supported) {
         showPopup("オフライン演出図鑑", `
-            <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                 <p style="margin:0;font-weight:900;">このブラウザではオフライン図鑑を利用できません。</p>
             </div>
         `);
@@ -211,7 +218,7 @@ async function showOfflineMiracleBookPopup(): Promise<void> {
     }
 
     const rankRows = Object.entries(catalog.rankCounts).sort(([a], [b]) => b.localeCompare(a)).map(([rankName, count]) => `
-        <div style="padding:12px;border-radius:16px;background:rgba(255,255,255,.68);display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;">
+        <div class="offline-lab-small-card" style="padding:12px;border-radius:16px;background:rgba(255,255,255,.68);display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;">
             <span style="padding:5px 10px;border-radius:999px;font-weight:1000;${getOfflineRankBadgeStyle(rankName)}">${escapeHtml(rankName)}</span>
             <div style="font-weight:900;">${count.cached} / ${count.total}<div style="font-size:.84em;opacity:.65;">${formatOfflineBytes(count.bytes)}</div></div>
         </div>
@@ -220,7 +227,7 @@ async function showOfflineMiracleBookPopup(): Promise<void> {
     const cachedRows = catalog.cachedItems.length === 0
         ? `<div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);font-weight:900;">まだ保存済み動画がありません。「動画保存」から保管してください。</div>`
         : catalog.cachedItems.slice(0, 80).map((item, index) => `
-            <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;">
+            <div class="offline-lab-list-row" style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;">
                 <div style="min-width:0;">
                     <div style="font-weight:1000;"><span style="padding:4px 9px;border-radius:999px;${getOfflineRankBadgeStyle(item.rank)}">${escapeHtml(String(item.rank ?? "common").toUpperCase())}</span> ${index + 1}. ${escapeHtml(getOfflineCatalogDisplayName(item))}</div>
                     <div style="margin-top:4px;opacity:.70;font-size:.88em;">${formatOfflineBytes(item.sizeBytes)} / ${escapeHtml(getOfflineUpdatedAtText(item.cachedAt))}</div>
@@ -235,8 +242,9 @@ async function showOfflineMiracleBookPopup(): Promise<void> {
         : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - catalog.cachedBytes))}`;
 
     showPopup("オフライン演出図鑑", `
-        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
-            <div style="padding:16px;border-radius:22px;background:linear-gradient(135deg,rgba(8,47,73,.92),rgba(88,28,135,.82));color:#fff;">
+        ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
+            <div class="offline-lab-card" style="padding:16px;border-radius:22px;background:linear-gradient(135deg,rgba(8,47,73,.92),rgba(88,28,135,.82));color:#fff;">
                 <div style="font-weight:1000;font-size:${isMobile ? "24px" : "22px"};">オフライン研究所</div>
                 <div style="margin-top:8px;display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:10px;">
                     <div><div style="opacity:.74;">保存済み</div><b style="font-size:24px;">${catalog.cachedItems.length} / ${catalog.totalVideoSources}</b></div>
@@ -247,10 +255,10 @@ async function showOfflineMiracleBookPopup(): Promise<void> {
                 <div style="margin-top:6px;opacity:.86;">${nextRankText}</div>
             </div>
             <h3 style="margin:18px 0 8px;">レア度別の保管状況</h3>
-            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${rankRows}</div>
+            <div class="offline-lab-grid" style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${rankRows}</div>
             <h3 style="margin:18px 0 8px;">保存済み動画の再生テスト</h3>
-            <div style="border-radius:18px;background:rgba(255,255,255,.70);padding:4px 14px;max-height:${isMobile ? "48vh" : "420px"};overflow:auto;">${cachedRows}</div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+            <div class="offline-lab-scroll-box" style="border-radius:18px;background:rgba(255,255,255,.70);padding:4px 14px;max-height:${isMobile ? "48vh" : "420px"};overflow:auto;">${cachedRows}</div>
+            <div class="offline-lab-button-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
                 <button id="offline-book-download-button" class="miracle-home-button miracle-home-primary">動画保存へ</button>
                 <button id="offline-book-stop-button" class="miracle-home-button">動画停止</button>
             </div>
@@ -284,7 +292,7 @@ function renderOfflineMissionRows(): string {
     return missions.map((mission) => {
         const percent = clamp((mission.current / Math.max(1, mission.target)) * 100, 0, 100);
         return `
-            <div style="padding:12px;border-radius:18px;background:${mission.done ? "rgba(34,197,94,.18)" : "rgba(255,255,255,.68)"};border:1px solid rgba(100,116,139,.18);">
+            <div class="offline-lab-small-card" style="padding:12px;border-radius:18px;background:${mission.done ? "rgba(34,197,94,.18)" : "rgba(255,255,255,.68)"};border:1px solid rgba(100,116,139,.18);">
                 <div style="display:flex;justify-content:space-between;gap:10px;font-weight:1000;"><span>${mission.done ? "✅" : "🧪"} ${escapeHtml(mission.label)}</span><span>${Math.min(mission.current, mission.target)} / ${mission.target}</span></div>
                 <div style="margin-top:5px;opacity:.72;font-size:.9em;">${escapeHtml(mission.description)}</div>
                 <div style="margin-top:8px;">${getOfflineProgressHtml(percent)}</div>
@@ -296,7 +304,7 @@ function renderOfflineMissionRows(): string {
 function renderOfflineTitleRows(catalog: Awaited<ReturnType<typeof getOfflineMiracleCatalog>>): string {
     const titles = getOfflineMiracleTitles(catalog, loadOfflineMiracleProgress());
     return titles.map((title) => `
-        <div style="padding:12px;border-radius:18px;background:${title.unlocked ? "linear-gradient(135deg,rgba(250,204,21,.24),rgba(34,197,94,.16))" : "rgba(148,163,184,.18)"};border:1px solid rgba(100,116,139,.18);">
+        <div class="offline-lab-small-card" style="padding:12px;border-radius:18px;background:${title.unlocked ? "linear-gradient(135deg,rgba(250,204,21,.24),rgba(34,197,94,.16))" : "rgba(148,163,184,.18)"};border:1px solid rgba(100,116,139,.18);">
             <div style="font-weight:1000;">${title.unlocked ? "🏅" : "🔒"} ${escapeHtml(title.label)}</div>
             <div style="opacity:.72;font-size:.9em;margin-top:4px;">${escapeHtml(title.description)}</div>
         </div>
@@ -344,7 +352,8 @@ const customOfflineVideo = createOfflineCustomVideoController({
 async function showOfflineLabHomePopup(): Promise<void> {
     recordOfflineMiracleAction("bookOpen");
     showPopup("オフライン研究所", `
-        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+        ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
             <p style="margin:0;font-weight:900;">オフライン研究所を起動しています...</p>
         </div>
     `);
@@ -355,7 +364,7 @@ async function showOfflineLabHomePopup(): Promise<void> {
         ? "最高ランク到達"
         : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - catalog.cachedBytes))}`;
     const tutorialHtml = shouldShowOfflineTutorial()
-        ? `<div style="padding:14px;border-radius:20px;background:linear-gradient(135deg,rgba(250,204,21,.24),rgba(59,130,246,.18));border:1px solid rgba(59,130,246,.22);margin-bottom:14px;">
+        ? `<div class="offline-lab-card" style="padding:14px;border-radius:20px;background:linear-gradient(135deg,rgba(250,204,21,.24),rgba(59,130,246,.18));border:1px solid rgba(59,130,246,.22);margin-bottom:16px;">
                 <div style="font-weight:1000;font-size:${isMobile ? "22px" : "20px"};">初回オフライン準備チュートリアル</div>
                 <ol style="margin:8px 0 0;padding-left:1.4em;line-height:1.75;">
                     <li>まず「おすすめ保存」で動画演出を少し保管します。</li>
@@ -368,9 +377,10 @@ async function showOfflineLabHomePopup(): Promise<void> {
         : "";
 
     showPopup("オフライン研究所", `
-        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+        ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
             ${tutorialHtml}
-            <div style="padding:16px;border-radius:22px;background:linear-gradient(135deg,rgba(8,47,73,.92),rgba(88,28,135,.82));color:#fff;">
+            <div class="offline-lab-card" style="padding:16px;border-radius:22px;background:linear-gradient(135deg,rgba(8,47,73,.92),rgba(88,28,135,.82));color:#fff;">
                 <div style="font-weight:1000;font-size:${isMobile ? "26px" : "24px"};">地下オフライン研究所</div>
                 <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:10px;margin-top:12px;">
                     <div><div style="opacity:.74;">保存済み</div><b style="font-size:24px;">${catalog.cachedItems.length} / ${catalog.totalVideoSources}</b></div>
@@ -380,7 +390,7 @@ async function showOfflineLabHomePopup(): Promise<void> {
                 <div style="margin-top:12px;">${getOfflineProgressHtml(rank.progressRatio * 100)}</div>
                 <div style="margin-top:6px;opacity:.86;">${nextRankText}</div>
             </div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+            <div class="offline-lab-button-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
                 <button id="offline-home-save-button" class="miracle-home-button miracle-home-primary">おすすめ保存</button>
                 <button id="offline-home-book-button" class="miracle-home-button">図鑑</button>
                 <button id="offline-home-theater-button" class="miracle-home-button">ランダム鑑賞</button>
@@ -389,9 +399,9 @@ async function showOfflineLabHomePopup(): Promise<void> {
                 <button id="offline-home-custom-button" class="miracle-home-button">自分の動画登録</button>
             </div>
             <h3 style="margin:18px 0 8px;">今日のオフライン研究ミッション</h3>
-            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${renderOfflineMissionRows()}</div>
+            <div class="offline-lab-grid" style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${renderOfflineMissionRows()}</div>
             <h3 style="margin:18px 0 8px;">オフライン限定称号</h3>
-            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${renderOfflineTitleRows(catalog)}</div>
+            <div class="offline-lab-grid" style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${renderOfflineTitleRows(catalog)}</div>
         </div>
     `);
 
@@ -417,10 +427,11 @@ function showOfflineModeEventPopup(): void {
     if (!navigator.onLine && isHelpOverlayClosed()) {
         recordOfflineMiracleAction("offlineBoot");
         showPopup("オフライン研究モード", `
-            <div class="miracle-user-card" style="border-radius:22px;padding:18px;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(55,48,163,.86));color:#fff;">
+            ${getOfflineLabStyles(isMobile)}
+        <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(55,48,163,.86));color:#fff;">
                 <div style="font-size:${isMobile ? "26px" : "24px"};font-weight:1000;">通信断絶イベント発生</div>
                 <p style="line-height:1.7;opacity:.88;">保存済み動画演出を優先し、地下研究所モードで実験を継続します。</p>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                <div class="offline-lab-button-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
                     <button id="offline-event-book-button" class="miracle-home-button miracle-home-primary">オフライン図鑑を見る</button>
                 </div>
             </div>
