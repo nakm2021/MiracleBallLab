@@ -119,6 +119,10 @@ const uiFontPx = isMobile ? 25 : 20;
 const uiButtonFontPx = isMobile ? 26 : 20;
 const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
 const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
+const MIRACLE_GACHA_ONCE_COST = 100;
+const MIRACLE_GACHA_TEN_COST = 900;
+type GachaPointSavedRecords = SavedRecords & { gachaPoint?: number };
+
 
 let settings: Settings = createDefaultSettings(isMobile, DEFAULT_BACKGROUND_IMAGE_URL);
 
@@ -1180,6 +1184,8 @@ const settingButtons = createSection("反映・出力", "Apply & export");
 
 const homeButton = setTooltip(setButtonLabel(createButton("研究所ホーム", () => showLabHome()), "研究所ホーム", "Home"), "研究所ホーム画面を開きます。", "Open the lab home screen.");
 utilityButtons.appendChild(homeButton);
+const miracleGachaButton = setTooltip(setButtonLabel(createButton("奇跡ガチャ", () => showMiracleGachaPopup()), "奇跡ガチャ", "Gacha"), "保存動画や超レア演出と連動するド派手なガチャを開きます。", "Open the dramatic miracle gacha.");
+utilityButtons.appendChild(miracleGachaButton);
 const runButton = setTooltip(setButtonLabel(createButton("実行", () => startExperiment()), "実行", "Run"), "設定どおりに落下実験を開始します。", "Start the drop experiment with current settings.");
 utilityButtons.appendChild(runButton);
 utilityButtons.appendChild(setTooltip(setButtonLabel(createButton("この実験について", () => showAboutPopup()), "この実験について", "About"), "このプログラムが何をするか説明します。", "Explain what this program does."));
@@ -1786,6 +1792,46 @@ function saveRecords(): void {
     saveSavedRecords(savedRecords);
 }
 
+function getGachaPoint(): number {
+    return Math.max(0, Math.floor(((savedRecords as GachaPointSavedRecords).gachaPoint ?? 0)));
+}
+
+function setGachaPoint(point: number): void {
+    (savedRecords as GachaPointSavedRecords).gachaPoint = Math.max(0, Math.floor(point));
+}
+
+function addGachaPoint(point: number, reason: string, showToast = true): number {
+    const safePoint = Math.max(0, Math.floor(point));
+    if (safePoint <= 0) return getGachaPoint();
+    setGachaPoint(getGachaPoint() + safePoint);
+    saveRecords();
+    if (showToast) showSoftToast(`奇跡ガチャP +${safePoint.toLocaleString()}：${reason}`);
+    return getGachaPoint();
+}
+
+function spendGachaPoint(point: number): boolean {
+    const safePoint = Math.max(0, Math.floor(point));
+    if (getGachaPoint() < safePoint) return false;
+    setGachaPoint(getGachaPoint() - safePoint);
+    saveRecords();
+    return true;
+}
+
+function getGachaPointRewardForRank(rank: string): number {
+    const score = getRankScore(rank);
+    if (rank === "GOD" || rank === "EX" || score >= getRankScore("GOD")) return 1000;
+    if (score >= getRankScore("SSR")) return 300;
+    if (score >= getRankScore("SR")) return 100;
+    return 0;
+}
+
+function awardExperimentFinishGachaPoint(): number {
+    let point = 30;
+    if (finishedCount >= 1000) point += 50;
+    addGachaPoint(point, finishedCount >= 1000 ? "実験完了 + 1000玉以上投下" : "実験完了", false);
+    return point;
+}
+
 function saveUserProfile(): void {
     saveUserProfileData(userProfile);
 }
@@ -2010,8 +2056,9 @@ function evaluateAndSaveDailyMissions(): string[] {
         completed.push(mission.title);
     }
     if (completed.length > 0) {
+        addGachaPoint(completed.length * 200, `デイリー研究達成 ${completed.length}件`, false);
         saveRecords();
-        showSoftToast("デイリー研究達成: " + completed.join(" / "));
+        showSoftToast("デイリー研究達成: " + completed.join(" / ") + ` / 奇跡ガチャP +${(completed.length * 200).toLocaleString()}`);
     }
     return completed;
 }
@@ -3644,6 +3691,11 @@ function recordSpecialDiscovery(def: SpecialEventDef): void {
         savedRecords.bestLabel = def.label;
     }
     addScore(getRankBaseScore(def.rank), `RARE ${def.label}`);
+    const gachaReward = getGachaPointRewardForRank(def.rank);
+    if (gachaReward > 0) {
+        addGachaPoint(gachaReward, `${def.rank}以上発見: ${def.label}`, false);
+        if (getRankScore(def.rank) >= getRankScore("SSR")) showSoftToast(`奇跡ガチャP +${gachaReward.toLocaleString()}：${def.label}`);
+    }
     tryUnlockFusions();
     saveRecords();
 }
@@ -4561,17 +4613,134 @@ function showUserGuidePopup(): void {
     showPopup("遊び方", getUserGuideHtml());
 }
 
+function pickMiracleGachaDef(): SpecialEventDef {
+    const pool = SPECIAL_EVENT_DEFS.filter((def) => getRankScore(def.rank) >= getRankScore("SR"));
+    const weighted = pool.flatMap((def) => {
+        const score = getRankScore(def.rank);
+        const count = score >= getRankScore("GOD") ? 1 : score >= getRankScore("EX") ? 2 : score >= getRankScore("SSR") ? 4 : 7;
+        return Array.from({ length: count }, () => def);
+    });
+    const exChance = appRandom();
+    const godOrEx = pool.filter((def) => getRankScore(def.rank) >= getRankScore("EX"));
+    if (exChance < 0.18 && godOrEx.length > 0) return godOrEx[Math.floor(appRandom() * godOrEx.length)] ?? weighted[0]!;
+    return weighted[Math.floor(appRandom() * weighted.length)] ?? SPECIAL_EVENT_DEFS[0];
+}
+
+async function playGachaRemoteMiracleVideo(def: SpecialEventDef): Promise<void> {
+    if (settings.simpleMode) return;
+    try {
+        const assets = await loadRemoteMiracleAssets();
+        for (let i = 0; i < 6; i++) {
+            const asset = selectRemoteMiracleVideoAsset(assets, def);
+            if (!asset) return;
+            const played = await playRemoteMiracleVideoAsset(asset, true);
+            if (played) return;
+        }
+    } catch (error) {
+        console.warn("[Miracle Gacha] video failed", error);
+    }
+}
+
+function showMiracleGachaPopup(): void {
+    const point = getGachaPoint();
+    const canOnce = point >= MIRACLE_GACHA_ONCE_COST;
+    const canTen = point >= MIRACLE_GACHA_TEN_COST;
+    showPopup("奇跡ガチャ", `
+        <div style="display:grid;gap:18px;text-align:center;">
+            <div class="miracle-user-card" style="background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.95),rgba(255,230,160,.86),rgba(160,80,255,.34));">
+                <div style="font-size:clamp(46px,12vw,120px);font-weight:1000;line-height:1;text-shadow:0 8px 28px rgba(0,0,0,.22);">奇跡ガチャ</div>
+                <div style="margin-top:12px;font-size:clamp(18px,4vw,34px);font-weight:1000;">貯めた奇跡ガチャPで研究装置を回します</div>
+                <div style="margin-top:10px;font-size:clamp(20px,4vw,34px);font-weight:1000;color:#713f12;">所持P：${point.toLocaleString()}P</div>
+                <div style="margin-top:8px;opacity:.78;font-weight:900;line-height:1.7;">1回 ${MIRACLE_GACHA_ONCE_COST}P / 10連 ${MIRACLE_GACHA_TEN_COST}P</div>
+            </div>
+            <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
+                <button id="miracle-gacha-once-button" class="miracle-home-button miracle-home-primary" style="font-size:clamp(22px,4vw,34px);padding:16px 32px;" ${canOnce ? "" : "disabled"}>1回まわす</button>
+                <button id="miracle-gacha-ten-button" class="miracle-home-button miracle-home-primary" style="font-size:clamp(22px,4vw,34px);padding:16px 32px;" ${canTen ? "" : "disabled"}>10連まわす</button>
+            </div>
+            <div class="miracle-user-card" style="text-align:left;">
+                <b>奇跡ガチャPの貯め方</b>
+                <ul style="line-height:1.85;margin:10px 0 0;padding-left:1.3em;">
+                    <li>実験完了：+30P</li>
+                    <li>1000玉以上投下：+50P</li>
+                    <li>SR以上発見：+100P</li>
+                    <li>SSR以上発見：+300P</li>
+                    <li>GOD/EX発見：+1000P</li>
+                    <li>デイリー研究達成：+200P</li>
+                </ul>
+            </div>
+            <p style="opacity:.72;line-height:1.8;margin:0;">ガチャ回転演出のあとに結果が表示されます。SSR以上では盤面崩壊イベントが発生し、EX/GOD級は動画演出を強めに狙います。</p>
+        </div>
+    `);
+
+    const run = (count: 1 | 10) => {
+        const cost = count === 10 ? MIRACLE_GACHA_TEN_COST : MIRACLE_GACHA_ONCE_COST;
+        if (!spendGachaPoint(cost)) {
+            showSoftToast(`奇跡ガチャPが足りません。必要: ${cost.toLocaleString()}P / 所持: ${getGachaPoint().toLocaleString()}P`);
+            showMiracleGachaPopup();
+            return;
+        }
+
+        showPopup("奇跡ガチャ抽選中", `
+            <style>
+                @keyframes miracleGachaSpin {
+                    0% { transform:rotate(0deg) scale(1); filter:hue-rotate(0deg) brightness(1); }
+                    35% { transform:rotate(520deg) scale(1.08); filter:hue-rotate(120deg) brightness(1.25); }
+                    70% { transform:rotate(980deg) scale(1.16); filter:hue-rotate(260deg) brightness(1.45); }
+                    100% { transform:rotate(1440deg) scale(1); filter:hue-rotate(360deg) brightness(1.08); }
+                }
+                @keyframes miracleGachaPulse {
+                    0%,100% { transform:scale(.94); opacity:.58; }
+                    50% { transform:scale(1.18); opacity:1; }
+                }
+                @keyframes miracleGachaBeam {
+                    0% { transform:rotate(0deg); opacity:.20; }
+                    100% { transform:rotate(360deg); opacity:.62; }
+                }
+            </style>
+            <div class="miracle-user-card" style="text-align:center;overflow:hidden;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.98),rgba(255,220,80,.82),rgba(88,28,135,.42));">
+                <div style="position:relative;width:min(72vw,360px);height:min(72vw,360px);margin:0 auto;display:grid;place-items:center;">
+                    <div style="position:absolute;inset:0;border-radius:999px;background:conic-gradient(from 0deg,rgba(255,255,255,0),rgba(255,255,255,.85),rgba(250,204,21,.95),rgba(168,85,247,.75),rgba(255,255,255,0));animation:miracleGachaBeam .75s linear infinite;"></div>
+                    <div style="position:absolute;inset:10%;border-radius:999px;background:radial-gradient(circle,rgba(255,255,255,.95),rgba(250,204,21,.72),rgba(126,34,206,.65));box-shadow:0 0 50px rgba(250,204,21,.7);animation:miracleGachaPulse .48s ease-in-out infinite;"></div>
+                    <div style="position:relative;font-size:min(26vw,132px);line-height:1;animation:miracleGachaSpin 1.85s cubic-bezier(.2,.9,.2,1) forwards;text-shadow:0 0 30px rgba(255,255,255,.95);">🎰</div>
+                </div>
+                <div style="font-size:clamp(24px,5vw,44px);font-weight:1000;margin-top:10px;">${count === 10 ? "10連" : "奇跡"}抽選中...</div>
+                <div style="opacity:.78;font-weight:900;margin-top:8px;">${cost.toLocaleString()}Pを消費して研究装置が高エネルギー反応を解析しています</div>
+            </div>
+        `);
+
+        window.setTimeout(() => {
+            const defs = Array.from({ length: count }, () => pickMiracleGachaDef());
+            const best = defs.slice().sort((a, b) => getRankScore(b.rank) - getRankScore(a.rank))[0] ?? defs[0]!;
+            const probabilityText = `[${best.rank}] ${formatProbability(best.denominator)}`;
+            const feelingText = count === 10 ? "10連ガチャ研究装置が最高反応を観測しました。" : "ガチャ研究装置が未知の奇跡を観測しました。";
+            if (count === 10) {
+                const summary = defs.map((def, index) => `${index + 1}. ${def.label} [${def.rank}]`).join(" / ");
+                showSoftToast(`10連結果: ${summary}`);
+            }
+            closeHelpPopup();
+            settings.effectsEnabled = true;
+            adminForceNextMiracleEffect = true;
+            triggerRareBoardCatastrophe(best);
+            showMiracle(best.kind, best.symbol, probabilityText, feelingText);
+            void playGachaRemoteMiracleVideo(best);
+        }, 1950);
+    };
+
+    document.getElementById("miracle-gacha-once-button")?.addEventListener("click", () => run(1));
+    document.getElementById("miracle-gacha-ten-button")?.addEventListener("click", () => run(10));
+}
+
 function showLabHome(): void {
     const rank = getCurrentResearchRankInfo();
     const discoveredKinds = getDiscoveredKindCount();
     const reports = savedRecords.researchReports ?? [];
     const latestReport = reports[0];
     const homeHtml = `
-        <div class="miracle-home-shell" style="display:grid;gap:18px;">
+        <div style="display:grid;gap:18px;">
             <div class="miracle-user-card miracle-home-hero">
                 <div style="font-size:clamp(28px,6vw,54px);font-weight:1000;line-height:1.1;">MiracleBallLab</div>
                 <div style="margin-top:14px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">玉を落として、まれに起きる奇跡を集めよう</div>
-                <div style="margin-top:16px;line-height:1.85;">今日の研究テーマ：<b>${escapeHtml(getDailyFortune().title)}</b><br>研究員ランク：<b>Lv.${rank.level} ${escapeHtml(rank.label)}</b> / 図鑑：<b>${discoveredKinds}</b>種類 / 実験：<b>${savedRecords.totalRuns.toLocaleString()}</b>回</div>
+                <div style="margin-top:16px;line-height:1.85;">今日の研究テーマ：<b>${escapeHtml(getDailyFortune().title)}</b><br>研究員ランク：<b>Lv.${rank.level} ${escapeHtml(rank.label)}</b> / 図鑑：<b>${discoveredKinds}</b>種類 / 実験：<b>${savedRecords.totalRuns.toLocaleString()}</b>回 / 奇跡ガチャP：<b>${getGachaPoint().toLocaleString()}</b>P</div>
             </div>
             <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:14px;">
                 <div class="miracle-user-card"><b>今日やること</b><br><span style="opacity:.82;line-height:1.7;">デイリー研究を確認して、研究レポートを1件作成しましょう。</span></div>
@@ -4735,6 +4904,154 @@ function toggleObsMode(): void {
     updateObsButton();
     showSoftToast(isObsMode ? t("OBSモードをONにしました", "OBS mode enabled") : t("OBSモードをOFFにしました", "OBS mode disabled"));
     scheduleResize();
+}
+
+type RareBoardCatastropheKind = "earthquake" | "tsunami" | "lightning" | "meteor" | "blackhole" | "volcano" | "ice" | "laser" | "gravity" | "crack" | "typhoon" | "sandstorm" | "aurora" | "timebreak" | "pinfall" | "mirror" | "plasma" | "labburst" | "dragon" | "void" | "supernova";
+
+interface RareBoardCatastropheDef {
+    kind: RareBoardCatastropheKind;
+    label: string;
+    emoji: string;
+    color: string;
+    bg: string;
+    shake: number;
+    duration: number;
+    gravityX: number;
+    gravityY: number;
+    lightning: number;
+    waves: number;
+    fragments: number;
+}
+
+const RARE_BOARD_CATASTROPHE_DEFS: RareBoardCatastropheDef[] = [
+    { kind: "earthquake", label: "大地震で盤面崩壊", emoji: "🌋", color: "#ff6b35", bg: "rgba(80,25,10,.28)", shake: 56, duration: 2600, gravityX: .16, gravityY: 9.8, lightning: 2, waves: 1, fragments: 24 },
+    { kind: "tsunami", label: "津波が盤面を飲み込む", emoji: "🌊", color: "#38bdf8", bg: "rgba(14,116,144,.32)", shake: 42, duration: 2800, gravityX: -.20, gravityY: 7.2, lightning: 0, waves: 5, fragments: 12 },
+    { kind: "lightning", label: "落雷の嵐", emoji: "⚡", color: "#fde047", bg: "rgba(253,224,71,.18)", shake: 48, duration: 2400, gravityX: .08, gravityY: 8.0, lightning: 14, waves: 1, fragments: 18 },
+    { kind: "meteor", label: "隕石群直撃", emoji: "☄️", color: "#fb923c", bg: "rgba(124,45,18,.30)", shake: 60, duration: 2800, gravityX: -.08, gravityY: 10.8, lightning: 5, waves: 2, fragments: 34 },
+    { kind: "blackhole", label: "ブラックホール発生", emoji: "🕳️", color: "#a78bfa", bg: "rgba(30,27,75,.42)", shake: 44, duration: 3000, gravityX: 0, gravityY: 4.8, lightning: 4, waves: 4, fragments: 10 },
+    { kind: "volcano", label: "火山噴火モード", emoji: "🔥", color: "#ef4444", bg: "rgba(127,29,29,.34)", shake: 54, duration: 2600, gravityX: .10, gravityY: 11.2, lightning: 3, waves: 1, fragments: 32 },
+    { kind: "ice", label: "氷結崩壊", emoji: "❄️", color: "#bae6fd", bg: "rgba(125,211,252,.25)", shake: 34, duration: 2500, gravityX: -.10, gravityY: 6.4, lightning: 2, waves: 2, fragments: 20 },
+    { kind: "laser", label: "研究所レーザー暴走", emoji: "🔴", color: "#ff2d75", bg: "rgba(190,24,93,.26)", shake: 38, duration: 2400, gravityX: .14, gravityY: 8.2, lightning: 10, waves: 0, fragments: 16 },
+    { kind: "gravity", label: "重力反転警報", emoji: "🧲", color: "#22d3ee", bg: "rgba(8,145,178,.25)", shake: 44, duration: 3000, gravityX: 0, gravityY: -3.2, lightning: 3, waves: 3, fragments: 10 },
+    { kind: "crack", label: "盤面亀裂拡大", emoji: "🪨", color: "#d6d3d1", bg: "rgba(41,37,36,.35)", shake: 52, duration: 2600, gravityX: -.12, gravityY: 8.8, lightning: 2, waves: 2, fragments: 28 },
+    { kind: "typhoon", label: "超巨大台風", emoji: "🌀", color: "#67e8f9", bg: "rgba(21,94,117,.30)", shake: 40, duration: 2800, gravityX: .24, gravityY: 6.8, lightning: 5, waves: 4, fragments: 12 },
+    { kind: "sandstorm", label: "砂嵐で視界崩壊", emoji: "🌪️", color: "#fbbf24", bg: "rgba(146,64,14,.26)", shake: 36, duration: 2500, gravityX: -.22, gravityY: 7.4, lightning: 1, waves: 2, fragments: 22 },
+    { kind: "aurora", label: "オーロラ暴走", emoji: "🌌", color: "#86efac", bg: "rgba(6,78,59,.24)", shake: 32, duration: 2600, gravityX: .06, gravityY: 5.8, lightning: 7, waves: 3, fragments: 10 },
+    { kind: "timebreak", label: "時間断層崩壊", emoji: "⏳", color: "#c4b5fd", bg: "rgba(76,29,149,.30)", shake: 42, duration: 3000, gravityX: .04, gravityY: 4.2, lightning: 8, waves: 4, fragments: 14 },
+    { kind: "pinfall", label: "ピン全域暴走", emoji: "📍", color: "#fda4af", bg: "rgba(159,18,57,.24)", shake: 50, duration: 2600, gravityX: -.14, gravityY: 8.4, lightning: 4, waves: 2, fragments: 26 },
+    { kind: "mirror", label: "鏡面世界反転", emoji: "🪞", color: "#e0f2fe", bg: "rgba(15,23,42,.26)", shake: 34, duration: 2500, gravityX: .18, gravityY: 6.2, lightning: 4, waves: 3, fragments: 12 },
+    { kind: "plasma", label: "プラズマ豪雨", emoji: "💥", color: "#f0abfc", bg: "rgba(112,26,117,.30)", shake: 46, duration: 2500, gravityX: .10, gravityY: 9.2, lightning: 12, waves: 2, fragments: 18 },
+    { kind: "labburst", label: "研究炉メルトダウン", emoji: "☢️", color: "#bef264", bg: "rgba(63,98,18,.24)", shake: 58, duration: 2800, gravityX: -.10, gravityY: 10.0, lightning: 6, waves: 2, fragments: 32 },
+    { kind: "dragon", label: "龍脈が盤面を裂く", emoji: "🐉", color: "#34d399", bg: "rgba(6,95,70,.28)", shake: 52, duration: 2700, gravityX: .20, gravityY: 8.0, lightning: 8, waves: 4, fragments: 20 },
+    { kind: "void", label: "虚無領域展開", emoji: "⬛", color: "#e5e7eb", bg: "rgba(0,0,0,.44)", shake: 40, duration: 2900, gravityX: 0, gravityY: 3.6, lightning: 2, waves: 5, fragments: 8 },
+    { kind: "supernova", label: "超新星爆発", emoji: "🌟", color: "#fff7ad", bg: "rgba(250,204,21,.26)", shake: 66, duration: 3000, gravityX: .02, gravityY: 10.5, lightning: 16, waves: 6, fragments: 38 },
+];
+
+let rareBoardCatastrophe: RareBoardCatastropheDef | null = null;
+let rareBoardCatastropheUntil = 0;
+let rareBoardCatastropheStartedAt = 0;
+let rareBoardOldGravityX = 0;
+let rareBoardOldGravityY = 8;
+
+function shouldTriggerRareBoardCatastrophe(def?: SpecialEventDef): boolean {
+    if (!def || settings.simpleMode || !settings.effectsEnabled) return false;
+    return getRankScore(def.rank) >= getRankScore("SSR");
+}
+
+function triggerRareBoardCatastrophe(def?: SpecialEventDef, forcedKind?: RareBoardCatastropheKind): void {
+    if (!def || settings.simpleMode) return;
+    const pool = RARE_BOARD_CATASTROPHE_DEFS;
+    const selected = forcedKind ? pool.find((x) => x.kind === forcedKind) : pool[Math.floor(appRandom() * pool.length)];
+    if (!selected) return;
+    rareBoardCatastrophe = selected;
+    rareBoardCatastropheStartedAt = performance.now();
+    rareBoardCatastropheUntil = Date.now() + selected.duration;
+    rareBoardOldGravityX = engine.gravity.x;
+    rareBoardOldGravityY = engine.gravity.y;
+    engine.gravity.x = selected.gravityX;
+    engine.gravity.y = selected.gravityY;
+    triggerCameraShake(selected.shake * geometry.scale, selected.duration, true);
+    addFloatingText(`${selected.emoji} ${selected.label}`, geometry.width / 2, geometry.height * 0.20, selected.color);
+    maybeShowCommentary(`緊急警報「${selected.label}」`, true);
+    for (const body of engine.world.bodies) {
+        const plugin = (body as any).plugin;
+        if (plugin?.isPin && appRandom() < 0.45) plugin.wiggleFrames = Math.max(plugin.wiggleFrames ?? 0, 70);
+        if (plugin?.isDrop) {
+            Body.applyForce(body, body.position, { x: (appRandom() - 0.5) * 0.012 * geometry.scale, y: -appRandom() * 0.010 * geometry.scale });
+        }
+    }
+    for (let i = 0; i < selected.waves; i++) {
+        createTapRipple(geometry.width * (0.18 + appRandom() * 0.64), geometry.height * (0.22 + appRandom() * 0.48), true);
+    }
+    if (!settings.lowSpecMode) {
+        for (let i = 0; i < selected.fragments; i++) {
+            Composite.add(engine.world, createTinyFragment(geometry.width * (0.15 + appRandom() * 0.7), geometry.height * (0.12 + appRandom() * 0.35), geometry.ballRadius * 1.2, selected.color));
+        }
+    }
+    window.setTimeout(() => {
+        if (rareBoardCatastrophe !== selected) return;
+        engine.gravity.x = rareBoardOldGravityX;
+        engine.gravity.y = rareBoardOldGravityY;
+        rareBoardCatastrophe = null;
+    }, selected.duration);
+}
+
+function drawRareBoardCatastrophe(context: CanvasRenderingContext2D): void {
+    if (!rareBoardCatastrophe || Date.now() > rareBoardCatastropheUntil) return;
+    const def = rareBoardCatastrophe;
+    const elapsed = performance.now() - rareBoardCatastropheStartedAt;
+    const progress = clamp(elapsed / Math.max(1, def.duration), 0, 1);
+    const fade = Math.sin(progress * Math.PI);
+    context.save();
+    context.globalCompositeOperation = "source-over";
+    context.fillStyle = def.bg;
+    context.fillRect(0, 0, geometry.width, geometry.height);
+
+    context.globalCompositeOperation = "lighter";
+    context.strokeStyle = def.color;
+    context.fillStyle = def.color;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.globalAlpha = 0.28 + fade * 0.42;
+
+    const waveCount = Math.min(8, def.waves + 2);
+    for (let i = 0; i < waveCount; i++) {
+        const r = (progress * 480 + i * 70) * geometry.scale;
+        context.lineWidth = Math.max(2, 5 * geometry.scale);
+        context.beginPath();
+        context.arc(geometry.width / 2, geometry.height * 0.42, r % (Math.max(geometry.width, geometry.height) * 0.7), 0, Math.PI * 2);
+        context.stroke();
+    }
+
+    for (let i = 0; i < def.lightning; i++) {
+        const seed = i * 37 + Math.floor(elapsed / 120);
+        const x = ((seed * 97) % Math.max(1, Math.floor(geometry.width)));
+        const top = 10 * geometry.scale;
+        const bottom = geometry.height * (0.25 + ((seed * 13) % 55) / 100);
+        context.lineWidth = Math.max(2, 3.5 * geometry.scale);
+        context.beginPath();
+        context.moveTo(x, top);
+        const segments = 5;
+        for (let s = 1; s <= segments; s++) {
+            const yy = top + (bottom - top) * (s / segments);
+            const xx = x + Math.sin(seed + s * 2.1) * 34 * geometry.scale;
+            context.lineTo(xx, yy);
+        }
+        context.stroke();
+    }
+
+    context.globalCompositeOperation = "source-over";
+    context.globalAlpha = 0.95;
+    context.font = `900 ${Math.round(clamp(24 * geometry.scale, 18, 44))}px ${ROUNDED_UI_FONT}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = "rgba(255,255,255,.94)";
+    context.strokeStyle = "rgba(0,0,0,.55)";
+    context.lineWidth = Math.max(3, 5 * geometry.scale);
+    const label = `${def.emoji} ${def.label}`;
+    context.strokeText(label, geometry.width / 2, geometry.height * 0.13);
+    context.fillText(label, geometry.width / 2, geometry.height * 0.13);
+    context.restore();
 }
 
 function applyRareBackground(kind: DropKind): void {
@@ -4911,6 +5228,23 @@ function showPopup(title: string, bodyHtml: string): void {
 
     helpOverlay.innerHTML = `
         <style>
+            .miracle-popup-panel::before{
+                content:"";
+                position:absolute;
+                inset:0;
+                border-radius:inherit;
+                background-image:url(${DEFAULT_BACKGROUND_IMAGE_URL});
+                background-size:${isMobile ? "118px 118px" : "150px 150px"};
+                background-repeat:repeat;
+                background-position:center;
+                opacity:.075;
+                pointer-events:none;
+                z-index:0;
+            }
+            .miracle-popup-panel > *{
+                position:relative;
+                z-index:1;
+            }
             .miracle-popup-panel .miracle-user-card{
                 background:${palette.section};
                 color:${palette.fieldText};
@@ -4928,18 +5262,6 @@ function showPopup(title: string, bodyHtml: string): void {
                 padding:${isMobile ? "24px 24px 26px" : "34px 36px 36px"} !important;
                 border-radius:24px;
             }
-            .miracle-popup-panel .miracle-home-shell{
-                position:relative;
-                padding:${isMobile ? "12px" : "18px"};
-                border-radius:26px;
-                background-image:
-                    linear-gradient(rgba(255,255,255,.78), rgba(255,255,255,.72)),
-                    url(${DEFAULT_BACKGROUND_IMAGE_URL});
-                background-size:auto, ${isMobile ? "120px 120px" : "150px 150px"};
-                background-repeat:repeat;
-                background-position:center;
-                background-blend-mode:normal;
-            }
             .miracle-popup-panel .miracle-user-card > :first-child,
             .miracle-popup-panel .miracle-home-hero > :first-child{margin-top:0 !important;}
             .miracle-popup-panel .miracle-user-card > :last-child,
@@ -4950,7 +5272,6 @@ function showPopup(title: string, bodyHtml: string): void {
             @media (max-width: 640px){
                 .miracle-popup-panel .miracle-user-card{padding:20px !important;}
                 .miracle-popup-panel .miracle-home-hero{padding:22px 22px 24px !important;}
-                .miracle-popup-panel .miracle-home-shell{padding:10px !important;background-size:auto, 110px 110px !important;}
             }
         </style>
         <div class="miracle-popup-panel" style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:${palette.panel};color:${palette.fieldText};box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid ${palette.buttonBorder};overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
@@ -5265,7 +5586,11 @@ function calculateGeometry(): Geometry {
     const width = viewportWidth;
     const height = fullscreenLike ? viewportHeight : Math.max(360, viewportHeight - infoHeight);
     const scale = clamp(Math.min(width / BASE_WIDTH, height / BASE_HEIGHT), 0.56, 2.4);
-    const pixelRatio = clamp(window.devicePixelRatio || 1, 1, 3);
+    const pixelRatio = settings.lowSpecMode || settings.simpleMode
+        ? 1
+        : isMobile
+            ? clamp(window.devicePixelRatio || 1, 1, 1.5)
+            : clamp(window.devicePixelRatio || 1, 1, 2);
 
     const totalBinCount = settings.binCount + 2;
     const visibleStart = 1;
@@ -5965,6 +6290,8 @@ function selectRemoteMiracleVideoAsset(assets: RemoteMiracleAsset[], def?: Speci
 }
 
 function stopRemoteMiracleVideo(): void {
+    hideMobileVideoSoundRetryButton();
+
     if (remoteMiracleVideoTimer !== undefined) {
         window.clearTimeout(remoteMiracleVideoTimer);
         remoteMiracleVideoTimer = undefined;
@@ -6149,6 +6476,17 @@ function showMobileVideoSoundRetryButton(video: HTMLVideoElement | null, volume 
         }
     };
 
+    const cleanupRetryButton = () => {
+        if (video.ended || video.paused || video.error || video.readyState === HTMLMediaElement.HAVE_NOTHING) {
+            hideMobileVideoSoundRetryButton();
+        }
+    };
+    video.addEventListener("ended", hideMobileVideoSoundRetryButton, { once: true });
+    video.addEventListener("error", hideMobileVideoSoundRetryButton, { once: true });
+    video.addEventListener("emptied", hideMobileVideoSoundRetryButton, { once: true });
+    video.addEventListener("abort", hideMobileVideoSoundRetryButton, { once: true });
+    video.addEventListener("pause", cleanupRetryButton);
+
     document.body.appendChild(mobileVideoSoundRetryButton);
 }
 
@@ -6282,20 +6620,8 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
 
     video.addEventListener("ended", () => {
         if (!activeRemoteMiracleVideo || activeRemoteMiracleVideo !== video) return;
-
-        try {
-            video.currentTime = 0;
-            prepareRemoteVideoForSound(video, remoteVideoVolume);
-            const result = video.play();
-            if (result && typeof result.catch === "function") {
-                result.catch(() => {
-                    if (isMobile) showMobileVideoSoundRetryButton(video, remoteVideoVolume);
-                });
-            }
-        } catch {
-            if (isMobile) showMobileVideoSoundRetryButton(video, remoteVideoVolume);
-            // 10秒表示を優先するため、再再生できなくてもオーバーレイは残します
-        }
+        hideMobileVideoSoundRetryButton();
+        stopRemoteMiracleVideo();
     });
 
     video.addEventListener("error", () => {
@@ -7330,6 +7656,7 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
         else setSubtitle(subtitle);
         saveMiracleClip(def, subtitle);
         if (shouldPlayEffects) applyRareBackground(kind);
+        if (shouldTriggerRareBoardCatastrophe(def)) triggerRareBoardCatastrophe(def);
         updateRecentMiracleMini();
         updateStatusMiniOverlays();
     }
@@ -7803,6 +8130,9 @@ function showFinalResult(): void {
     savedRecords.maxFinishedCount = Math.max(savedRecords.maxFinishedCount, finishedCount);
     savedRecords.maxTargetCount = Math.max(savedRecords.maxTargetCount, settings.targetCount);
     const dailyCompleted = evaluateAndSaveDailyMissions();
+    const finishGachaPoint = awardExperimentFinishGachaPoint();
+    const dailyGachaPoint = dailyCompleted.length * 200;
+    const totalGachaPointAward = finishGachaPoint + dailyGachaPoint;
     savedRecords.bestScore = Math.max(savedRecords.bestScore, runScore);
     savedRecords.totalScore += runScore;
     const currentReport = saveCurrentResearchReport();
@@ -7817,6 +8147,7 @@ function showFinalResult(): void {
             <div style="font-size:clamp(22px,4vw,40px);margin-bottom:18px;">${browserName} / 指定${settings.targetCount.toLocaleString()}回 / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime)}</div>
             <div style="font-size:clamp(20px,3vw,34px);margin-bottom:18px;">スコア <b>${runScore.toLocaleString()}</b> / ミッション ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length} / 奇跡コンボ最高 ${bestComboThisRun}</div>
             ${dailyCompleted.length > 0 ? `<div style="margin:0 auto 18px;max-width:760px;padding:14px;border-radius:18px;background:rgba(34,197,94,.16);border:1px solid rgba(134,239,172,.35);font-size:clamp(16px,2.4vw,24px);">デイリー研究達成: ${dailyCompleted.map(escapeHtml).join(" / ")}</div>` : ""}
+            <div style="margin:0 auto 18px;max-width:760px;padding:14px;border-radius:18px;background:rgba(250,204,21,.16);border:1px solid rgba(250,204,21,.35);font-size:clamp(16px,2.4vw,26px);line-height:1.55;">奇跡ガチャP <b>+${totalGachaPointAward.toLocaleString()}P</b> / 所持 <b>${getGachaPoint().toLocaleString()}P</b><br><span style="opacity:.80;">実験完了 +${finishGachaPoint.toLocaleString()}P${dailyGachaPoint > 0 ? ` / デイリー +${dailyGachaPoint.toLocaleString()}P` : ""}</span></div>
             <div style="margin:0 auto 18px;max-width:760px;padding:16px;border-radius:20px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);font-size:clamp(17px,2.6vw,28px);line-height:1.55;text-align:left;"><b>今回の研究評価: ${evaluation.grade}</b><br>観測タイプ: ${evaluation.type}<br>奇跡濃度: ${evaluation.density}%<br><span style="opacity:.82;">${evaluation.note}</span><br><span style="opacity:.82;">研究レポート #${currentReport.runNo} を奇跡アルバムに保存しました。</span></div>
             <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
             <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の極秘イベント。出たら奇跡どころか、画面が伝説になります。</div>
@@ -8108,29 +8439,25 @@ function drawTimeBallSkins(context: CanvasRenderingContext2D): void {
 }
 
 function draw3DBallShading(context: CanvasRenderingContext2D): void {
+    if (settings.simpleMode) return;
+    const dropBodies = engine.world.bodies.filter((body) => (body as any).plugin?.isDrop);
+    const maxShaded = isMobile || settings.lowSpecMode ? 260 : 520;
+    const step = dropBodies.length > maxShaded ? Math.ceil(dropBodies.length / maxShaded) : 1;
     const timeSec = performance.now() * 0.001;
     context.save();
-    for (const body of engine.world.bodies) {
+    for (let bodyIndex = 0; bodyIndex < dropBodies.length; bodyIndex += step) {
+        const body = dropBodies[bodyIndex];
         const plugin = (body as any).plugin;
-        if (!plugin?.isDrop) continue;
-        const radius = body.circleRadius ?? plugin.originalRadius ?? 0;
+        const radius = body.circleRadius ?? plugin?.originalRadius ?? 0;
         if (!radius || radius <= 0) continue;
         const x = body.position.x;
         const y = body.position.y;
-        const kind = plugin.kind as DropKind | undefined;
+        const kind = String(plugin?.kind ?? "normal");
         const isDarkBall = kind === "blackSun" || kind === "darkMatter";
-        const metallicBall = kind !== "ghost";
-        const phase = timeSec * 1.65 + (body.id % 23) * 0.33;
-        const stripeShift = Math.sin(phase) * radius * 0.24;
-        const stripeShift2 = Math.cos(phase * 0.82 + 0.6) * radius * 0.18;
-        const edgeBright = settings.simpleMode ? 0.24 : 0.36;
-
-        if (!settings.simpleMode) {
-            context.fillStyle = 'rgba(0,0,0,.11)';
-            context.beginPath();
-            context.ellipse(x + radius * 0.08, y + radius * 0.88, radius * 0.76, radius * 0.25, 0, 0, Math.PI * 2);
-            context.fill();
-        }
+        const metallicBall = kind !== "ghost" && kind !== "heart";
+        const phase = timeSec * 1.8 + (body.id % 29) * 0.31 + body.angle * 0.35;
+        const stripeShift = Math.sin(phase) * radius * 0.30;
+        const stripeShift2 = Math.cos(phase * 0.72 + 0.6) * radius * 0.22;
 
         context.save();
         context.beginPath();
@@ -8138,28 +8465,23 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
         context.clip();
 
         const silverSheen = context.createLinearGradient(x - radius * 1.04, y - radius * 1.08, x + radius * 1.02, y + radius * 1.06);
-        silverSheen.addColorStop(0, isDarkBall ? 'rgba(255,255,255,.32)' : 'rgba(255,255,255,.52)');
-        silverSheen.addColorStop(0.20, isDarkBall ? 'rgba(220,230,245,.10)' : 'rgba(225,232,242,.24)');
-        silverSheen.addColorStop(0.48, 'rgba(255,255,255,0)');
-        silverSheen.addColorStop(0.76, 'rgba(25,32,42,.10)');
-        silverSheen.addColorStop(1, 'rgba(0,0,0,.24)');
+        silverSheen.addColorStop(0, isDarkBall ? 'rgba(255,255,255,.30)' : 'rgba(255,255,255,.58)');
+        silverSheen.addColorStop(0.18, isDarkBall ? 'rgba(220,230,245,.10)' : 'rgba(232,238,248,.36)');
+        silverSheen.addColorStop(0.46, 'rgba(255,255,255,0)');
+        silverSheen.addColorStop(0.74, 'rgba(24,32,44,.10)');
+        silverSheen.addColorStop(1, 'rgba(0,0,0,.25)');
         context.fillStyle = silverSheen;
         context.beginPath();
         context.arc(x, y, radius, 0, Math.PI * 2);
         context.fill();
 
         if (metallicBall) {
-            const sweep = context.createLinearGradient(
-                x - radius * 0.94 + stripeShift,
-                y - radius * 0.12,
-                x + radius * 0.98 + stripeShift,
-                y + radius * 0.12
-            );
+            const sweep = context.createLinearGradient(x - radius * 0.96 + stripeShift, y - radius * 0.14, x + radius * 0.98 + stripeShift, y + radius * 0.14);
             sweep.addColorStop(0, 'rgba(255,255,255,0)');
-            sweep.addColorStop(0.14, 'rgba(220,230,245,.16)');
-            sweep.addColorStop(0.30, 'rgba(250,252,255,.44)');
-            sweep.addColorStop(0.48, 'rgba(255,255,255,.94)');
-            sweep.addColorStop(0.58, 'rgba(208,220,240,.54)');
+            sweep.addColorStop(0.14, 'rgba(220,230,245,.18)');
+            sweep.addColorStop(0.30, 'rgba(250,252,255,.48)');
+            sweep.addColorStop(0.48, 'rgba(255,255,255,.96)');
+            sweep.addColorStop(0.58, 'rgba(208,220,240,.56)');
             sweep.addColorStop(0.76, 'rgba(255,255,255,.08)');
             sweep.addColorStop(1, 'rgba(255,255,255,0)');
             context.fillStyle = sweep;
@@ -8167,15 +8489,10 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
             context.arc(x, y, radius, 0, Math.PI * 2);
             context.fill();
 
-            const sweep2 = context.createLinearGradient(
-                x - radius * 0.84 + stripeShift2,
-                y - radius * 0.05,
-                x + radius * 0.84 + stripeShift2,
-                y + radius * 0.06
-            );
+            const sweep2 = context.createLinearGradient(x - radius * 0.84 + stripeShift2, y - radius * 0.05, x + radius * 0.84 + stripeShift2, y + radius * 0.06);
             sweep2.addColorStop(0, 'rgba(255,255,255,0)');
-            sweep2.addColorStop(0.36, 'rgba(210,220,238,.08)');
-            sweep2.addColorStop(0.50, 'rgba(255,255,255,.50)');
+            sweep2.addColorStop(0.42, 'rgba(230,238,250,.10)');
+            sweep2.addColorStop(0.52, 'rgba(255,255,255,.48)');
             sweep2.addColorStop(0.62, 'rgba(210,220,238,.10)');
             sweep2.addColorStop(1, 'rgba(255,255,255,0)');
             context.fillStyle = sweep2;
@@ -8185,32 +8502,27 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
         }
 
         const topCool = context.createLinearGradient(x, y - radius * 0.98, x, y + radius * 0.98);
-        topCool.addColorStop(0, 'rgba(214,230,255,.20)');
+        topCool.addColorStop(0, 'rgba(224,236,255,.24)');
         topCool.addColorStop(0.24, 'rgba(255,255,255,0)');
         topCool.addColorStop(0.76, 'rgba(0,0,0,.06)');
-        topCool.addColorStop(1, 'rgba(0,0,0,.12)');
+        topCool.addColorStop(1, 'rgba(0,0,0,.13)');
         context.fillStyle = topCool;
         context.beginPath();
         context.arc(x, y, radius, 0, Math.PI * 2);
         context.fill();
 
-        context.fillStyle = isDarkBall ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.86)';
+        context.fillStyle = isDarkBall ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.88)';
         context.beginPath();
         context.ellipse(x - radius * 0.30, y - radius * 0.42, radius * 0.29, radius * 0.18, -0.56, 0, Math.PI * 2);
         context.fill();
 
-        context.fillStyle = metallicBall ? 'rgba(255,255,255,.40)' : 'rgba(255,255,255,.16)';
+        context.fillStyle = metallicBall ? 'rgba(255,255,255,.42)' : 'rgba(255,255,255,.16)';
         context.beginPath();
         context.ellipse(x - radius * 0.02 + stripeShift * 0.25, y - radius * 0.10, radius * 0.50, radius * 0.12, -0.38, 0, Math.PI * 2);
         context.fill();
 
-        if (!settings.simpleMode) {
-            context.fillStyle = metallicBall ? 'rgba(255,255,255,.24)' : 'rgba(255,255,255,.12)';
-            context.beginPath();
-            context.ellipse(x + radius * 0.06, y + radius * 0.18, radius * 0.44, radius * 0.11, -0.18, 0, Math.PI * 2);
-            context.fill();
-
-            context.fillStyle = 'rgba(255,255,255,.24)';
+        if (!settings.lowSpecMode) {
+            context.fillStyle = 'rgba(255,255,255,.22)';
             context.beginPath();
             context.ellipse(x + radius * 0.44, y - radius * 0.02, radius * 0.10, radius * 0.34, 0.2, 0, Math.PI * 2);
             context.fill();
@@ -8227,7 +8539,7 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
 
         context.restore();
 
-        context.strokeStyle = metallicBall ? `rgba(255,255,255,${edgeBright})` : 'rgba(255,255,255,.24)';
+        context.strokeStyle = metallicBall ? 'rgba(255,255,255,.38)' : 'rgba(255,255,255,.24)';
         context.lineWidth = Math.max(1, radius * 0.085);
         context.beginPath();
         context.arc(x, y, radius * 0.968, Math.PI * 0.80, Math.PI * 1.88);
@@ -8238,14 +8550,6 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
         context.beginPath();
         context.arc(x, y, radius * 0.94, Math.PI * 0.04, Math.PI * 1.00);
         context.stroke();
-
-        if (!settings.simpleMode && metallicBall) {
-            context.strokeStyle = 'rgba(196,216,255,.22)';
-            context.lineWidth = Math.max(1, radius * 0.04);
-            context.beginPath();
-            context.arc(x, y, radius * 0.70, Math.PI * 1.10, Math.PI * 1.60);
-            context.stroke();
-        }
     }
     context.restore();
 }
@@ -8386,6 +8690,7 @@ Events.on(render, "afterRender", () => {
     const context = render.context;
     context.save();
     drawPachinkoMachine(context);
+    drawRareBoardCatastrophe(context);
     drawTapRipples(context);
     draw3DBallShading(context);
     drawSpecialGlows(context);
