@@ -121,10 +121,12 @@ const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
 const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
 const MIRACLE_GACHA_ONCE_COST = 100000;
 const MIRACLE_GACHA_TEN_COST = 900000;
+const SETTINGS_UI_ZOOM_STORAGE_KEY = "miracle_settings_ui_zoom_v1";
 type GachaPointSavedRecords = SavedRecords & { gachaPoint?: number };
 
 
 let settings: Settings = createDefaultSettings(isMobile, DEFAULT_BACKGROUND_IMAGE_URL);
+let settingsUiZoom = clamp(Number(localStorage.getItem(SETTINGS_UI_ZOOM_STORAGE_KEY) ?? "1"), 0.82, 1.22);
 
 let selectedBackgroundObjectUrl = "";
 let geometry: Geometry;
@@ -714,7 +716,7 @@ canvas.style.position = "relative";
 canvas.style.zIndex = "1";
 canvas.style.transformOrigin = "center center";
 canvas.style.borderRadius = isMobile ? "24px" : "26px";
-canvas.style.boxShadow = isMobile ? "0 10px 28px rgba(26,35,60,0.18)" : "0 18px 44px rgba(26,35,60,0.20)";
+canvas.style.boxShadow = isMobile ? "0 16px 34px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,.60)" : "0 26px 64px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,.62)";
 canvas.style.backgroundColor = "rgba(245,245,245,0.88)";
 canvas.style.backgroundSize = "cover";
 canvas.style.backgroundPosition = "center";
@@ -725,6 +727,7 @@ canvas.addEventListener("pointerdown", (event) => {
         const pt = getCanvasPointFromEvent(event);
         createTemporaryPinAt(pt.x, pt.y);
         temporaryPinPlacementEnabled = false;
+        canvas.style.cursor = "";
         return;
     }
     if (magicCircleModeEnabled) {
@@ -751,6 +754,7 @@ canvas.addEventListener("pointerup", (event) => {
     event.preventDefault();
     magicCircleDrawing = false;
     magicCircleModeEnabled = false;
+    canvas.style.cursor = "";
     const pt = getCanvasPointFromEvent(event);
     magicCirclePoints.push({ ...pt, t: performance.now() });
     const def = classifyMagicCircle(magicCirclePoints);
@@ -760,6 +764,7 @@ canvas.addEventListener("pointerup", (event) => {
 canvas.addEventListener("pointercancel", () => {
     magicCircleDrawing = false;
     magicCirclePoints = [];
+    if (magicCircleModeEnabled) canvas.style.cursor = "crosshair";
 });
 gameArea.appendChild(canvas);
 
@@ -794,7 +799,9 @@ pcPauseButton.style.pointerEvents = "auto";
 pcPauseButton.style.display = isMobile ? "none" : "inline-flex";
 pcPauseButton.style.alignItems = "center";
 pcPauseButton.style.justifyContent = "center";
-pcPauseButton.style.minWidth = "112px";
+pcPauseButton.style.minWidth = "86px";
+pcPauseButton.style.whiteSpace = "normal";
+pcPauseButton.style.lineHeight = "1.15";
 pcPauseButton.style.height = "48px";
 pcPauseButton.style.padding = "0 18px";
 pcPauseButton.style.borderRadius = "999px";
@@ -818,13 +825,41 @@ pcPauseButton.addEventListener("click", (event) => {
 });
 gameArea.appendChild(pcPauseButton);
 
+const pcMagicButton = document.createElement("button");
+pcMagicButton.textContent = "魔法陣";
+pcMagicButton.title = "魔法陣を書く";
+pcMagicButton.style.position = "absolute";
+pcMagicButton.style.left = isMobile ? "14px" : "144px";
+pcMagicButton.style.bottom = isMobile ? "144px" : "16px";
+pcMagicButton.style.zIndex = "120";
+pcMagicButton.style.pointerEvents = "auto";
+pcMagicButton.style.display = isMobile ? "none" : "inline-flex";
+pcMagicButton.style.alignItems = "center";
+pcMagicButton.style.justifyContent = "center";
+pcMagicButton.style.minWidth = "76px";
+pcMagicButton.style.whiteSpace = "normal";
+pcMagicButton.style.lineHeight = "1.15";
+pcMagicButton.style.height = "48px";
+pcMagicButton.style.padding = "0 16px";
+pcMagicButton.style.borderRadius = "999px";
+pcMagicButton.style.border = "1px solid rgba(255,255,255,.48)";
+pcMagicButton.style.background = "rgba(88,28,135,.62)";
+pcMagicButton.style.backdropFilter = "blur(10px)";
+pcMagicButton.style.color = "#fff";
+pcMagicButton.style.fontSize = "17px";
+pcMagicButton.style.fontWeight = "900";
+pcMagicButton.style.fontFamily = ROUNDED_UI_FONT;
+pcMagicButton.style.cursor = "pointer";
+pcMagicButton.onclick = () => enableMagicCircleMode();
+gameArea.appendChild(pcMagicButton);
+
 const info = document.createElement("div");
 info.id = "miracle-info-area";
 info.style.flex = "0 0 auto";
 info.style.width = "100%";
 info.style.maxWidth = "100%";
 info.style.boxSizing = "border-box";
-info.style.background = "rgba(255, 255, 255, 0.88)";
+info.style.background = "rgba(255, 255, 255, 0.72)";
 info.style.backdropFilter = "blur(18px)";
 info.style.borderTop = "1px solid rgba(255,255,255,0.78)";
 info.style.boxShadow = "0 -8px 28px rgba(0,0,0,0.08)";
@@ -841,9 +876,9 @@ appHeader.style.flexWrap = "wrap";
 appHeader.style.marginBottom = "12px";
 appHeader.style.padding = isMobile ? "12px 14px" : "10px 16px";
 appHeader.style.borderRadius = "18px";
-appHeader.style.background = "linear-gradient(180deg, #f6faec 0%, #e3f0cc 100%)";
-appHeader.style.border = "1px solid rgba(87,112,51,0.22)";
-appHeader.style.boxShadow = "0 6px 18px rgba(87,112,51,0.10)";
+appHeader.style.background = getMetallicPanelBackground();
+appHeader.style.border = "1px solid rgba(148,163,184,.42)";
+appHeader.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,.70), 0 10px 28px rgba(30,42,58,.14)";
 info.appendChild(appHeader);
 
 const appTitle = document.createElement("div");
@@ -929,10 +964,11 @@ function createInput(value: string, type = "text"): HTMLInputElement {
     input.value = value;
     input.style.width = "100%";
     input.style.boxSizing = "border-box";
-    input.style.padding = isMobile ? "16px 16px" : "12px 14px";
+    input.style.padding = isMobile ? "12px 12px" : "9px 11px";
     input.style.borderRadius = "18px";
-    input.style.border = "1px solid #b8c1d1";
-    input.style.background = "#ffffff";
+    input.style.border = "1px solid rgba(85,105,130,.40)";
+    input.style.background = "linear-gradient(180deg,rgba(255,255,255,.92),rgba(228,236,246,.82))";
+    input.style.boxShadow = "inset 0 2px 8px rgba(15,23,42,.10), 0 1px 0 rgba(255,255,255,.65)";
     input.style.fontSize = `${uiFontPx}px`;
     input.style.outline = "none";
     input.style.fontFamily = ROUNDED_UI_FONT;
@@ -945,10 +981,11 @@ function createTextarea(value: string): HTMLTextAreaElement {
     textarea.rows = isMobile ? 5 : 4;
     textarea.style.width = "100%";
     textarea.style.boxSizing = "border-box";
-    textarea.style.padding = isMobile ? "16px 16px" : "12px 14px";
+    textarea.style.padding = isMobile ? "12px 12px" : "9px 11px";
     textarea.style.borderRadius = "18px";
-    textarea.style.border = "1px solid #b8c1d1";
-    textarea.style.background = "#ffffff";
+    textarea.style.border = "1px solid rgba(85,105,130,.40)";
+    textarea.style.background = "linear-gradient(180deg,rgba(255,255,255,.92),rgba(228,236,246,.82))";
+    textarea.style.boxShadow = "inset 0 2px 8px rgba(15,23,42,.10), 0 1px 0 rgba(255,255,255,.65)";
     textarea.style.fontSize = `${uiFontPx}px`;
     textarea.style.outline = "none";
     textarea.style.resize = "vertical";
@@ -956,25 +993,50 @@ function createTextarea(value: string): HTMLTextAreaElement {
     return textarea;
 }
 
+function getMetallicButtonBackground(primary = false): string {
+    return primary
+        ? "linear-gradient(180deg,#fff7bf 0%,#ffd65a 22%,#c58a10 54%,#fff1a6 100%)"
+        : "linear-gradient(180deg,#ffffff 0%,#dfe8f3 18%,#8fa3b7 50%,#f9fbff 100%)";
+}
+
+function applyUnifiedMetallicButtonStyle(button: HTMLButtonElement, primary = false): void {
+    button.style.width = "100%";
+    button.style.minWidth = "0";
+    button.style.height = isMobile ? "46px" : "44px";
+    button.style.minHeight = isMobile ? "46px" : "44px";
+    button.style.maxHeight = isMobile ? "46px" : "44px";
+    button.style.padding = isMobile ? "5px 8px" : "5px 10px";
+    button.style.border = primary ? "1px solid rgba(126,87,0,.55)" : "1px solid rgba(70,88,112,.42)";
+    button.style.borderRadius = "999px";
+    button.style.background = getMetallicButtonBackground(primary);
+    button.style.boxShadow = primary
+        ? "inset 0 1px 0 rgba(255,255,255,.82), inset 0 -5px 10px rgba(105,62,0,.20), 0 8px 18px rgba(126,87,0,.18)"
+        : "inset 0 1px 0 rgba(255,255,255,.92), inset 0 -5px 10px rgba(30,42,58,.16), 0 8px 18px rgba(30,42,58,.14)";
+    button.style.color = primary ? "#3b2600" : "#142033";
+    button.style.cursor = "pointer";
+    button.style.boxSizing = "border-box";
+    button.style.whiteSpace = "normal";
+    button.style.overflowWrap = "anywhere";
+    button.style.wordBreak = "keep-all";
+    button.style.lineHeight = "1.08";
+    button.style.textAlign = "center";
+    button.style.fontFamily = ROUNDED_UI_FONT;
+    button.style.fontWeight = "1000";
+    button.style.fontSize = isMobile ? "12px" : "13px";
+    button.style.textShadow = "0 1px 0 rgba(255,255,255,.55)";
+    button.style.overflow = "hidden";
+}
+
+function getMetallicPanelBackground(dark = false): string {
+    return dark
+        ? "linear-gradient(135deg,rgba(15,23,42,.86) 0%,rgba(30,41,59,.72) 46%,rgba(148,163,184,.24) 100%)"
+        : "linear-gradient(135deg,rgba(255,255,255,.76) 0%,rgba(222,235,247,.62) 38%,rgba(180,198,218,.46) 70%,rgba(255,255,255,.66) 100%)";
+}
+
 function createButton(text: string, onClick: () => void): HTMLButtonElement {
     const button = document.createElement("button");
     button.textContent = text;
-    button.style.fontSize = `${uiButtonFontPx}px`;
-    button.style.fontWeight = "900";
-    button.style.padding = isMobile ? "16px 22px" : "12px 18px";
-    button.style.border = "1px solid rgba(87,112,51,0.28)";
-    button.style.borderRadius = "999px";
-    button.style.background = "linear-gradient(180deg, #f3f8e8 0%, #dceec2 100%)";
-    button.style.boxShadow = "0 8px 20px rgba(87,112,51,0.16)";
-    button.style.color = "#26351f";
-    button.style.cursor = "pointer";
-    button.style.maxWidth = "100%";
-    button.style.whiteSpace = "nowrap";
-    button.style.fontFamily = ROUNDED_UI_FONT;
-    if (isMobile) {
-        button.style.flex = "1 1 auto";
-        button.style.minWidth = "0";
-    }
+    applyUnifiedMetallicButtonStyle(button);
     button.onclick = onClick;
     return button;
 }
@@ -1023,12 +1085,12 @@ function createSection(titleJa: string, titleEn: string): HTMLDivElement {
     section.className = "miracle-section";
     section.style.display = "flex";
     section.style.flexDirection = "column";
-    section.style.gap = "10px";
-    section.style.padding = isMobile ? "14px" : "12px";
+    section.style.gap = isMobile ? "8px" : "9px";
+    section.style.padding = isMobile ? "11px" : "10px";
     section.style.borderRadius = "22px";
-    section.style.background = "linear-gradient(180deg, rgba(246,250,236,.96) 0%, rgba(227,240,204,.88) 100%)";
-    section.style.border = "1px solid rgba(87,112,51,0.20)";
-    section.style.boxShadow = "0 8px 22px rgba(87,112,51,0.10)";
+    section.style.background = getMetallicPanelBackground();
+    section.style.border = "1px solid rgba(148,163,184,.38)";
+    section.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,.68), 0 10px 26px rgba(30,42,58,.12)";
     section.style.width = "100%";
     section.style.boxSizing = "border-box";
 
@@ -1041,9 +1103,10 @@ function createSection(titleJa: string, titleEn: string): HTMLDivElement {
     sectionTitles.push({ el: title, ja: titleJa, en: titleEn });
 
     const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.flexWrap = "wrap";
-    row.style.gap = isMobile ? "10px" : "8px";
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = isMobile ? "repeat(3,minmax(0,1fr))" : "repeat(auto-fit,minmax(128px,1fr))";
+    row.style.alignItems = "center";
+    row.style.gap = isMobile ? "8px" : "9px";
     section.appendChild(row);
     buttonArea.appendChild(section);
     return row;
@@ -1093,6 +1156,20 @@ binCountInput.max = "30";
 const pinRowInput = createInput(String(settings.pinRows), "number");
 pinRowInput.min = "1";
 pinRowInput.max = "30";
+
+const settingsZoomInput = createInput(String(Math.round(settingsUiZoom * 100)), "range");
+settingsZoomInput.min = "82";
+settingsZoomInput.max = "122";
+settingsZoomInput.step = "2";
+settingsZoomInput.title = "設定画面の表示倍率";
+settingsZoomInput.oninput = () => {
+    settingsUiZoom = clamp(Number(settingsZoomInput.value) / 100, 0.82, 1.22);
+    applySettingsUiZoom();
+};
+settingsZoomInput.onchange = () => {
+    localStorage.setItem(SETTINGS_UI_ZOOM_STORAGE_KEY, String(settingsUiZoom));
+    showSoftToast(`設定画面ズーム: ${Math.round(settingsUiZoom * 100)}%`);
+};
 
 const backgroundInput = createInput(settings.backgroundImage, "text");
 backgroundInput.placeholder = "例: /background.jpg または https://example.com/image.jpg";
@@ -1225,6 +1302,8 @@ const themeAutoField = createField("テーマ運用", themeAutoModeSelect);
 addField(themeAutoField.wrapper, themeAutoField.labelEl, "テーマ運用", "Theme mode");
 const effectModeField = createField("演出モード", effectModeSelect);
 addField(effectModeField.wrapper, effectModeField.labelEl, "演出モード", "Effect mode");
+const settingsZoomField = createField("設定画面ズーム", settingsZoomInput);
+addField(settingsZoomField.wrapper, settingsZoomField.labelEl, "設定画面ズーム", "Settings zoom");
 
 const utilityButtons = createSection("実験メニュー", "Experiment");
 const speedButtons = createSection("投下速度", "Drop speed");
@@ -1285,6 +1364,8 @@ utilityButtons.appendChild(languageButton);
 
 const fullScreenButton = setTooltip(setButtonLabel(createButton("全画面", () => toggleGameFullscreen()), "全画面", "Fullscreen"), "実験画面だけを大きく表示します。", "Expand only the game screen." );
 utilityButtons.appendChild(fullScreenButton);
+// よく使う操作を先頭へまとめる。append済み要素をprependするとDOM上で移動されるため安全です。
+utilityButtons.prepend(runButton, miracleGachaButton, magicCircleButton, homeButton);
 
 const speedButtonRefs: Record<string, HTMLButtonElement> = {};
 
@@ -2438,7 +2519,7 @@ function setupMobileLayout(): void {
 
     const dock = document.createElement("div");
     dock.style.display = "grid";
-    dock.style.gridTemplateColumns = "1.15fr 1.15fr 1fr";
+    dock.style.gridTemplateColumns = "1.05fr 1.05fr 1fr 1fr";
     dock.style.gap = "8px";
     dock.style.height = "100%";
     dock.style.alignItems = "center";
@@ -2447,7 +2528,7 @@ function setupMobileLayout(): void {
     mobileDockRunButton = createButton(t("実行", "Run"), () => startExperiment());
     mobileDockRunButton.style.width = "100%";
     mobileDockRunButton.style.height = "66px";
-    mobileDockRunButton.style.fontSize = "24px";
+    mobileDockRunButton.style.fontSize = "21px";
     dock.appendChild(mobileDockRunButton);
 
     mobileDockPauseButton = createButton(t("一時停止", "Pause"), () => {});
@@ -2463,13 +2544,19 @@ function setupMobileLayout(): void {
     });
     mobileDockPauseButton.style.width = "100%";
     mobileDockPauseButton.style.height = "66px";
-    mobileDockPauseButton.style.fontSize = "22px";
+    mobileDockPauseButton.style.fontSize = "20px";
     dock.appendChild(mobileDockPauseButton);
+
+    const mobileDockMagicButton = createButton(t("魔法陣", "Magic"), () => enableMagicCircleMode());
+    mobileDockMagicButton.style.width = "100%";
+    mobileDockMagicButton.style.height = "66px";
+    mobileDockMagicButton.style.fontSize = "19px";
+    dock.appendChild(mobileDockMagicButton);
 
     mobileDockSettingsButton = createButton(t("設定", "Settings"), () => openMobileSettingsPopup());
     mobileDockSettingsButton.style.width = "100%";
     mobileDockSettingsButton.style.height = "66px";
-    mobileDockSettingsButton.style.fontSize = "24px";
+    mobileDockSettingsButton.style.fontSize = "20px";
     dock.appendChild(mobileDockSettingsButton);
 
     mobileSettingsOverlay = document.createElement("div");
@@ -2478,8 +2565,8 @@ function setupMobileLayout(): void {
     mobileSettingsOverlay.style.display = "none";
     mobileSettingsOverlay.style.alignItems = "stretch";
     mobileSettingsOverlay.style.justifyContent = "center";
-    mobileSettingsOverlay.style.background = "rgba(5,8,18,.18)";
-    mobileSettingsOverlay.style.backdropFilter = "blur(1px)";
+    mobileSettingsOverlay.style.background = "rgba(5,8,18,.40)";
+    mobileSettingsOverlay.style.backdropFilter = "blur(8px)";
     mobileSettingsOverlay.style.zIndex = "140";
     mobileSettingsOverlay.style.padding = "0";
     document.body.appendChild(mobileSettingsOverlay);
@@ -2492,8 +2579,8 @@ function setupMobileLayout(): void {
     mobileSettingsPanel.style.width = "100%";
     mobileSettingsPanel.style.height = "100dvh";
     mobileSettingsPanel.style.maxHeight = "100dvh";
-    mobileSettingsPanel.style.background = "linear-gradient(180deg,rgba(251,253,255,.62) 0%,rgba(239,244,255,.48) 100%)";
-    mobileSettingsPanel.style.backdropFilter = "blur(8px) saturate(1.08)";
+    mobileSettingsPanel.style.background = "linear-gradient(135deg,rgba(255,255,255,.36),rgba(190,205,224,.24),rgba(255,255,255,.30))";
+    mobileSettingsPanel.style.backdropFilter = "blur(22px) saturate(1.35) contrast(1.04)";
     mobileSettingsPanel.style.borderTopLeftRadius = "0";
     mobileSettingsPanel.style.borderTopRightRadius = "0";
     mobileSettingsPanel.style.boxShadow = "0 -12px 40px rgba(0,0,0,.28)";
@@ -2515,8 +2602,8 @@ function setupMobileLayout(): void {
     closeRow.style.top = "0";
     closeRow.style.zIndex = "5";
     closeRow.style.padding = "max(10px, env(safe-area-inset-top)) 0 10px 0";
-    closeRow.style.background = "linear-gradient(180deg,rgba(251,253,255,.72),rgba(251,253,255,.54))";
-    closeRow.style.backdropFilter = "blur(14px)";
+    closeRow.style.background = "linear-gradient(180deg,rgba(251,253,255,.52),rgba(251,253,255,.34))";
+    closeRow.style.backdropFilter = "blur(22px)";
     closeRow.style.borderBottom = "1px solid rgba(80,90,120,.18)";
     closeRow.innerHTML = `<div style="font-size:22px;font-weight:900;color:#243018;">${t("設定", "Settings")}</div>`;
     const closeButton = createButton("×", () => closeMobileSettingsPopup());
@@ -2541,9 +2628,23 @@ function setupMobileLayout(): void {
     inner.appendChild(topRow);
     inner.appendChild(controlArea);
     inner.appendChild(buttonArea);
-    inner.appendChild(randomGraphArea);
+    randomGraphArea.style.display = "none";
+
+    applySettingsUiZoom();
 
     gameArea.style.flex = "1 1 auto";
+}
+
+function applySettingsUiZoom(): void {
+    const zoomText = String(settingsUiZoom);
+    if (mobileSettingsPanel) {
+        (mobileSettingsPanel.style as any).zoom = zoomText;
+    }
+    if (!isMobile) {
+        (controlArea.style as any).zoom = zoomText;
+        (buttonArea.style as any).zoom = zoomText;
+    }
+    settingsZoomInput.value = String(Math.round(settingsUiZoom * 100));
 }
 
 function updateUiLanguage(): void {
@@ -2796,12 +2897,12 @@ function applyDynamicUiPalette(): void {
     info.style.background = palette.panel;
     info.style.color = palette.fieldText;
     appHeader.style.background = palette.section;
-    recordHero.style.background = palette.section;
-    controlArea.style.background = palette.section;
-    buttonArea.style.background = palette.section;
-    randomGraphArea.style.background = palette.section;
+    recordHero.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
+    controlArea.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
+    buttonArea.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
+    randomGraphArea.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
     if (mobileSettingsPanel) {
-        mobileSettingsPanel.style.background = palette.panel;
+        mobileSettingsPanel.style.background = settings.blackModeEnabled ? "linear-gradient(135deg,rgba(15,23,42,.58),rgba(51,65,85,.36),rgba(148,163,184,.18))" : "linear-gradient(135deg,rgba(255,255,255,.36),rgba(190,205,224,.24),rgba(255,255,255,.30))";
         mobileSettingsPanel.style.color = palette.fieldText;
         applyThemePaletteToPanel(mobileSettingsPanel, {
             body: palette.panel,
@@ -4044,7 +4145,7 @@ function showAdminPanelPopup(): void {
     const miracleButtons = SPECIAL_EVENT_DEFS
         .slice()
         .sort((a, b) => b.denominator - a.denominator)
-        .map((def) => `<button class="admin-miracle-button" data-kind="${def.kind}" style="font-size:${isMobile ? "16px" : "15px"};font-weight:900;padding:10px 12px;border-radius:14px;border:1px solid rgba(127,29,29,.24);background:linear-gradient(180deg,#fff7ed 0%,#fed7aa 100%);color:#7c2d12;cursor:pointer;text-align:left;">${def.label}<br><span style="font-size:.82em;opacity:.78;">[${def.rank}] ${formatProbability(def.denominator)}</span></button>`)
+        .map((def) => `<button class="admin-miracle-button" data-kind="${def.kind}" style="font-size:${isMobile ? "16px" : "15px"};font-weight:900;padding:10px 12px;border-radius:14px;border:1px solid rgba(127,29,29,.24);background:linear-gradient(180deg,#fff7ed 0%,#fed7aa 100%);color:#7c2d12;cursor:pointer;text-align:left;white-space:normal;overflow-wrap:anywhere;line-height:1.2;">${def.label}<br><span style="font-size:.82em;opacity:.78;">[${def.rank}] ${formatProbability(def.denominator)}</span></button>`)
         .join("");
     showPopup("研究主任モード", `
         <p><b>管理者専用のテスト操作です。</b> 1兆分の1級の演出もボタンで強制発動できます。</p>
@@ -4340,19 +4441,20 @@ function applyTheme(): void {
     // テーマCSSで gameArea の background を強制すると、実行中にピンや玉が見えづらくなるため、
     // 盤面背景は applyBackgroundImage() に集約する。
     if (!activeRareBackgroundKind) applyBackgroundImage();
-    appHeader.style.background = palette.section;
+    appHeader.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
     appHeader.style.color = palette.fieldText;
-    appHeader.style.borderColor = palette.buttonBorder;
+    appHeader.style.borderColor = "rgba(148,163,184,.42)";
+    appHeader.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,.70), 0 10px 28px rgba(30,42,58,.14)";
     appHeaderNote.style.color = palette.mutedText;
-    recordHero.style.background = palette.section;
+    recordHero.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
     recordHero.style.color = palette.fieldText;
     recordHero.style.borderColor = palette.buttonBorder;
-    controlArea.style.background = palette.section;
-    buttonArea.style.background = palette.section;
-    randomGraphArea.style.background = palette.section;
+    controlArea.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
+    buttonArea.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
+    randomGraphArea.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
     applyThemePaletteToPanel(info, palette);
     if (mobileSettingsPanel) {
-        mobileSettingsPanel.style.background = palette.panel;
+        mobileSettingsPanel.style.background = settings.blackModeEnabled ? "linear-gradient(135deg,rgba(15,23,42,.58),rgba(51,65,85,.36),rgba(148,163,184,.18))" : "linear-gradient(135deg,rgba(255,255,255,.36),rgba(190,205,224,.24),rgba(255,255,255,.30))";
         mobileSettingsPanel.style.color = palette.fieldText;
         mobileSettingsPanel.style.borderColor = palette.buttonBorder;
         applyThemePaletteToPanel(mobileSettingsPanel, palette);
@@ -4733,18 +4835,44 @@ const MAGIC_CIRCLE_DEFS: MagicCircleDef[] = [
     { kind: "crown", label: "王冠陣", emoji: "👑", color: "#facc15", description: "強い光とともに観測ピンを置きます。" },
 ];
 
+function getMagicCircleMarkSvg(def: MagicCircleDef): string {
+    const stroke = escapeHtml(def.color);
+    const common = `fill="none" stroke="${stroke}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"`;
+    const markMap: Record<string, string> = {
+        sun: `<circle cx="60" cy="60" r="28" ${common}/><path d="M60 12v14M60 94v14M12 60h14M94 60h14M26 26l10 10M84 84l10 10M94 26 84 36M36 84 26 94" ${common}/>` ,
+        moon: `<path d="M74 18c-22 5-36 22-36 42s14 37 36 42c-30 8-58-12-58-42s28-50 58-42Z" fill="${stroke}" opacity=".82"/>`,
+        star: `<path d="M60 14 72 45 106 45 78 64 88 98 60 78 32 98 42 64 14 45 48 45Z" ${common}/>` ,
+        thunder: `<path d="M70 10 28 64h28L46 110 92 50H63Z" fill="${stroke}" opacity=".86"/>`,
+        wave: `<path d="M12 70c18-20 32-20 50 0s32 20 50 0M12 88c18-16 32-16 50 0s32 16 50 0" ${common}/>` ,
+        earth: `<path d="M18 74c16-10 26-30 42-30s26 20 42 30M24 88h72M36 58l24-32 24 32" ${common}/>` ,
+        wind: `<path d="M18 42h54c18 0 18-22 0-22M18 62h78c18 0 18 24-2 24H72M18 82h36" ${common}/>` ,
+        gate: `<path d="M26 102V34c0-14 12-24 34-24s34 10 34 24v68M42 102V42c0-8 6-14 18-14s18 6 18 14v60" ${common}/>` ,
+        mirror: `<path d="M24 16h72v88H24zM60 18v84M40 38l14 12-14 12M80 38 66 50l14 12" ${common}/>` ,
+        dragon: `<path d="M22 82c20-52 58 22 76-30 4-12-2-24-16-26M82 26l18-8-8 18M30 86l-12 18" ${common}/>` ,
+        void: `<circle cx="60" cy="60" r="42" fill="${stroke}" opacity=".18"/><circle cx="60" cy="60" r="24" fill="${stroke}" opacity=".82"/>`,
+        flower: `<circle cx="60" cy="60" r="12" fill="${stroke}"/><path d="M60 18c18 18 18 28 0 42-18-14-18-24 0-42ZM60 102c-18-18-18-28 0-42 18 14 18 24 0 42ZM18 60c18-18 28-18 42 0-14 18-24 18-42 0ZM102 60c-18 18-28 18-42 0 14-18 24-18 42 0Z" fill="${stroke}" opacity=".55"/>`,
+        gear: `<circle cx="60" cy="60" r="18" ${common}/><path d="M60 12v18M60 90v18M12 60h18M90 60h18M26 26l13 13M81 81l13 13M94 26 81 39M39 81 26 94" ${common}/>` ,
+        meteor: `<path d="M18 28c20 5 38 18 58 38M28 18c12 20 24 38 44 58M76 70c18-8 32 6 24 24s-32 14-40 0 0-20 16-24Z" ${common}/>` ,
+        clock: `<circle cx="60" cy="60" r="44" ${common}/><path d="M60 32v30l22 12M36 16l-12 12M84 16l12 12" ${common}/>` ,
+        crown: `<path d="M18 86h84M24 80l8-46 22 28 6-42 6 42 22-28 8 46Z" ${common}/>` ,
+    };
+    const mark = markMap[def.kind] ?? `<circle cx="60" cy="60" r="40" ${common}/>`;
+    return `<svg viewBox="0 0 120 120" width="96" height="96" role="img" aria-label="${escapeHtml(def.label)}" style="display:block;margin:0 auto 10px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.18));">${mark}</svg>`;
+}
+
 function showAdminMagicCircleAnswerPopup(): void {
     const rows = MAGIC_CIRCLE_DEFS.map((def, index) => `
-        <div style="padding:12px;border-radius:16px;background:rgba(255,255,255,.72);border:1px solid rgba(80,90,120,.16);">
+        <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);border:1px solid rgba(80,90,120,.16);text-align:center;">
+            ${getMagicCircleMarkSvg(def)}
             <div style="font-weight:1000;font-size:1.05em;">${index + 1}. ${def.emoji} ${escapeHtml(def.label)}</div>
-            <div style="margin-top:4px;opacity:.76;line-height:1.65;">${escapeHtml(def.description)}</div>
-            <div style="margin-top:4px;font-size:.84em;opacity:.62;">内部ID: ${escapeHtml(def.kind)}</div>
+            <div style="margin-top:6px;opacity:.76;line-height:1.65;text-align:left;">${escapeHtml(def.description)}</div>
+            <div style="margin-top:5px;font-size:.84em;opacity:.62;text-align:left;">内部ID: ${escapeHtml(def.kind)}</div>
         </div>
     `).join("");
     showPopup("魔法陣の回答一覧", `
-        <p style="line-height:1.8;margin-top:0;">管理者確認用です。魔法陣は線の長さ、曲がり方、描いた範囲、閉じ具合、点数などから判定しています。完全な固定ジェスチャーではなく、描き方によって下記16種類のどれかに分類されます。</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(${isMobile ? "210px" : "260px"},1fr));gap:10px;">${rows}</div>
-        <p style="line-height:1.8;opacity:.72;margin-bottom:0;">確認したい場合は「魔法陣を書く」を押して、丸、ジグザグ、大きい円、小さい円、長い線などを描いてください。</p>
+        <p style="line-height:1.8;margin-top:0;">管理者確認用です。各魔法陣の見た目イメージを表示しています。実際の判定は線の長さ、曲がり方、描いた範囲、閉じ具合、点数から分類します。</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(${isMobile ? "180px" : "220px"},1fr));gap:12px;">${rows}</div>
+        <p style="line-height:1.8;opacity:.72;margin-bottom:0;">「魔法陣を書く」を押して、上のマークに近い形を盤面へ描いてください。</p>
     `);
 }
 
@@ -4788,7 +4916,7 @@ function createTemporaryPinAt(x: number, y: number, label = "観測ピン", life
         friction: 0,
         render: { fillStyle: "rgba(250,204,21,.96)", strokeStyle: "rgba(255,255,255,.95)", lineWidth: Math.max(1, 2 * geometry.scale) } as any,
     });
-    (pin as any).plugin = { isPin: true, isTempPin: true, label, wiggleFrames: 80 };
+    (pin as any).plugin = { isPin: true, isTempPin: true, label, baseX: x, baseY: y, wiggleFrames: 80, wiggleTotal: 80, wigglePower: 1.25, bendDirection: 1 };
     temporaryPinBodies.add(pin);
     Composite.add(engine.world, pin);
     addFloatingText(label, x, y - 22 * geometry.scale, "#facc15");
@@ -4802,6 +4930,9 @@ function createTemporaryPinAt(x: number, y: number, label = "観測ピン", life
 function enableTemporaryPinPlacement(): void {
     temporaryPinPlacementEnabled = true;
     magicCircleModeEnabled = false;
+    magicCircleDrawing = false;
+    magicCirclePoints = [];
+    canvas.style.cursor = "copy";
     showSoftToast("盤面をタップすると一時的な観測ピンを設置します");
 }
 
@@ -4867,9 +4998,11 @@ function activateMagicCircle(def: MagicCircleDef, points: Array<{ x: number; y: 
 
 function enableMagicCircleMode(): void {
     magicCircleModeEnabled = true;
+    magicCircleDrawing = false;
     temporaryPinPlacementEnabled = false;
     magicCirclePoints = [];
-    showSoftToast("盤面を指でなぞって魔法陣を描いてください");
+    canvas.style.cursor = "crosshair";
+    showSoftToast("盤面を指でなぞって魔法陣を描いてください。描いた線が光ります");
 }
 
 function updateTiltButton(): void {
@@ -4924,8 +5057,8 @@ function showMiracleGachaPopup(): void {
                 <div style="margin-top:8px;opacity:.78;font-weight:900;line-height:1.7;">1回 ${MIRACLE_GACHA_ONCE_COST}P / 10連 ${MIRACLE_GACHA_TEN_COST}P</div>
             </div>
             <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
-                <button id="miracle-gacha-once-button" class="miracle-home-button miracle-home-primary" style="font-size:clamp(22px,4vw,34px);padding:16px 32px;" ${canOnce ? "" : "disabled"}>1回まわす</button>
-                <button id="miracle-gacha-ten-button" class="miracle-home-button miracle-home-primary" style="font-size:clamp(22px,4vw,34px);padding:16px 32px;" ${canTen ? "" : "disabled"}>10連まわす</button>
+                <button id="miracle-gacha-once-button" class="miracle-home-button miracle-home-primary" style="width:168px;height:48px;font-size:13px;padding:5px 10px;white-space:normal;line-height:1.08;" ${canOnce ? "" : "disabled"}>1回まわす</button>
+                <button id="miracle-gacha-ten-button" class="miracle-home-button miracle-home-primary" style="width:168px;height:48px;font-size:13px;padding:5px 10px;white-space:normal;line-height:1.08;" ${canTen ? "" : "disabled"}>10連まわす</button>
             </div>
             <div class="miracle-user-card" style="text-align:left;">
                 <b>奇跡ガチャPの貯め方</b>
@@ -5520,18 +5653,18 @@ function showPopup(title: string, bodyHtml: string): void {
                 z-index:1;
             }
             .miracle-popup-panel .miracle-user-card{
-                background:${palette.section};
+                background:${getMetallicPanelBackground(settings.blackModeEnabled)};
                 color:${palette.fieldText};
-                border:1px solid ${palette.buttonBorder};
+                border:1px solid rgba(148,163,184,.42);
                 box-sizing:border-box;
                 padding:${isMobile ? "22px" : "28px"} !important;
                 border-radius:22px;
                 line-height:1.72;
             }
             .miracle-popup-panel .miracle-home-hero{
-                background:${palette.section};
+                background:${getMetallicPanelBackground(settings.blackModeEnabled)};
                 color:${palette.fieldText};
-                border:1px solid ${palette.buttonBorder};
+                border:1px solid rgba(148,163,184,.42);
                 box-sizing:border-box;
                 padding:${isMobile ? "24px 24px 26px" : "34px 36px 36px"} !important;
                 border-radius:24px;
@@ -5541,18 +5674,18 @@ function showPopup(title: string, bodyHtml: string): void {
             .miracle-popup-panel .miracle-user-card > :last-child,
             .miracle-popup-panel .miracle-home-hero > :last-child{margin-bottom:0 !important;}
             .miracle-popup-panel .miracle-home-hero div:first-child{margin-bottom:${isMobile ? "14px" : "18px"};}
-            .miracle-popup-panel .miracle-home-button{font-size:20px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid ${palette.buttonBorder};background:${palette.buttonBg};color:${palette.buttonText};cursor:pointer;}
-            .miracle-popup-panel .miracle-home-primary{background:${palette.badge};color:${palette.badgeText};}
+            .miracle-popup-panel .miracle-home-button{width:${isMobile ? "min(100%, 148px)" : "168px"};height:${isMobile ? "46px" : "48px"};min-height:${isMobile ? "46px" : "48px"};font-size:${isMobile ? "12px" : "13px"};font-weight:1000;padding:5px 10px;border-radius:999px;border:1px solid rgba(70,88,112,.42);background:${getMetallicButtonBackground(false)};color:#142033;cursor:pointer;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;word-break:keep-all;line-height:1.08;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.92), inset 0 -5px 10px rgba(30,42,58,.16), 0 8px 18px rgba(30,42,58,.14);text-shadow:0 1px 0 rgba(255,255,255,.55);overflow:hidden;}
+            .miracle-popup-panel .miracle-home-primary{background:${getMetallicButtonBackground(true)};color:#3b2600;border-color:rgba(126,87,0,.55);}
             @media (max-width: 640px){
                 .miracle-popup-panel .miracle-user-card{padding:20px !important;}
                 .miracle-popup-panel .miracle-home-hero{padding:22px 22px 24px !important;}
             }
         </style>
-        <div class="miracle-popup-panel" style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:${palette.panel};color:${palette.fieldText};box-shadow:0 24px 80px rgba(0,0,0,.42);border:1px solid ${palette.buttonBorder};overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
-            <button id="close-help-popup-button" aria-label="閉じる" style="position:sticky;float:right;right:0;top:0;width:${closeSize};height:${closeSize};border-radius:999px;border:1px solid ${palette.buttonBorder};background:${palette.buttonBg};color:${palette.buttonText};font-size:${isMobile ? "34px" : "28px"};font-weight:900;line-height:1;cursor:pointer;box-shadow:0 5px 14px rgba(87,112,51,.16);z-index:2;">×</button>
+        <div class="miracle-popup-panel" style="position:relative;width:${panelWidth};max-width:${panelWidth};max-height:${panelMaxHeight};overflow:auto;box-sizing:border-box;padding:${panelPadding};border-radius:${isMobile ? "24px" : "26px"};background:${getMetallicPanelBackground(settings.blackModeEnabled)};color:${palette.fieldText};box-shadow:inset 0 1px 0 rgba(255,255,255,.66), inset 0 -18px 40px rgba(15,23,42,.10), 0 28px 90px rgba(0,0,0,.46);border:1px solid rgba(148,163,184,.48);overscroll-behavior:contain;-webkit-overflow-scrolling:touch;">
+            <button id="close-help-popup-button" aria-label="閉じる" style="position:sticky;float:right;right:0;top:0;width:${closeSize};height:${closeSize};border-radius:999px;border:1px solid rgba(70,88,112,.42);background:${getMetallicButtonBackground(false)};color:#142033;font-size:${isMobile ? "34px" : "28px"};font-weight:900;line-height:1;cursor:pointer;box-shadow:0 5px 14px rgba(87,112,51,.16);z-index:2;">×</button>
             <div style="font-size:${titleFont};font-weight:900;margin:0 ${isMobile ? "76px" : "70px"} 26px 0;padding-left:${isMobile ? "4px" : "6px"};color:${palette.title};line-height:1.18;word-break:keep-all;overflow-wrap:break-word;">${title}</div>
             <div style="font-size:${bodyFont};line-height:${isMobile ? "1.68" : "1.76"};color:${palette.fieldText};text-align:left;word-break:normal;overflow-wrap:break-word;padding:0 ${isMobile ? "2px" : "6px"};">${bodyHtml}</div>
-            <div style="margin-top:24px;text-align:center;"><button id="bottom-close-help-popup-button" style="font-size:20px;padding:12px 28px;border-radius:999px;border:1px solid ${palette.buttonBorder};cursor:pointer;font-weight:900;background:${palette.buttonBg};box-shadow:0 5px 14px rgba(87,112,51,.16);color:${palette.buttonText};">閉じる</button></div>
+            <div style="margin-top:24px;text-align:center;"><button id="bottom-close-help-popup-button" style="font-size:20px;padding:12px 28px;border-radius:999px;border:1px solid rgba(70,88,112,.42);cursor:pointer;font-weight:900;background:${getMetallicButtonBackground(false)};box-shadow:inset 0 1px 0 rgba(255,255,255,.92), inset 0 -5px 10px rgba(30,42,58,.16), 0 8px 18px rgba(30,42,58,.14);color:#142033;">閉じる</button></div>
         </div>`;
     helpOverlay.style.display = "flex";
     document.getElementById("close-help-popup-button")!.onclick = () => closeHelpPopup();
@@ -5876,7 +6009,7 @@ function calculateGeometry(): Geometry {
     const groundTop = height - groundHeight;
     const binScale = clamp(binWidth / 90, isMobile ? 0.9 : 0.55, 2.25);
     const ballRadius = clamp(18 * scale * binScale, isMobile ? 8 : 5, isMobile ? 34 : 30);
-    const pinRadius = clamp(10 * scale * binScale, isMobile ? 5 : 3, isMobile ? 20 : 18);
+    const pinRadius = clamp(13 * scale * binScale, isMobile ? 7 : 5, isMobile ? 26 : 24);
     const dividerWidth = clamp(12 * scale * binScale, 5, 22);
     const dividerHeight = clamp(104 * scale, 68, 170);
     const dividerY = groundTop - dividerHeight / 2;
@@ -6111,17 +6244,35 @@ function repaintThemeDecorations(palette: ReturnType<typeof getThemeUiPalette>):
     ].join(",");
 
     document.querySelectorAll<HTMLElement>(panelSelectors).forEach((panel) => {
-        panel.style.background = palette.section;
+        panel.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
         panel.style.color = palette.fieldText;
-        panel.style.borderColor = palette.buttonBorder;
+        panel.style.borderColor = "rgba(148,163,184,.42)";
         panel.style.borderRadius = "26px";
+        panel.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,.66), 0 10px 28px rgba(30,42,58,.14)";
     });
 
     document.querySelectorAll<HTMLButtonElement>("button:not([data-fixed-style='1'])").forEach((button) => {
-        button.style.background = palette.buttonBg;
-        button.style.color = palette.buttonText;
-        button.style.borderColor = palette.buttonBorder;
-        button.style.borderRadius = "999px";
+        const primary = button.classList.contains("miracle-home-primary");
+        const isPopupCloseButton = button.id === "close-help-popup-button" || button.id === "bottom-close-help-popup-button";
+        const isMainOverlayButton = button === gameFullscreenButton || button === pcPauseButton || button === mobileDockRunButton || button === mobileDockPauseButton || button === mobileDockSettingsButton;
+        const shouldUnifySize = !isPopupCloseButton && !isMainOverlayButton && Boolean(button.closest(".miracle-section, .miracle-mobile-panel") || button.classList.contains("miracle-home-button"));
+        if (shouldUnifySize) {
+            applyUnifiedMetallicButtonStyle(button, primary);
+            if (button.classList.contains("miracle-home-button")) {
+                button.style.width = isMobile ? "min(100%, 148px)" : "168px";
+                button.style.height = isMobile ? "46px" : "48px";
+                button.style.minHeight = button.style.height;
+                button.style.maxHeight = button.style.height;
+            }
+        } else {
+            button.style.background = getMetallicButtonBackground(primary);
+            button.style.color = primary ? "#3b2600" : "#142033";
+            button.style.borderColor = primary ? "rgba(126,87,0,.55)" : "rgba(70,88,112,.42)";
+            button.style.borderRadius = "999px";
+            button.style.boxShadow = primary
+                ? "inset 0 1px 0 rgba(255,255,255,.82), inset 0 -5px 10px rgba(105,62,0,.20), 0 8px 18px rgba(126,87,0,.18)"
+                : "inset 0 1px 0 rgba(255,255,255,.92), inset 0 -5px 10px rgba(30,42,58,.16), 0 8px 18px rgba(30,42,58,.14)";
+        }
     });
 
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select").forEach((field) => {
@@ -7352,9 +7503,9 @@ function createPins(): Matter.Body[] {
             const pin = Bodies.circle(pos.x, pos.y, geometry.pinRadius, {
                 isStatic: true,
                 render: {
-                    fillStyle: rarePin?.fillStyle ?? '#d4af37',
-                    strokeStyle: rarePin?.strokeStyle ?? '#fff2a8',
-                    lineWidth: Math.max(1, (rarePin ? 2.8 : 1.5) * geometry.scale),
+                    fillStyle: rarePin?.fillStyle ?? 'rgba(196,154,58,.98)',
+                    strokeStyle: rarePin?.strokeStyle ?? 'rgba(255,246,190,.98)',
+                    lineWidth: Math.max(1.4, (rarePin ? 3.2 : 2.4) * geometry.scale),
                 } as any,
             });
             (pin as any).plugin = { isPin: true, baseX: pos.x, baseY: pos.y, wiggleFrames: 0, rarePinKind: rarePin?.kind, rarePinLabel: rarePin?.label };
@@ -7695,7 +7846,13 @@ function activateNearestPin(event: PointerEvent): void {
     if (!nearest || nearestDistance > tapRadius) return;
 
     const plugin = (nearest as any).plugin;
-    plugin.wiggleFrames = 46;
+    plugin.baseX = plugin.baseX ?? nearest.position.x;
+    plugin.baseY = plugin.baseY ?? nearest.position.y;
+    const dir = nearest.position.x >= point.x ? 1 : -1;
+    plugin.wiggleFrames = 96;
+    plugin.wiggleTotal = 96;
+    plugin.wigglePower = 1.45;
+    plugin.bendDirection = dir;
 
     for (const body of engine.world.bodies) {
         const p = (body as any).plugin;
@@ -7707,19 +7864,36 @@ function activateNearestPin(event: PointerEvent): void {
         }
     }
 
-    addFloatingText("ピン揺れ", nearest.position.x, nearest.position.y - 20 * geometry.scale, "#00aaff");
-    triggerCameraShake(3 * geometry.scale, 100);
+    addFloatingText("ゴムピンしなり", nearest.position.x, nearest.position.y - 22 * geometry.scale, "#facc15");
+    triggerCameraShake(4 * geometry.scale, 140);
 }
 
 function updatePinWiggles(): void {
     for (const body of engine.world.bodies) {
         const plugin = (body as any).plugin;
         if (!plugin?.isPin || !plugin.wiggleFrames) continue;
+        plugin.baseX = plugin.baseX ?? body.position.x;
+        plugin.baseY = plugin.baseY ?? body.position.y;
+        const total = Math.max(1, plugin.wiggleTotal ?? 96);
+        if (!plugin.wiggleTotal) plugin.wiggleTotal = total;
         const t = plugin.wiggleFrames;
-        const power = (t / 46) * 10 * geometry.scale;
-        Body.setPosition(body, { x: plugin.baseX + Math.sin(t * 0.85) * power, y: plugin.baseY + Math.cos(t * 0.7) * power * 0.25 });
+        const progress = clamp(t / total, 0, 1);
+        const phase = (1 - progress) * Math.PI;
+        const elastic = Math.sin(phase * 8.5) * progress;
+        const dir = Number(plugin.bendDirection ?? (body.id % 2 === 0 ? 1 : -1));
+        const power = (plugin.wigglePower ?? 1) * Math.max(8 * geometry.scale, geometry.pinRadius * 1.15);
+        plugin.bendAmount = clamp(elastic * dir * 3.2, -3.2, 3.2);
+        Body.setPosition(body, {
+            x: plugin.baseX + elastic * dir * power,
+            y: plugin.baseY + Math.sin(phase * 5.5) * progress * power * 0.18,
+        });
         plugin.wiggleFrames--;
-        if (plugin.wiggleFrames <= 0) { Body.setPosition(body, { x: plugin.baseX, y: plugin.baseY }); plugin.wiggleFrames = 0; }
+        if (plugin.wiggleFrames <= 0) {
+            Body.setPosition(body, { x: plugin.baseX, y: plugin.baseY });
+            plugin.wiggleFrames = 0;
+            plugin.wiggleTotal = 0;
+            plugin.bendAmount = 0;
+        }
     }
 }
 
@@ -8309,16 +8483,8 @@ function updateInfo(): void {
 }
 
 function updateRandomGraph(): void {
-    const maxBucket = Math.max(...randomBuckets, 1);
-    let html = `<div style="font-weight:900;margin-bottom:6px;color:#273042;">Math.random() 直接分布</div><div style="display:grid;grid-template-columns:repeat(10,1fr);gap:6px;align-items:end;height:${Math.round(clamp(72 * geometry.scale, 54, isMobile ? 130 : 110))}px;">`;
-    for (let i = 0; i < RANDOM_BUCKET_COUNT; i++) {
-        const count = randomBuckets[i];
-        const percent = randomCallCount > 0 ? (count / randomCallCount) * 100 : 0;
-        const barHeight = Math.max(2, (count / maxBucket) * 100);
-        html += `<div style="text-align:center;font-size:${Math.round(clamp(12 * geometry.scale, isMobile ? 13 : 10, isMobile ? 20 : 16))}px;"><div style="height:${barHeight}%;background:linear-gradient(180deg,#6fb0ff,#3d72ff);border-radius:7px 7px 0 0;margin:0 auto 3px auto;width:72%;box-shadow:0 3px 8px rgba(61,114,255,.25);"></div><div>${i / 10}-${(i + 1) / 10}</div><div>${percent.toFixed(1)}%</div></div>`;
-    }
-    html += `</div>`;
-    randomGraphArea.innerHTML = html;
+    randomGraphArea.style.display = "none";
+    randomGraphArea.innerHTML = "";
 }
 
 function buildResultCsv(): string {
@@ -8870,6 +9036,337 @@ function drawNormalTraitMarks(context: CanvasRenderingContext2D): void {
     context.restore();
 }
 
+function drawRealisticPins(context: CanvasRenderingContext2D): void {
+    context.save();
+    for (const body of engine.world.bodies) {
+        const plugin = (body as any).plugin;
+        if (!plugin?.isPin) continue;
+        try { (body.render as any).visible = false; } catch {}
+        const rawRadius = body.circleRadius ?? geometry.pinRadius;
+        const radius = clamp(Math.max(rawRadius * 1.28, geometry.pinRadius * 1.42, 4 * geometry.scale), 3, 92 * geometry.scale);
+        const baseX = Number(plugin.baseX ?? body.position.x);
+        const baseY = Number(plugin.baseY ?? body.position.y);
+        const bend = clamp(Number(plugin.bendAmount ?? 0), -3.2, 3.2);
+        const headX = body.position.x + bend * radius * 0.18;
+        const headY = body.position.y + Math.abs(bend) * radius * 0.05;
+        const stretch = 1 + Math.min(0.55, Math.abs(bend) * 0.09);
+        const squash = Math.max(0.62, 1 - Math.abs(bend) * 0.05);
+        const rx = Math.max(2, radius * stretch);
+        const ry = Math.max(2, radius * squash);
+
+        context.save();
+        context.lineCap = "round";
+        context.lineJoin = "round";
+
+        // 盤面に刺さる金属ピンの軸。しなった時にゴムのように曲がって見えるよう、
+        // 土台位置から頭まで曲線でつなぎます。
+        const anchorX = baseX;
+        const anchorY = baseY + radius * 0.58;
+        const controlX = (anchorX + headX) / 2 + bend * radius * 0.78;
+        const controlY = (anchorY + headY) / 2 - radius * 0.35;
+        context.strokeStyle = "rgba(20,24,34,.32)";
+        context.lineWidth = Math.max(2, radius * 0.28);
+        context.beginPath();
+        context.moveTo(anchorX + radius * 0.10, anchorY + radius * 0.18);
+        context.quadraticCurveTo(controlX + radius * 0.10, controlY + radius * 0.18, headX + radius * 0.10, headY + radius * 0.08);
+        context.stroke();
+
+        const stemGrad = context.createLinearGradient(anchorX - radius, anchorY, headX + radius, headY);
+        stemGrad.addColorStop(0, "rgba(255,255,245,.95)");
+        stemGrad.addColorStop(0.34, "rgba(244,202,92,.95)");
+        stemGrad.addColorStop(0.68, "rgba(122,78,22,.92)");
+        stemGrad.addColorStop(1, "rgba(255,247,190,.88)");
+        context.strokeStyle = stemGrad;
+        context.lineWidth = Math.max(2, radius * 0.18);
+        context.beginPath();
+        context.moveTo(anchorX, anchorY);
+        context.quadraticCurveTo(controlX, controlY, headX, headY + radius * 0.06);
+        context.stroke();
+
+        // 土台の影。
+        context.fillStyle = "rgba(0,0,0,.20)";
+        context.beginPath();
+        context.ellipse(baseX + radius * 0.16, baseY + radius * 0.62, Math.max(2, radius * 0.90), Math.max(2, radius * 0.30), 0, 0, Math.PI * 2);
+        context.fill();
+
+        context.translate(headX, headY);
+        context.rotate(bend * 0.10);
+
+        const base = context.createRadialGradient(-rx * 0.30, -ry * 0.36, Math.max(1, radius * 0.12), 0, 0, Math.max(2, radius * 1.18));
+        base.addColorStop(0, "rgba(255,255,248,.98)");
+        base.addColorStop(0.20, "rgba(255,236,148,.98)");
+        base.addColorStop(0.48, "rgba(214,149,35,.98)");
+        base.addColorStop(0.76, "rgba(129,81,18,.98)");
+        base.addColorStop(1, "rgba(255,239,145,.92)");
+        context.fillStyle = base;
+        context.beginPath();
+        context.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+        context.fill();
+
+        const shine = context.createLinearGradient(-rx, -ry, rx, ry);
+        shine.addColorStop(0, "rgba(255,255,255,.92)");
+        shine.addColorStop(0.30, "rgba(255,255,255,.16)");
+        shine.addColorStop(0.52, "rgba(255,255,255,0)");
+        shine.addColorStop(0.68, "rgba(255,245,180,.34)");
+        shine.addColorStop(1, "rgba(0,0,0,.20)");
+        context.fillStyle = shine;
+        context.beginPath();
+        context.ellipse(0, 0, rx * 0.96, ry * 0.96, 0, 0, Math.PI * 2);
+        context.fill();
+
+        context.fillStyle = "rgba(255,255,255,.72)";
+        context.beginPath();
+        context.ellipse(-rx * 0.28, -ry * 0.34, Math.max(1, rx * 0.25), Math.max(1, ry * 0.16), -0.55, 0, Math.PI * 2);
+        context.fill();
+
+        context.strokeStyle = "rgba(255,246,190,.96)";
+        context.lineWidth = Math.max(1, radius * 0.12);
+        context.beginPath();
+        context.ellipse(0, 0, rx * 0.88, ry * 0.88, 0, Math.PI * 0.82, Math.PI * 1.82);
+        context.stroke();
+        context.strokeStyle = "rgba(52,32,7,.34)";
+        context.lineWidth = Math.max(1, radius * 0.08);
+        context.beginPath();
+        context.ellipse(0, 0, rx * 0.95, ry * 0.95, 0, Math.PI * 0.02, Math.PI * 0.92);
+        context.stroke();
+        context.restore();
+    }
+    context.restore();
+}
+
+function drawMagicCircleTrace(context: CanvasRenderingContext2D): void {
+    if (!magicCircleModeEnabled && magicCirclePoints.length === 0) return;
+    const points = magicCirclePoints;
+    context.save();
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.globalCompositeOperation = "lighter";
+    if (points.length >= 2) {
+        const pulse = 0.55 + Math.sin(performance.now() / 120) * 0.25;
+        context.strokeStyle = `rgba(180,235,255,${0.58 + pulse * 0.28})`;
+        context.lineWidth = Math.max(5 * geometry.scale, 4);
+        context.beginPath();
+        context.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) context.lineTo(points[i].x, points[i].y);
+        context.stroke();
+        context.strokeStyle = "rgba(255,255,255,.92)";
+        context.lineWidth = Math.max(1.5 * geometry.scale, 1.2);
+        context.stroke();
+    }
+    if (magicCircleModeEnabled) {
+        const last = points[points.length - 1];
+        const cx = last?.x ?? geometry.width / 2;
+        const cy = last?.y ?? geometry.height * 0.32;
+        const r = Math.max(28 * geometry.scale, 20);
+        context.strokeStyle = "rgba(255,255,255,.70)";
+        context.lineWidth = Math.max(2 * geometry.scale, 1.5);
+        context.beginPath();
+        context.arc(cx, cy, r, 0, Math.PI * 2);
+        context.stroke();
+        context.fillStyle = "rgba(255,255,255,.90)";
+        context.font = `900 ${Math.round(clamp(18 * geometry.scale, 13, 28))}px ${ROUNDED_UI_FONT}`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText("描画中", cx, cy - r - 14 * geometry.scale);
+    }
+    context.restore();
+}
+
+function drawBoardDepthOverlay(context: CanvasRenderingContext2D): void {
+    context.save();
+    context.globalCompositeOperation = "source-over";
+    const scale = geometry.scale || 1;
+    const left = Math.max(geometry.wallWidth * 0.58, 10 * scale);
+    const top = Math.max(10 * scale, 8);
+    const right = geometry.width - left;
+    const bottom = Math.max(geometry.groundTop - 12 * scale, top + 40 * scale);
+    const w = Math.max(20 * scale, right - left);
+    const h = Math.max(20 * scale, bottom - top);
+    const radius = Math.max(18 * scale, 14);
+    const richAlpha = settings.simpleMode ? 0.55 : 1;
+
+    // 外側の高級メタルフレーム。simpleModeでも消さず、軽めに描画します。
+    const frame = context.createLinearGradient(left, top, right, bottom);
+    frame.addColorStop(0, `rgba(255,255,255,${0.58 * richAlpha})`);
+    frame.addColorStop(0.18, `rgba(210,223,238,${0.30 * richAlpha})`);
+    frame.addColorStop(0.45, `rgba(94,111,132,${0.32 * richAlpha})`);
+    frame.addColorStop(0.70, `rgba(255,230,145,${0.30 * richAlpha})`);
+    frame.addColorStop(1, `rgba(255,255,255,${0.42 * richAlpha})`);
+    context.strokeStyle = frame;
+    context.lineWidth = Math.max(5 * scale, 3);
+    roundRect(context, left, top, w, h, radius);
+    context.stroke();
+
+    context.strokeStyle = `rgba(255,255,255,${0.34 * richAlpha})`;
+    context.lineWidth = Math.max(2 * scale, 1.5);
+    roundRect(context, left + 7 * scale, top + 7 * scale, Math.max(8, w - 14 * scale), Math.max(8, h - 14 * scale), Math.max(8, radius - 7 * scale));
+    context.stroke();
+
+    context.strokeStyle = `rgba(0,0,0,${0.26 * richAlpha})`;
+    context.lineWidth = Math.max(2 * scale, 1);
+    roundRect(context, left + 3 * scale, top + 3 * scale, Math.max(8, w - 6 * scale), Math.max(8, h - 6 * scale), Math.max(8, radius - 3 * scale));
+    context.stroke();
+
+    // 盤面ガラスの斜め反射。常時表示して、奥行きと高級感を出します。
+    const glass = context.createLinearGradient(0, 0, geometry.width, geometry.height);
+    glass.addColorStop(0, `rgba(255,255,255,${0.24 * richAlpha})`);
+    glass.addColorStop(0.22, `rgba(255,255,255,${0.07 * richAlpha})`);
+    glass.addColorStop(0.38, "rgba(255,255,255,0)");
+    glass.addColorStop(0.68, "rgba(0,0,0,0)");
+    glass.addColorStop(1, `rgba(0,0,0,${0.16 * richAlpha})`);
+    context.fillStyle = glass;
+    context.fillRect(0, 0, geometry.width, geometry.height);
+
+    if (!settings.simpleMode) {
+        context.save();
+        context.globalCompositeOperation = "screen";
+        const sweepX = (performance.now() / 42) % (geometry.width + geometry.height) - geometry.height;
+        const sweep = context.createLinearGradient(sweepX, 0, sweepX + geometry.height * 0.55, geometry.height);
+        sweep.addColorStop(0, "rgba(255,255,255,0)");
+        sweep.addColorStop(0.42, "rgba(255,255,255,0)");
+        sweep.addColorStop(0.50, "rgba(255,255,255,.18)");
+        sweep.addColorStop(0.58, "rgba(255,255,255,0)");
+        sweep.addColorStop(1, "rgba(255,255,255,0)");
+        context.fillStyle = sweep;
+        context.fillRect(0, 0, geometry.width, geometry.height);
+        context.restore();
+
+        // 左右の透明アクリル柱。
+        const railW = Math.max(16 * scale, 8);
+        const rail = context.createLinearGradient(0, top, railW, top);
+        rail.addColorStop(0, "rgba(255,255,255,.28)");
+        rail.addColorStop(0.45, "rgba(255,255,255,.06)");
+        rail.addColorStop(1, "rgba(0,0,0,.20)");
+        context.fillStyle = rail;
+        roundRect(context, left - railW * 0.45, top + 10 * scale, railW, Math.max(10, h - 20 * scale), railW / 2);
+        context.fill();
+        context.save();
+        context.translate(geometry.width, 0);
+        context.scale(-1, 1);
+        context.fillStyle = rail;
+        roundRect(context, left - railW * 0.45, top + 10 * scale, railW, Math.max(10, h - 20 * scale), railW / 2);
+        context.fill();
+        context.restore();
+
+        // 四隅の宝石っぽい輝き。
+        const corners: Array<[number, number, number]> = [
+            [left + radius * 0.7, top + radius * 0.7, 0],
+            [right - radius * 0.7, top + radius * 0.7, Math.PI * 0.5],
+            [left + radius * 0.7, bottom - radius * 0.7, Math.PI * 1.5],
+            [right - radius * 0.7, bottom - radius * 0.7, Math.PI],
+        ];
+        for (const [cx, cy, angle] of corners) {
+            context.save();
+            context.translate(cx, cy);
+            context.rotate(angle);
+            const glow = context.createRadialGradient(0, 0, 0, 0, 0, radius * 1.6);
+            glow.addColorStop(0, "rgba(255,240,170,.26)");
+            glow.addColorStop(0.45, "rgba(255,255,255,.10)");
+            glow.addColorStop(1, "rgba(255,255,255,0)");
+            context.fillStyle = glow;
+            context.beginPath();
+            context.arc(0, 0, radius * 1.6, 0, Math.PI * 2);
+            context.fill();
+            context.strokeStyle = "rgba(255,240,170,.35)";
+            context.lineWidth = Math.max(1, 1.3 * scale);
+            context.beginPath();
+            context.moveTo(-radius * 0.8, 0);
+            context.lineTo(radius * 0.8, 0);
+            context.moveTo(0, -radius * 0.8);
+            context.lineTo(0, radius * 0.8);
+            context.stroke();
+            context.restore();
+        }
+    }
+
+    // 下側は少し暗くして、盤面の奥行きを固定で見せる。
+    const bottomDepth = context.createLinearGradient(0, geometry.groundTop - 150 * scale, 0, geometry.height);
+    bottomDepth.addColorStop(0, "rgba(0,0,0,0)");
+    bottomDepth.addColorStop(0.65, `rgba(0,0,0,${0.08 * richAlpha})`);
+    bottomDepth.addColorStop(1, `rgba(0,0,0,${0.22 * richAlpha})`);
+    context.fillStyle = bottomDepth;
+    context.fillRect(0, Math.max(0, geometry.groundTop - 150 * scale), geometry.width, Math.max(0, geometry.height - (geometry.groundTop - 150 * scale)));
+
+    context.restore();
+}
+
+function drawLuxuryBoardForeground(context: CanvasRenderingContext2D): void {
+    const scale = geometry.scale || 1;
+    const left = Math.max(geometry.wallWidth * 0.44, 8 * scale);
+    const top = Math.max(8 * scale, 6);
+    const right = geometry.width - left;
+    const bottom = Math.max(geometry.groundTop - 8 * scale, top + 50 * scale);
+    const w = Math.max(40 * scale, right - left);
+    const h = Math.max(40 * scale, bottom - top);
+    const radius = Math.max(22 * scale, 16);
+    const time = performance.now() / 1000;
+
+    context.save();
+    context.globalCompositeOperation = "source-over";
+
+    // 前面の厚いクロームフレーム。背景側ではなく最後に重ねるので必ず見えます。
+    const chrome = context.createLinearGradient(left, top, right, bottom);
+    chrome.addColorStop(0, "rgba(255,255,255,.82)");
+    chrome.addColorStop(0.16, "rgba(195,210,228,.42)");
+    chrome.addColorStop(0.36, "rgba(66,82,105,.36)");
+    chrome.addColorStop(0.58, "rgba(255,238,150,.46)");
+    chrome.addColorStop(0.78, "rgba(86,102,126,.30)");
+    chrome.addColorStop(1, "rgba(255,255,255,.70)");
+    context.strokeStyle = chrome;
+    context.lineWidth = Math.max(7 * scale, 4);
+    roundRect(context, left, top, w, h, radius);
+    context.stroke();
+
+    context.strokeStyle = "rgba(255,255,255,.38)";
+    context.lineWidth = Math.max(2.5 * scale, 1.5);
+    roundRect(context, left + 8 * scale, top + 8 * scale, Math.max(10, w - 16 * scale), Math.max(10, h - 16 * scale), Math.max(8, radius - 8 * scale));
+    context.stroke();
+
+    // ガラス反射を前面に薄く重ねる。
+    context.save();
+    context.globalCompositeOperation = "screen";
+    const glass = context.createLinearGradient(0, 0, geometry.width, geometry.height);
+    glass.addColorStop(0, "rgba(255,255,255,.25)");
+    glass.addColorStop(0.28, "rgba(255,255,255,.05)");
+    glass.addColorStop(0.46, "rgba(255,255,255,0)");
+    glass.addColorStop(0.78, "rgba(255,255,255,.08)");
+    glass.addColorStop(1, "rgba(255,255,255,.18)");
+    context.fillStyle = glass;
+    context.fillRect(0, 0, geometry.width, bottom);
+
+    const sweepX = ((time * 95) % (geometry.width + geometry.height)) - geometry.height;
+    const sweep = context.createLinearGradient(sweepX, 0, sweepX + geometry.height * 0.62, geometry.height);
+    sweep.addColorStop(0, "rgba(255,255,255,0)");
+    sweep.addColorStop(0.45, "rgba(255,255,255,0)");
+    sweep.addColorStop(0.51, "rgba(255,255,255,.22)");
+    sweep.addColorStop(0.58, "rgba(255,255,255,0)");
+    sweep.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = sweep;
+    context.fillRect(0, 0, geometry.width, bottom);
+    context.restore();
+
+    // 奥行きをわかりやすくする下側の影。
+    const depth = context.createLinearGradient(0, bottom - 80 * scale, 0, geometry.height);
+    depth.addColorStop(0, "rgba(0,0,0,0)");
+    depth.addColorStop(1, "rgba(0,0,0,.26)");
+    context.fillStyle = depth;
+    context.fillRect(0, Math.max(0, bottom - 80 * scale), geometry.width, geometry.height - Math.max(0, bottom - 80 * scale));
+
+    // 両サイドに宝石感のある縦光。
+    for (const side of [-1, 1]) {
+        const cx = side < 0 ? left + 18 * scale : right - 18 * scale;
+        const glow = context.createLinearGradient(cx - side * 10 * scale, top, cx + side * 10 * scale, bottom);
+        glow.addColorStop(0, "rgba(255,255,255,.28)");
+        glow.addColorStop(0.45, "rgba(135,205,255,.10)");
+        glow.addColorStop(1, "rgba(255,236,160,.20)");
+        context.fillStyle = glow;
+        roundRect(context, cx - 5 * scale, top + 18 * scale, 10 * scale, Math.max(10, h - 36 * scale), 999);
+        context.fill();
+    }
+
+    context.restore();
+}
+
 function drawSpecialGlows(context: CanvasRenderingContext2D): void {
     if (settings.simpleMode) return;
     const time = Date.now() / 1000;
@@ -8984,7 +9481,10 @@ Events.on(render, "afterRender", () => {
     context.save();
     drawPachinkoMachine(context);
     drawRareBoardCatastrophe(context);
+    drawBoardDepthOverlay(context);
     drawTapRipples(context);
+    drawMagicCircleTrace(context);
+    drawRealisticPins(context);
     draw3DBallShading(context);
     drawSpecialGlows(context);
     drawTimeBallSkins(context);
@@ -9051,6 +9551,7 @@ Events.on(render, "afterRender", () => {
         }
         context.restore();
     }
+    drawLuxuryBoardForeground(context);
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
         const item = floatingTexts[i];
         const progress = item.life / item.maxLife;
