@@ -14,6 +14,7 @@ import { createInitialSkillState, createRandomBuckets } from "./miracle/state";
 import { getRankBaseScore, getRankScore } from "./miracle/rarity";
 import { applyThemePaletteToPanel } from "./miracle/ui";
 import { shouldPlayRemoteMiracleVideo } from "./miracle/videoEffects";
+import { buildOfflineMiracleVideoPlan, clearOfflineMiracleVideos, downloadOfflineMiracleVideos, formatOfflineBytes, getOfflineMiracleSummary, resolveOfflineMiracleSources, revokeOfflineObjectUrls } from "./miracle/offlineCache";
 import { FAMILIAR_DEFS, findFamiliarBySecretCode, gainFamiliarXp, getFamiliarDef, getFamiliarDropXp, getFamiliarLevelInfo, getFamiliarModeLabel, getFamiliarMood, loadFamiliarState, saveFamiliarState, unlockFamiliar } from "./miracle/familiar";
 import { awardTicketsForRank, loadMiracleTicketState, saveMiracleTicketState, spendMiracleTickets, type MiracleTicketState } from "./miracle/miracleTicket";
 import { FAMILIAR_EXPEDITION_PLANS, claimFamiliarExpedition, getFamiliarExpeditionProgress, loadFamiliarExpeditionState, startFamiliarExpedition, type FamiliarExpeditionState } from "./miracle/familiarExpedition";
@@ -279,6 +280,7 @@ let adminForceNextMiracleEffect = false;
 let activeRemoteMiracleVideoRankScore = -1;
 let activeRemoteMiracleVideoLabel = "";
 let activeRemoteMiracleVideoVolume = 0.45;
+let activeRemoteMiracleObjectUrls: string[] = [];
 
 const engine = Engine.create();
 engine.gravity.y = 8;
@@ -1346,6 +1348,9 @@ const lowSpecButton = setTooltip(setButtonLabel(createButton("低スペック: O
 }), "低スペック: OFF", "Low spec: OFF"), "スマホや低スペック端末向けに動画・演出・背景を軽くします。", "Reduce video, effects, and background load for weaker devices.");
 displayButtons.appendChild(lowSpecButton);
 
+const offlineVideoButton = setTooltip(setButtonLabel(createButton("動画保存", () => { void showOfflineVideoDownloadPopup(); }), "動画保存", "Save videos"), "動画演出をブラウザ内に保存して、オフラインでも再生しやすくします。", "Save video effects in this browser for offline playback.");
+displayButtons.appendChild(offlineVideoButton);
+
 const recentMiracleDisplayButton = setTooltip(setButtonLabel(createButton("直近の奇跡: OFF", () => {
     settings.showRecentMiracles = !settings.showRecentMiracles;
     updateRecentMiracleDisplayButton();
@@ -1488,6 +1493,7 @@ let remoteMiracleAssets: RemoteMiracleAsset[] = [];
 let remoteMiracleAssetsLoadedAt = 0;
 let remoteMiracleAssetsLoading: Promise<RemoteMiracleAsset[]> | null = null;
 let activeRemoteMiracleVideo: HTMLVideoElement | null = null;
+const REMOTE_MIRACLE_MANIFEST_BACKUP_STORAGE_KEY = "miracleBallLab.remoteManifestBackup.v1";
 let remoteMiracleVideoTimer: number | undefined;
 let remoteMiracleBadUrls = new Map<string, number>();
 
@@ -5785,6 +5791,35 @@ function getRemoteRankCandidates(def?: SpecialEventDef): string[] {
     return ["common", "rare"];
 }
 
+function normalizeRemoteMiracleAssetsFromManifest(manifest: RemoteMiracleManifest): RemoteMiracleAsset[] {
+    const assets = Array.isArray(manifest.assets) ? manifest.assets : [];
+
+    return assets.filter((asset) => {
+        if (!asset || !asset.id || !asset.kind) return false;
+        if (asset.kind !== "video" && asset.kind !== "audio") return false;
+        if (!asset.url && (!asset.sources || asset.sources.length === 0)) return false;
+        return true;
+    });
+}
+
+function saveRemoteMiracleManifestBackup(manifest: RemoteMiracleManifest): void {
+    try {
+        localStorage.setItem(REMOTE_MIRACLE_MANIFEST_BACKUP_STORAGE_KEY, JSON.stringify(manifest));
+    } catch {
+        // オフライン再生の補助情報なので、保存失敗しても通常動作を優先します。
+    }
+}
+
+function loadRemoteMiracleManifestBackup(): RemoteMiracleAsset[] {
+    try {
+        const raw = localStorage.getItem(REMOTE_MIRACLE_MANIFEST_BACKUP_STORAGE_KEY);
+        if (!raw) return [];
+        return normalizeRemoteMiracleAssetsFromManifest(JSON.parse(raw) as RemoteMiracleManifest);
+    } catch {
+        return [];
+    }
+}
+
 async function loadRemoteMiracleAssets(force = false): Promise<RemoteMiracleAsset[]> {
     const now = Date.now();
 
@@ -5800,20 +5835,20 @@ async function loadRemoteMiracleAssets(force = false): Promise<RemoteMiracleAsse
         .then(async (res) => {
             if (!res.ok) throw new Error(`manifest fetch failed: ${res.status}`);
             const manifest = (await res.json()) as RemoteMiracleManifest;
-            const assets = Array.isArray(manifest.assets) ? manifest.assets : [];
 
-            remoteMiracleAssets = assets.filter((asset) => {
-                if (!asset || !asset.id || !asset.kind) return false;
-                if (asset.kind !== "video" && asset.kind !== "audio") return false;
-                if (!asset.url && (!asset.sources || asset.sources.length === 0)) return false;
-                return true;
-            });
-
+            remoteMiracleAssets = normalizeRemoteMiracleAssetsFromManifest(manifest);
             remoteMiracleAssetsLoadedAt = Date.now();
+            saveRemoteMiracleManifestBackup({ ...manifest, assets: remoteMiracleAssets });
             return remoteMiracleAssets;
         })
         .catch((error) => {
             console.warn("[Miracle R2] manifest load failed", error);
+            const backupAssets = loadRemoteMiracleManifestBackup();
+            if (backupAssets.length > 0) {
+                remoteMiracleAssets = backupAssets;
+                remoteMiracleAssetsLoadedAt = Date.now();
+                return remoteMiracleAssets;
+            }
             return remoteMiracleAssets;
         })
         .finally(() => {
@@ -5867,6 +5902,11 @@ function stopRemoteMiracleVideo(): void {
             // 動画停止失敗は無視
         }
         activeRemoteMiracleVideo = null;
+    }
+
+    if (activeRemoteMiracleObjectUrls.length > 0) {
+        revokeOfflineObjectUrls(activeRemoteMiracleObjectUrls);
+        activeRemoteMiracleObjectUrls = [];
     }
 
     remoteMiracleVideoOverlay.innerHTML = "";
@@ -6048,6 +6088,123 @@ function getRemoteMiracleVideoVolume(asset: RemoteMiracleAsset): number {
     return clamp(Number(asset.volume ?? 0.45), 0, 1);
 }
 
+function getOfflineUpdatedAtText(updatedAt: number): string {
+    if (!updatedAt) return "未保存";
+    try {
+        return new Date(updatedAt).toLocaleString();
+    } catch {
+        return "保存済み";
+    }
+}
+
+async function showOfflineVideoDownloadPopup(): Promise<void> {
+    showPopup("オフライン動画保存", `
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            <p style="margin:0;font-weight:900;">動画演出の容量を確認しています。</p>
+            <p style="margin:8px 0 0;opacity:.72;">R2 の manifest.json を読み込み、未保存動画のサイズを調べます。</p>
+        </div>
+    `);
+
+    const assets = await loadRemoteMiracleAssets(true);
+    const videos = assets.filter((asset) => asset.kind === "video");
+
+    if (videos.length === 0) {
+        showPopup("オフライン動画保存", `
+            <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+                <p style="margin:0;font-weight:900;">保存対象の動画が見つかりませんでした。</p>
+                <p style="margin:8px 0 0;opacity:.72;">manifest.json に <code>kind: "video"</code> の素材があるか確認してください。</p>
+            </div>
+        `);
+        return;
+    }
+
+    const plan = await buildOfflineMiracleVideoPlan(videos, getRemoteMiracleAssetSources);
+    const summary = await getOfflineMiracleSummary();
+
+    if (!plan.supported) {
+        showPopup("オフライン動画保存", `
+            <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+                <p style="margin:0;font-weight:900;">このブラウザでは動画保存を利用できません。</p>
+                <p style="margin:8px 0 0;opacity:.72;">Chrome / Edge / Safari の通常ブラウザ、またはHTTPS配信で試してください。</p>
+            </div>
+        `);
+        return;
+    }
+
+    const unknownText = plan.unknownCount > 0
+        ? `<div style="margin-top:8px;color:#92400e;font-weight:900;">サイズ不明の動画が ${plan.unknownCount} 件あります。実際の通信量は表示より増える可能性があります。</div>`
+        : "";
+    const allCachedText = plan.downloadSources.length === 0
+        ? `<div style="margin-top:10px;padding:12px;border-radius:16px;background:rgba(34,197,94,.14);font-weight:900;">すべて保存済みです。オフライン時も保存済み動画を優先して再生します。</div>`
+        : "";
+
+    showPopup("オフライン動画保存", `
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            <p style="margin-top:0;">動画演出をブラウザ内に保存します。保存後は、通信できない状態でも保存済み動画を優先して再生します。</p>
+            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:12px;margin-top:14px;">
+                <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);"><div style="opacity:.68;">manifest内の動画URL</div><b style="font-size:26px;">${plan.sources.length}</b></div>
+                <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);"><div style="opacity:.68;">保存済み</div><b style="font-size:26px;">${plan.cachedCount}</b></div>
+                <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);"><div style="opacity:.68;">今回保存する件数</div><b style="font-size:26px;">${plan.downloadSources.length}</b></div>
+                <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);"><div style="opacity:.68;">今回の推定容量</div><b style="font-size:26px;">${formatOfflineBytes(plan.knownBytes)}${plan.unknownCount > 0 ? "+α" : ""}</b></div>
+            </div>
+            ${unknownText}
+            ${allCachedText}
+            <div style="margin-top:12px;opacity:.72;">現在の保存容量: <b>${formatOfflineBytes(summary.cachedBytes)}</b> / 最終保存: ${escapeHtml(getOfflineUpdatedAtText(summary.updatedAt))}</div>
+            <div id="offline-video-progress" style="margin-top:14px;min-height:28px;font-weight:900;"></div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;">
+                <button id="offline-video-download-button" class="miracle-home-button miracle-home-primary" ${plan.downloadSources.length === 0 ? "disabled" : ""}>確認して保存開始</button>
+                <button id="offline-video-clear-button" class="miracle-home-button">保存済み動画を削除</button>
+            </div>
+            <p style="margin-bottom:0;opacity:.66;font-size:.92em;">ブラウザのサイトデータ削除や容量不足があると、保存済み動画は消える場合があります。</p>
+        </div>
+    `);
+
+    const progress = document.getElementById("offline-video-progress") as HTMLDivElement | null;
+    const downloadButton = document.getElementById("offline-video-download-button") as HTMLButtonElement | null;
+    const clearButton = document.getElementById("offline-video-clear-button") as HTMLButtonElement | null;
+
+    if (downloadButton) {
+        downloadButton.onclick = async () => {
+            const confirmText = plan.unknownCount > 0
+                ? `推定 ${formatOfflineBytes(plan.knownBytes)} + サイズ不明 ${plan.unknownCount} 件を保存します。よろしいですか？`
+                : `推定 ${formatOfflineBytes(plan.knownBytes)} を保存します。よろしいですか？`;
+            if (!window.confirm(confirmText)) return;
+
+            downloadButton.disabled = true;
+            if (clearButton) clearButton.disabled = true;
+            if (progress) progress.textContent = "保存を開始しています...";
+
+            try {
+                const result = await downloadOfflineMiracleVideos(plan, (p) => {
+                    if (!progress) return;
+                    progress.textContent = `保存中 ${p.done} / ${p.total} ... ${formatOfflineBytes(p.downloadedBytes)}`;
+                });
+                if (progress) progress.textContent = `保存完了: ${result.cachedCount} 件 / ${formatOfflineBytes(result.cachedBytes)}`;
+                showSoftToast("オフライン動画保存が完了しました");
+            } catch (error) {
+                console.error("[Miracle Offline] video download failed", error);
+                if (progress) progress.textContent = `保存に失敗しました: ${error instanceof Error ? error.message : String(error)}`;
+                showSoftToast("オフライン動画保存に失敗しました");
+            } finally {
+                if (clearButton) clearButton.disabled = false;
+            }
+        };
+    }
+
+    if (clearButton) {
+        clearButton.onclick = async () => {
+            if (!window.confirm("保存済みの動画演出を削除します。よろしいですか？")) return;
+            clearButton.disabled = true;
+            if (progress) progress.textContent = "削除中...";
+            await clearOfflineMiracleVideos();
+            if (progress) progress.textContent = "保存済み動画を削除しました。";
+            showSoftToast("保存済み動画を削除しました");
+            if (downloadButton) downloadButton.disabled = false;
+            clearButton.disabled = false;
+        };
+    }
+}
+
 function applyRemoteMiracleVideoSoundState(): void {
     if (!activeRemoteMiracleVideo) return;
 
@@ -6073,6 +6230,9 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
         return false;
     }
 
+    const offlineResolvedSources = await resolveOfflineMiracleSources(usableSources);
+    const playbackSources = offlineResolvedSources.sources.length > 0 ? offlineResolvedSources.sources : usableSources;
+
     stopRemoteMiracleVideo();
 
     const video = document.createElement("video");
@@ -6092,7 +6252,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     video.style.mixBlendMode = "screen";
     video.style.pointerEvents = "none";
 
-    for (const sourceDef of usableSources) {
+    for (const sourceDef of playbackSources) {
         const source = document.createElement("source");
         source.src = sourceDef.url;
         if (sourceDef.mimeType) source.type = sourceDef.mimeType;
@@ -6146,14 +6306,17 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     });
 
     if (!ready) {
+        revokeOfflineObjectUrls(offlineResolvedSources.objectUrls);
         console.warn("[Miracle R2] video file not found or not ready", asset);
         recordAdminEvent({ type: "video_fail", at: Date.now(), label: getRemoteMiracleAssetLabel(asset), rank: String(asset.rank ?? "common").toUpperCase(), detail: "not ready" });
-        if (!isMobile) markRemoteMiracleAssetBad(asset);
+        if (!isMobile && offlineResolvedSources.sources.length === 0) markRemoteMiracleAssetBad(asset);
 
         if (force) {
             showSoftToast("R2動画の読み込みに失敗しました。manifest.json のファイル名を確認してください");
         }
 
+        remoteMiracleVideoOverlay.innerHTML = "";
+        remoteMiracleVideoOverlay.style.display = "none";
         return false;
     }
 
@@ -6178,7 +6341,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     video.addEventListener("error", () => {
         console.warn("[Miracle R2] video load failed", asset);
         recordAdminEvent({ type: "video_fail", at: Date.now(), label: getRemoteMiracleAssetLabel(asset), rank: String(asset.rank ?? "common").toUpperCase(), detail: "load error" });
-        markRemoteMiracleAssetBad(asset);
+        if (offlineResolvedSources.sources.length === 0) markRemoteMiracleAssetBad(asset);
         stopRemoteMiracleVideo();
 
         if (force) {
@@ -6187,6 +6350,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     }, { once: true });
 
     activeRemoteMiracleVideo = video;
+    activeRemoteMiracleObjectUrls = offlineResolvedSources.objectUrls;
     activeRemoteMiracleVideoRankScore = nextRankScore;
     activeRemoteMiracleVideoLabel = nextLabel;
     activeRemoteMiracleVideoVolume = remoteVideoVolume;
@@ -6228,7 +6392,7 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
             } catch {}
         }
 
-        if (!isMobile) markRemoteMiracleAssetBad(asset);
+        if (!isMobile && offlineResolvedSources.sources.length === 0) markRemoteMiracleAssetBad(asset);
         stopRemoteMiracleVideo();
 
         if (force) {
