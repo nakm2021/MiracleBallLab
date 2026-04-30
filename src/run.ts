@@ -8094,6 +8094,74 @@ function drawTimeBallSkins(context: CanvasRenderingContext2D): void {
     context.restore();
 }
 
+function draw3DBallShading(context: CanvasRenderingContext2D): void {
+    context.save();
+    for (const body of engine.world.bodies) {
+        const plugin = (body as any).plugin;
+        if (!plugin?.isDrop) continue;
+        const radius = body.circleRadius ?? plugin.originalRadius ?? 0;
+        if (!radius || radius <= 0) continue;
+        const x = body.position.x;
+        const y = body.position.y;
+        const kind = plugin.kind as DropKind | undefined;
+        const isDarkBall = kind === "blackSun" || kind === "giant" || kind === "darkMatter";
+        const highlightAlpha = settings.simpleMode ? (isDarkBall ? 0.34 : 0.28) : (isDarkBall ? 0.52 : 0.42);
+        const shadowAlpha = settings.simpleMode ? 0.14 : 0.22;
+
+        context.save();
+        context.beginPath();
+        context.arc(x, y, radius * 0.98, 0, Math.PI * 2);
+        context.clip();
+
+        const bodyShade = context.createLinearGradient(x - radius * 0.85, y - radius * 0.95, x + radius * 0.95, y + radius * 0.95);
+        bodyShade.addColorStop(0, `rgba(255,255,255,${highlightAlpha})`);
+        bodyShade.addColorStop(0.22, `rgba(255,255,255,${highlightAlpha * 0.34})`);
+        bodyShade.addColorStop(0.5, 'rgba(255,255,255,0)');
+        bodyShade.addColorStop(0.76, `rgba(0,0,0,${shadowAlpha * 0.55})`);
+        bodyShade.addColorStop(1, `rgba(0,0,0,${shadowAlpha})`);
+        context.fillStyle = bodyShade;
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fill();
+
+        if (!settings.simpleMode) {
+            context.fillStyle = isDarkBall ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.70)';
+            context.beginPath();
+            context.ellipse(x - radius * 0.28, y - radius * 0.34, radius * 0.26, radius * 0.18, -0.5, 0, Math.PI * 2);
+            context.fill();
+
+            context.fillStyle = 'rgba(255,255,255,.18)';
+            context.beginPath();
+            context.ellipse(x - radius * 0.08, y - radius * 0.10, radius * 0.42, radius * 0.28, -0.45, 0, Math.PI * 2);
+            context.fill();
+
+            const bottomShade = context.createRadialGradient(x + radius * 0.20, y + radius * 0.30, radius * 0.18, x + radius * 0.18, y + radius * 0.34, radius * 0.95);
+            bottomShade.addColorStop(0, 'rgba(0,0,0,0)');
+            bottomShade.addColorStop(0.72, 'rgba(0,0,0,.08)');
+            bottomShade.addColorStop(1, 'rgba(0,0,0,.22)');
+            context.fillStyle = bottomShade;
+            context.beginPath();
+            context.arc(x, y, radius, 0, Math.PI * 2);
+            context.fill();
+        }
+
+        context.restore();
+
+        context.strokeStyle = settings.simpleMode ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.30)';
+        context.lineWidth = Math.max(1, radius * 0.08);
+        context.beginPath();
+        context.arc(x, y, radius * 0.96, Math.PI * 0.82, Math.PI * 1.82);
+        context.stroke();
+
+        context.strokeStyle = 'rgba(0,0,0,.14)';
+        context.lineWidth = Math.max(1, radius * 0.06);
+        context.beginPath();
+        context.arc(x, y, radius * 0.94, Math.PI * 0.02, Math.PI * 0.96);
+        context.stroke();
+    }
+    context.restore();
+}
+
 function drawNormalTraitMarks(context: CanvasRenderingContext2D): void {
     if (settings.simpleMode) return;
     context.save();
@@ -8231,6 +8299,7 @@ Events.on(render, "afterRender", () => {
     context.save();
     drawPachinkoMachine(context);
     drawTapRipples(context);
+    draw3DBallShading(context);
     drawSpecialGlows(context);
     drawTimeBallSkins(context);
     drawNormalTraitMarks(context);
