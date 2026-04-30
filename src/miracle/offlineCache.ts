@@ -38,6 +38,8 @@ export type OfflineMiracleCatalogItem = {
     rank?: string;
     sizeBytes: number;
     cachedAt: number;
+    label?: string;
+    isUserVideo?: boolean;
 };
 
 export type OfflineMiracleCatalog = {
@@ -58,7 +60,7 @@ export type OfflineMiracleResearchRank = {
 };
 
 type OfflineMiracleMeta = {
-    sources: Record<string, { assetId: string; rank?: string; sizeBytes: number; cachedAt: number }>;
+    sources: Record<string, { assetId: string; rank?: string; sizeBytes: number; cachedAt: number; label?: string; isUserVideo?: boolean }>;
     updatedAt: number;
 };
 
@@ -300,6 +302,8 @@ export async function getOfflineMiracleCatalog(
         rank: item.rank,
         sizeBytes: Math.max(0, Number(item.sizeBytes ?? 0)),
         cachedAt: Number(item.cachedAt ?? 0),
+        label: item.label,
+        isUserVideo: !!item.isUserVideo,
     }));
 
     for (const item of cachedItems) {
@@ -354,6 +358,97 @@ export function filterOfflineMiracleDownloadPlan(
         knownBytes: selected.reduce((sum, source) => sum + Math.max(0, Number(source.estimateBytes ?? 0)), 0),
         unknownCount: selected.filter((source) => source.estimateBytes == null).length,
     };
+}
+
+export async function saveCustomOfflineMiracleVideo(file: File, rank = "custom"): Promise<OfflineMiracleCatalogItem> {
+    if (!isCacheSupported()) {
+        throw new Error("このブラウザはオフライン動画保存に対応していません。");
+    }
+    if (!file || !file.type.startsWith("video/")) {
+        throw new Error("動画ファイルを選択してください。");
+    }
+
+    const cache = await caches.open(OFFLINE_VIDEO_CACHE_NAME);
+    const meta = loadMeta();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "user-video.mp4";
+    const id = `user-video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const url = `https://offline.miracle.local/${id}/${safeName}`;
+    const headers = new Headers();
+    headers.set("Content-Type", file.type || "video/mp4");
+    headers.set("X-Miracle-Offline-Asset-Id", id);
+    await cache.put(url, new Response(file, { headers }));
+
+    const item = {
+        assetId: id,
+        rank,
+        sizeBytes: file.size,
+        cachedAt: Date.now(),
+        label: file.name,
+        isUserVideo: true,
+    };
+    meta.sources[url] = item;
+    meta.updatedAt = Date.now();
+    saveMeta(meta);
+
+    return { url, ...item };
+}
+
+export async function deleteOfflineMiracleVideo(url: string): Promise<boolean> {
+    if (!isCacheSupported()) return false;
+    const cache = await caches.open(OFFLINE_VIDEO_CACHE_NAME);
+    let deleted = false;
+    try {
+        deleted = await cache.delete(url);
+    } catch {
+        deleted = false;
+    }
+    const meta = loadMeta();
+    if (meta.sources[url]) {
+        delete meta.sources[url];
+        meta.updatedAt = Date.now();
+        saveMeta(meta);
+        deleted = true;
+    }
+    return deleted;
+}
+
+export async function deleteOfflineMiracleVideos(urls: string[]): Promise<number> {
+    let count = 0;
+    for (const url of urls) {
+        if (await deleteOfflineMiracleVideo(url)) count++;
+    }
+    return count;
+}
+
+export async function trimOfflineMiracleVideosToBytes(limitBytes: number): Promise<number> {
+    const catalog = await getOfflineMiracleCatalog([], () => []);
+    let total = catalog.cachedBytes;
+    if (total <= limitBytes) return 0;
+
+    const scoreRank = (rank?: string): number => {
+        const r = String(rank ?? "common").toUpperCase();
+        if (r === "GOD" || r === "SECRET" || r === "EX") return 100;
+        if (r === "UR" || r === "SSR") return 80;
+        if (r === "SR" || r === "RARE") return 60;
+        if (r === "CUSTOM") return 55;
+        return 10;
+    };
+
+    const removable = [...catalog.cachedItems].sort((a, b) => {
+        const rankDiff = scoreRank(a.rank) - scoreRank(b.rank);
+        if (rankDiff !== 0) return rankDiff;
+        return b.sizeBytes - a.sizeBytes;
+    });
+
+    let deleted = 0;
+    for (const item of removable) {
+        if (total <= limitBytes) break;
+        if (await deleteOfflineMiracleVideo(item.url)) {
+            total -= item.sizeBytes;
+            deleted++;
+        }
+    }
+    return deleted;
 }
 
 export async function getOfflineMiracleSummary(): Promise<OfflineMiracleSummary> {

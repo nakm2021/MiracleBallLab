@@ -14,7 +14,8 @@ import { createInitialSkillState, createRandomBuckets } from "./miracle/state";
 import { getRankBaseScore, getRankScore } from "./miracle/rarity";
 import { applyThemePaletteToPanel } from "./miracle/ui";
 import { shouldPlayRemoteMiracleVideo } from "./miracle/videoEffects";
-import { buildOfflineMiracleVideoPlan, clearOfflineMiracleVideos, downloadOfflineMiracleVideos, filterOfflineMiracleDownloadPlan, formatOfflineBytes, getOfflineMiracleCatalog, getOfflineMiracleResearchRank, getOfflineMiracleSummary, resolveOfflineMiracleSources, revokeOfflineObjectUrls } from "./miracle/offlineCache";
+import { buildOfflineMiracleVideoPlan, clearOfflineMiracleVideos, deleteOfflineMiracleVideo, downloadOfflineMiracleVideos, filterOfflineMiracleDownloadPlan, formatOfflineBytes, getOfflineMiracleCatalog, getOfflineMiracleResearchRank, getOfflineMiracleSummary, resolveOfflineMiracleSources, revokeOfflineObjectUrls, saveCustomOfflineMiracleVideo, trimOfflineMiracleVideosToBytes, type OfflineMiracleCatalogItem } from "./miracle/offlineCache";
+import { completeOfflineTutorial, getNewlyUnlockedOfflineTitleLabels, getOfflineMiracleMissions, getOfflineMiracleTitles, loadOfflineMiracleProgress, recordOfflineMiracleAction, shouldShowOfflineTutorial } from "./miracle/offlineProgress";
 import { FAMILIAR_DEFS, findFamiliarBySecretCode, gainFamiliarXp, getFamiliarDef, getFamiliarDropXp, getFamiliarLevelInfo, getFamiliarModeLabel, getFamiliarMood, loadFamiliarState, saveFamiliarState, unlockFamiliar } from "./miracle/familiar";
 import { awardTicketsForRank, loadMiracleTicketState, saveMiracleTicketState, spendMiracleTickets, type MiracleTicketState } from "./miracle/miracleTicket";
 import { FAMILIAR_EXPEDITION_PLANS, claimFamiliarExpedition, getFamiliarExpeditionProgress, loadFamiliarExpeditionState, startFamiliarExpedition, type FamiliarExpeditionState } from "./miracle/familiarExpedition";
@@ -1352,6 +1353,8 @@ const offlineVideoButton = setTooltip(setButtonLabel(createButton("動画保存"
 displayButtons.appendChild(offlineVideoButton);
 const offlineBookButton = setTooltip(setButtonLabel(createButton("オフライン図鑑", () => { void showOfflineMiracleBookPopup(); }), "オフライン図鑑", "Offline book"), "保存済み動画、研究ランク、再生テストを表示します。", "Show saved videos, storage rank, and test playback.");
 displayButtons.appendChild(offlineBookButton);
+const offlineLabButton = setTooltip(setButtonLabel(createButton("オフライン研究所", () => { void showOfflineLabHomePopup(); }), "オフライン研究所", "Offline lab"), "ミッション、称号、ランダム鑑賞、専用ガチャ、自分の動画登録をまとめて開きます。", "Open offline missions, titles, theater, gacha, and custom videos.");
+displayButtons.appendChild(offlineLabButton);
 
 const recentMiracleDisplayButton = setTooltip(setButtonLabel(createButton("直近の奇跡: OFF", () => {
     settings.showRecentMiracles = !settings.showRecentMiracles;
@@ -6226,6 +6229,7 @@ async function showOfflineVideoDownloadPopup(mode: "recommended" | "rare" | "all
             if (progress) progress.innerHTML = `<div>奇跡データを封印中...</div>${getOfflineProgressHtml(0)}<div style="margin-top:6px;opacity:.75;">研究所に動画演出を保管しています。</div>`;
 
             try {
+                const beforeSaveCount = plan.downloadSources.length;
                 const result = await downloadOfflineMiracleVideos(plan, (p) => {
                     if (!progress) return;
                     const percent = p.total > 0 ? (p.done / p.total) * 100 : 100;
@@ -6233,6 +6237,8 @@ async function showOfflineVideoDownloadPopup(mode: "recommended" | "rare" | "all
                 });
                 const newRank = getOfflineMiracleResearchRank(result.cachedBytes);
                 if (progress) progress.innerHTML = `<div>保存成功: ${result.cachedCount} 件 / ${formatOfflineBytes(result.cachedBytes)}</div>${getOfflineProgressHtml(100)}<div style="margin-top:6px;color:#166534;">研究ランク: ${escapeHtml(newRank.label)}</div>`;
+                recordOfflineMiracleAction("saveVideo", Math.max(1, beforeSaveCount));
+                await showOfflineTitleUnlockToast();
                 showSoftToast("オフライン動画保存が完了しました");
             } catch (error) {
                 console.error("[Miracle Offline] video download failed", error);
@@ -6259,6 +6265,7 @@ async function showOfflineVideoDownloadPopup(mode: "recommended" | "rare" | "all
 }
 
 async function showOfflineMiracleBookPopup(): Promise<void> {
+    recordOfflineMiracleAction("bookOpen");
     showPopup("オフライン演出図鑑", `
         <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
             <p style="margin:0;font-weight:900;">保存済み動画を確認しています...</p>
@@ -6290,11 +6297,11 @@ async function showOfflineMiracleBookPopup(): Promise<void> {
         : catalog.cachedItems.slice(0, 80).map((item, index) => `
             <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;">
                 <div style="min-width:0;">
-                    <div style="font-weight:1000;"><span style="padding:4px 9px;border-radius:999px;${getOfflineRankBadgeStyle(item.rank)}">${escapeHtml(String(item.rank ?? "common").toUpperCase())}</span> ${index + 1}. ${escapeHtml(item.assetId)}</div>
+                    <div style="font-weight:1000;"><span style="padding:4px 9px;border-radius:999px;${getOfflineRankBadgeStyle(item.rank)}">${escapeHtml(String(item.rank ?? "common").toUpperCase())}</span> ${index + 1}. ${escapeHtml(getOfflineCatalogDisplayName(item))}</div>
                     <div style="margin-top:4px;opacity:.70;font-size:.88em;">${formatOfflineBytes(item.sizeBytes)} / ${escapeHtml(getOfflineUpdatedAtText(item.cachedAt))}</div>
                     <div style="margin-top:4px;opacity:.52;font-size:.78em;word-break:break-all;">${escapeHtml(item.url)}</div>
                 </div>
-                <button class="offline-video-test-button miracle-home-button" data-asset-id="${escapeHtml(item.assetId)}">再生テスト</button>
+                <button class="offline-video-test-button miracle-home-button" data-url="${escapeHtml(item.url)}">再生テスト</button>
             </div>
         `).join("");
 
@@ -6329,15 +6336,318 @@ async function showOfflineMiracleBookPopup(): Promise<void> {
     (document.getElementById("offline-book-stop-button") as HTMLButtonElement | null)?.addEventListener("click", () => stopRemoteMiracleVideo());
     document.querySelectorAll<HTMLButtonElement>(".offline-video-test-button").forEach((button) => {
         button.onclick = () => {
-            const asset = videos.find((x) => x.id === button.dataset.assetId);
-            if (!asset) {
+            const item = catalog.cachedItems.find((x) => x.url === button.dataset.url);
+            if (!item) {
                 showSoftToast("対象動画が見つかりません");
                 return;
             }
-            closeHelpPopup();
             showSoftToast("保存済み動画を再生テストします");
-            void playRemoteMiracleVideoAsset(asset, true);
+            void playOfflineCatalogItem(item, "testPlay");
         };
+    });
+}
+
+function createOfflineAssetFromCatalogItem(item: OfflineMiracleCatalogItem): RemoteMiracleAsset {
+    return {
+        id: item.assetId,
+        kind: "video",
+        rank: item.rank || (item.isUserVideo ? "custom" : "offline"),
+        url: item.url,
+        mimeType: item.url.toLowerCase().endsWith(".webm") ? "video/webm" : "video/mp4",
+        opacity: 0.58,
+        volume: 0.45,
+        weight: 1,
+        tags: item.isUserVideo ? ["user", "offline"] : ["offline"],
+    };
+}
+
+function getOfflineCatalogDisplayName(item: OfflineMiracleCatalogItem): string {
+    return item.label || item.assetId || item.url.split("/").pop() || "保存済み動画";
+}
+
+async function getOfflineCatalogForUi(): Promise<{ videos: RemoteMiracleAsset[]; catalog: Awaited<ReturnType<typeof getOfflineMiracleCatalog>> }> {
+    const videos = await getOfflineVideoAssetsForUi(false);
+    const catalog = await getOfflineMiracleCatalog(videos, getRemoteMiracleAssetSources);
+    return { videos, catalog };
+}
+
+function renderOfflineMissionRows(): string {
+    const missions = getOfflineMiracleMissions(loadOfflineMiracleProgress());
+    return missions.map((mission) => {
+        const percent = clamp((mission.current / Math.max(1, mission.target)) * 100, 0, 100);
+        return `
+            <div style="padding:12px;border-radius:18px;background:${mission.done ? "rgba(34,197,94,.18)" : "rgba(255,255,255,.68)"};border:1px solid rgba(100,116,139,.18);">
+                <div style="display:flex;justify-content:space-between;gap:10px;font-weight:1000;"><span>${mission.done ? "✅" : "🧪"} ${escapeHtml(mission.label)}</span><span>${Math.min(mission.current, mission.target)} / ${mission.target}</span></div>
+                <div style="margin-top:5px;opacity:.72;font-size:.9em;">${escapeHtml(mission.description)}</div>
+                <div style="margin-top:8px;">${getOfflineProgressHtml(percent)}</div>
+                <div style="margin-top:5px;font-weight:900;color:#166534;">${escapeHtml(mission.reward)}</div>
+            </div>`;
+    }).join("");
+}
+
+function renderOfflineTitleRows(catalog: Awaited<ReturnType<typeof getOfflineMiracleCatalog>>): string {
+    const titles = getOfflineMiracleTitles(catalog, loadOfflineMiracleProgress());
+    return titles.map((title) => `
+        <div style="padding:12px;border-radius:18px;background:${title.unlocked ? "linear-gradient(135deg,rgba(250,204,21,.24),rgba(34,197,94,.16))" : "rgba(148,163,184,.18)"};border:1px solid rgba(100,116,139,.18);">
+            <div style="font-weight:1000;">${title.unlocked ? "🏅" : "🔒"} ${escapeHtml(title.label)}</div>
+            <div style="opacity:.72;font-size:.9em;margin-top:4px;">${escapeHtml(title.description)}</div>
+        </div>
+    `).join("");
+}
+
+async function showOfflineTitleUnlockToast(): Promise<void> {
+    try {
+        const { catalog } = await getOfflineCatalogForUi();
+        const labels = getNewlyUnlockedOfflineTitleLabels(catalog);
+        if (labels.length > 0) {
+            showSoftToast(`称号解放: ${labels[0]}${labels.length > 1 ? ` ほか${labels.length - 1}件` : ""}`);
+        }
+    } catch {
+        // 称号チェック失敗は無視します。
+    }
+}
+
+async function showOfflineLabHomePopup(): Promise<void> {
+    recordOfflineMiracleAction("bookOpen");
+    showPopup("オフライン研究所", `
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            <p style="margin:0;font-weight:900;">オフライン研究所を起動しています...</p>
+        </div>
+    `);
+
+    const { catalog } = await getOfflineCatalogForUi();
+    const rank = getOfflineMiracleResearchRank(catalog.cachedBytes);
+    const nextRankText = rank.nextBytes === null
+        ? "最高ランク到達"
+        : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - catalog.cachedBytes))}`;
+    const tutorialHtml = shouldShowOfflineTutorial()
+        ? `<div style="padding:14px;border-radius:20px;background:linear-gradient(135deg,rgba(250,204,21,.24),rgba(59,130,246,.18));border:1px solid rgba(59,130,246,.22);margin-bottom:14px;">
+                <div style="font-weight:1000;font-size:${isMobile ? "22px" : "20px"};">初回オフライン準備チュートリアル</div>
+                <ol style="margin:8px 0 0;padding-left:1.4em;line-height:1.75;">
+                    <li>まず「おすすめ保存」で動画演出を少し保管します。</li>
+                    <li>図鑑で保存済み件数と研究ランクを確認します。</li>
+                    <li>ランダム鑑賞またはガチャで保存済み動画を再生します。</li>
+                    <li>容量が大きくなったらストレージ整理で軽くします。</li>
+                </ol>
+                <button id="offline-tutorial-done-button" class="miracle-home-button miracle-home-primary" style="margin-top:10px;">チュートリアル完了</button>
+            </div>`
+        : "";
+
+    showPopup("オフライン研究所", `
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            ${tutorialHtml}
+            <div style="padding:16px;border-radius:22px;background:linear-gradient(135deg,rgba(8,47,73,.92),rgba(88,28,135,.82));color:#fff;">
+                <div style="font-weight:1000;font-size:${isMobile ? "26px" : "24px"};">地下オフライン研究所</div>
+                <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:10px;margin-top:12px;">
+                    <div><div style="opacity:.74;">保存済み</div><b style="font-size:24px;">${catalog.cachedItems.length} / ${catalog.totalVideoSources}</b></div>
+                    <div><div style="opacity:.74;">保存容量</div><b style="font-size:24px;">${formatOfflineBytes(catalog.cachedBytes)}</b></div>
+                    <div><div style="opacity:.74;">研究ランク</div><b style="font-size:24px;">${escapeHtml(rank.label)}</b></div>
+                </div>
+                <div style="margin-top:12px;">${getOfflineProgressHtml(rank.progressRatio * 100)}</div>
+                <div style="margin-top:6px;opacity:.86;">${nextRankText}</div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                <button id="offline-home-save-button" class="miracle-home-button miracle-home-primary">おすすめ保存</button>
+                <button id="offline-home-book-button" class="miracle-home-button">図鑑</button>
+                <button id="offline-home-theater-button" class="miracle-home-button">ランダム鑑賞</button>
+                <button id="offline-home-gacha-button" class="miracle-home-button">オフラインガチャ</button>
+                <button id="offline-home-cleanup-button" class="miracle-home-button">ストレージ整理</button>
+                <button id="offline-home-custom-button" class="miracle-home-button">自分の動画登録</button>
+            </div>
+            <h3 style="margin:18px 0 8px;">今日のオフライン研究ミッション</h3>
+            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${renderOfflineMissionRows()}</div>
+            <h3 style="margin:18px 0 8px;">オフライン限定称号</h3>
+            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${renderOfflineTitleRows(catalog)}</div>
+        </div>
+    `);
+
+    (document.getElementById("offline-tutorial-done-button") as HTMLButtonElement | null)?.addEventListener("click", () => {
+        completeOfflineTutorial();
+        showSoftToast("オフライン準備チュートリアルを完了しました");
+        void showOfflineLabHomePopup();
+    });
+    (document.getElementById("offline-home-save-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("recommended"); });
+    (document.getElementById("offline-home-book-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineMiracleBookPopup(); });
+    (document.getElementById("offline-home-theater-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void playOfflineRandomTheater(); });
+    (document.getElementById("offline-home-gacha-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineGachaPopup(); });
+    (document.getElementById("offline-home-cleanup-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineStorageAssistPopup(); });
+    (document.getElementById("offline-home-custom-button") as HTMLButtonElement | null)?.addEventListener("click", () => { showCustomOfflineVideoPopup(); });
+}
+
+async function pickOfflineCatalogItem(preferRare = false): Promise<OfflineMiracleCatalogItem | null> {
+    const { catalog } = await getOfflineCatalogForUi();
+    const items = catalog.cachedItems;
+    if (items.length === 0) return null;
+    const scoreRank = (rank?: string): number => {
+        const r = String(rank ?? "common").toUpperCase();
+        if (r === "GOD" || r === "SECRET" || r === "EX") return 100;
+        if (r === "UR" || r === "SSR") return 80;
+        if (r === "SR" || r === "RARE") return 60;
+        if (r === "CUSTOM") return 55;
+        return 10;
+    };
+    const pool = preferRare ? items.filter((item) => scoreRank(item.rank) >= 60) : items;
+    const target = pool.length > 0 ? pool : items;
+    return target[Math.floor(appRandom() * target.length)] ?? null;
+}
+
+async function playOfflineCatalogItem(item: OfflineMiracleCatalogItem, action: "testPlay" | "theaterPlay" | "gachaPlay"): Promise<void> {
+    recordOfflineMiracleAction(action);
+    closeHelpPopup();
+    const asset = createOfflineAssetFromCatalogItem(item);
+    const ok = await playRemoteMiracleVideoAsset(asset, true);
+    if (ok) {
+        await showOfflineTitleUnlockToast();
+    } else {
+        showSoftToast("保存済み動画を再生できませんでした。保管庫の整理を試してください。");
+    }
+}
+
+async function playOfflineRandomTheater(): Promise<void> {
+    const item = await pickOfflineCatalogItem(false);
+    if (!item) {
+        showSoftToast("保存済み動画がありません。先におすすめ保存を実行してください。");
+        void showOfflineVideoDownloadPopup("recommended");
+        return;
+    }
+    showSoftToast(`保存済み奇跡シアター: ${getOfflineCatalogDisplayName(item)}`);
+    await playOfflineCatalogItem(item, "theaterPlay");
+}
+
+async function showOfflineGachaPopup(): Promise<void> {
+    const item = await pickOfflineCatalogItem(true);
+    if (!item) {
+        showPopup("オフライン専用ガチャ", `
+            <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+                <p style="margin:0;font-weight:900;">保存済み動画がありません。</p>
+                <p style="margin:8px 0 0;opacity:.72;">先におすすめ保存を行うと、通信なしでもガチャ演出を楽しめます。</p>
+                <button id="offline-gacha-save-button" class="miracle-home-button miracle-home-primary" style="margin-top:12px;">おすすめ保存へ</button>
+            </div>
+        `);
+        (document.getElementById("offline-gacha-save-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("recommended"); });
+        return;
+    }
+
+    showPopup("オフライン専用ガチャ", `
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;text-align:center;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(88,28,135,.86));color:#fff;">
+            <div style="font-size:${isMobile ? "42px" : "56px"};font-weight:1000;text-shadow:0 0 20px rgba(250,204,21,.8);">封印解除</div>
+            <p style="line-height:1.8;opacity:.88;">保存済み奇跡データから、今回の演出を抽選しました。</p>
+            <div style="margin:14px auto;padding:14px;border-radius:20px;background:rgba(255,255,255,.12);max-width:620px;">
+                <div style="font-size:14px;opacity:.72;">RESULT</div>
+                <div style="font-size:${isMobile ? "22px" : "26px"};font-weight:1000;">${escapeHtml(String(item.rank ?? "OFFLINE").toUpperCase())} / ${escapeHtml(getOfflineCatalogDisplayName(item))}</div>
+                <div style="margin-top:5px;opacity:.72;">${formatOfflineBytes(item.sizeBytes)}</div>
+            </div>
+            <button id="offline-gacha-play-button" class="miracle-home-button miracle-home-primary">演出を再生</button>
+        </div>
+    `);
+    (document.getElementById("offline-gacha-play-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void playOfflineCatalogItem(item, "gachaPlay"); });
+}
+
+async function showOfflineStorageAssistPopup(): Promise<void> {
+    const { catalog } = await getOfflineCatalogForUi();
+    const largeRows = catalog.cachedItems.slice().sort((a, b) => b.sizeBytes - a.sizeBytes).slice(0, 12).map((item) => `
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(100,116,139,.18);">
+            <div style="min-width:0;"><b>${escapeHtml(getOfflineCatalogDisplayName(item))}</b><div style="opacity:.64;font-size:.86em;">${escapeHtml(String(item.rank ?? "offline").toUpperCase())}</div></div>
+            <div style="font-weight:900;">${formatOfflineBytes(item.sizeBytes)}</div>
+            <button class="offline-delete-one-button miracle-home-button" data-url="${escapeHtml(item.url)}">削除</button>
+        </div>
+    `).join("") || `<div style="padding:14px;opacity:.72;">保存済み動画はまだありません。</div>`;
+
+    showPopup("ストレージ整理アシスト", `
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            <div style="padding:16px;border-radius:20px;background:rgba(15,23,42,.88);color:#fff;">
+                <div style="font-weight:1000;font-size:${isMobile ? "24px" : "22px"};">保管庫メンテナンス</div>
+                <div style="margin-top:8px;">保存済み: <b>${catalog.cachedItems.length}</b> 件 / 容量: <b>${formatOfflineBytes(catalog.cachedBytes)}</b></div>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                <button id="offline-trim-500mb-button" class="miracle-home-button">500MB以下に調整</button>
+                <button id="offline-trim-1gb-button" class="miracle-home-button">1GB以下に調整</button>
+                <button id="offline-clear-all-button" class="miracle-home-button">全削除</button>
+            </div>
+            <h3 style="margin:18px 0 8px;">容量が大きい保存済み動画</h3>
+            <div style="border-radius:18px;background:rgba(255,255,255,.68);padding:4px 14px;max-height:${isMobile ? "48vh" : "420px"};overflow:auto;">${largeRows}</div>
+        </div>
+    `);
+
+    const trim = async (limit: number) => {
+        const deleted = await trimOfflineMiracleVideosToBytes(limit);
+        recordOfflineMiracleAction("cleanup");
+        await showOfflineTitleUnlockToast();
+        showSoftToast(`整理完了: ${deleted} 件削除しました`);
+        void showOfflineStorageAssistPopup();
+    };
+    (document.getElementById("offline-trim-500mb-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void trim(500 * 1024 * 1024); });
+    (document.getElementById("offline-trim-1gb-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void trim(1024 * 1024 * 1024); });
+    (document.getElementById("offline-clear-all-button") as HTMLButtonElement | null)?.addEventListener("click", async () => {
+        if (!window.confirm("保存済み動画をすべて削除します。よろしいですか？")) return;
+        await clearOfflineMiracleVideos();
+        recordOfflineMiracleAction("cleanup");
+        showSoftToast("保存済み動画をすべて削除しました");
+        void showOfflineStorageAssistPopup();
+    });
+    document.querySelectorAll<HTMLButtonElement>(".offline-delete-one-button").forEach((button) => {
+        button.onclick = async () => {
+            const url = button.dataset.url;
+            if (!url) return;
+            await deleteOfflineMiracleVideo(url);
+            recordOfflineMiracleAction("cleanup");
+            showSoftToast("1件削除しました");
+            void showOfflineStorageAssistPopup();
+        };
+    });
+}
+
+function showCustomOfflineVideoPopup(): void {
+    showPopup("自分の動画を演出に登録", `
+        <div class="miracle-user-card" style="border-radius:22px;padding:18px;">
+            <div style="padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(30,64,175,.18),rgba(34,197,94,.14));">
+                <div style="font-weight:1000;font-size:${isMobile ? "24px" : "22px"};">ユーザー動画スロット</div>
+                <p style="line-height:1.75;margin:8px 0 0;">手元の mp4 / webm などの動画をブラウザ内に保存し、保存済み動画と同じようにテスト再生・ランダム鑑賞・ガチャ対象にできます。</p>
+            </div>
+            <label style="display:block;margin-top:14px;font-weight:900;">動画ファイル</label>
+            <input id="offline-custom-video-input" type="file" accept="video/*" style="margin-top:8px;width:100%;font-size:18px;" />
+            <label style="display:block;margin-top:14px;font-weight:900;">登録レア度</label>
+            <select id="offline-custom-video-rank" style="margin-top:8px;font-size:18px;padding:10px;border-radius:14px;">
+                <option value="custom">CUSTOM</option>
+                <option value="rare">RARE</option>
+                <option value="sr">SR</option>
+                <option value="ssr">SSR</option>
+                <option value="ex">EX</option>
+                <option value="god">GOD</option>
+            </select>
+            <div id="offline-custom-video-status" style="margin-top:12px;min-height:28px;font-weight:900;"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                <button id="offline-custom-video-save-button" class="miracle-home-button miracle-home-primary">この動画を登録</button>
+                <button id="offline-custom-video-book-button" class="miracle-home-button">図鑑を見る</button>
+            </div>
+            <p style="margin-bottom:0;opacity:.66;font-size:.92em;">登録した動画はこのブラウザのサイトデータ内に保存されます。容量不足やサイトデータ削除で消える場合があります。</p>
+        </div>
+    `);
+
+    (document.getElementById("offline-custom-video-book-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineMiracleBookPopup(); });
+    (document.getElementById("offline-custom-video-save-button") as HTMLButtonElement | null)?.addEventListener("click", async () => {
+        const input = document.getElementById("offline-custom-video-input") as HTMLInputElement | null;
+        const select = document.getElementById("offline-custom-video-rank") as HTMLSelectElement | null;
+        const status = document.getElementById("offline-custom-video-status") as HTMLDivElement | null;
+        const file = input?.files?.[0];
+        if (!file) {
+            if (status) status.textContent = "動画ファイルを選択してください。";
+            return;
+        }
+        const confirmText = `${file.name} / ${formatOfflineBytes(file.size)} をユーザー動画として保存します。よろしいですか？`;
+        if (!window.confirm(confirmText)) return;
+        if (status) status.textContent = "ユーザー動画を保管庫へ登録中...";
+        try {
+            const item = await saveCustomOfflineMiracleVideo(file, select?.value || "custom");
+            recordOfflineMiracleAction("customVideo");
+            recordOfflineMiracleAction("saveVideo");
+            if (status) status.textContent = `登録完了: ${getOfflineCatalogDisplayName(item)} / ${formatOfflineBytes(item.sizeBytes)}`;
+            await showOfflineTitleUnlockToast();
+            showSoftToast("自分の動画を登録しました");
+        } catch (error) {
+            console.error("[Miracle Offline] custom video save failed", error);
+            if (status) status.textContent = `登録に失敗しました: ${error instanceof Error ? error.message : String(error)}`;
+        }
     });
 }
 
@@ -6347,6 +6657,7 @@ function showOfflineModeEventPopup(): void {
         : "オフライン研究モード 起動。保存済みの奇跡データだけで実験を続行します。";
     showSoftToast(text);
     if (!navigator.onLine && helpOverlay.style.display === "none") {
+        recordOfflineMiracleAction("offlineBoot");
         showPopup("オフライン研究モード", `
             <div class="miracle-user-card" style="border-radius:22px;padding:18px;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(55,48,163,.86));color:#fff;">
                 <div style="font-size:${isMobile ? "26px" : "24px"};font-weight:1000;">通信断絶イベント発生</div>
