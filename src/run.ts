@@ -6,6 +6,10 @@ import GIF from "gif.js";
 import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
 import * as Tone from "tone";
 import confetti from "canvas-confetti";
+import rough from "roughjs/bundled/rough.esm";
+import { Howl } from "howler";
+import JSConfetti from "js-confetti";
+import party from "party-js";
 import { Application, Graphics } from "pixi.js";
 import { createAdminLogApi, type AdminLogApi, type AdminLogEntry } from "./miracle/adminLog";
 import { ADMIN_UNLOCK_STORAGE_KEY, verifyAdminPasscode } from "./miracle/admin";
@@ -23,6 +27,7 @@ import { SECRET_RESEARCH_NOTES, loadSecretResearchNoteState, markSecretResearchN
 import { BASE_SPECIAL_EVENT_DEFS, FUSION_DEFS, MIRACLE_CHAIN_DEFS, NORMAL_BALL_TRAITS, PACHINKO_YAKUMONO_DEFS, RARE_PIN_DEFS, SPECIAL_EVENT_DEFS } from "./miracle/eventCatalog";
 import { APP_VERSION, BASE_HEIGHT, BASE_WIDTH, BLACK_SUN_RATE, COMMENTARY_DISPLAY_MS, COMMENTARY_MIN_INTERVAL_MS, COSMIC_EGG_RATE, CROWN_RATE, FINAL_SWEEP_DELAY_MS, FIRST_RUN_GUIDE_STORAGE_KEY, GIANT_EVENT_INTERVAL, GOLD_RATE, HEART_RATE, LOCAL_GOD_AUDIO_FILES, LOCAL_RARE_AUDIO_FILES, MAGNET_DURATION_MS, MILESTONE_INTERVAL, MIRACLE_ASSET_BASE_URL, MIRACLE_CHAIN_WINDOW_MS, MIRACLE_MANIFEST_URL, MIRACLE_OMEN_DISPLAY_MS, MIRACLE_OMEN_MIN_INTERVAL_MS, RAINBOW_RATE, RANDOM_BUCKET_COUNT, RECORD_STORAGE_KEY, REMOTE_MIRACLE_BAD_URL_CACHE_MS, REMOTE_MIRACLE_MANIFEST_CACHE_MS, REMOTE_MIRACLE_VIDEO_DISPLAY_MS, SCORE_STORAGE_BONUS_INTERVAL, SECRET_KEY_MAX_LENGTH, SECRET_KEY_SEQUENCES, SHAPE_RATE, SHOOTING_STAR_RATE, SMALL_MIRACLE_MIN_INTERVAL_MS, STUCK_EXPLODE_FRAMES, STUCK_NUDGE_FRAMES, SWORD_IMPACT_RATE, TIME_STOP_DURATION_MS, USER_PREFERENCES_STORAGE_KEY, USER_PROFILE_STORAGE_KEY, type RareSoundFlavor } from "./miracle/constants";
 import { drawSparkle, drawStarPath, getSpecialIconColors, hexToRgbTriplet, roundRect } from "./miracle/drawing";
+import { MAGIC_CIRCLE_DEFS, getMagicCircleMarkSvg, type MagicCircleDef } from "./miracle/magicCircles";
 import { loadSavedRecords, loadUserPreferences, loadUserProfile, saveSavedRecords, saveUserProfileData } from "./miracle/localData";
 import { clamp, escapeCsv, escapeHtml, formatDateTime, formatDurationMs, formatElapsedTime, formatProbability, getBrowserName, getDateKey, getTodayKey, hashTextToNumber, isMobileDevice, loadExternalScript, parseLabels } from "./miracle/utils";
 import { getDailyMissions, getDailyMissionValue, getResearchRankInfo, getThemeCollection, getThemeForTime, pickRandomTheme } from "./miracle/progression";
@@ -155,6 +160,13 @@ let lastTiltGravityX = 0;
 let magicCircleModeEnabled = false;
 let magicCircleDrawing = false;
 let magicCirclePoints: Array<{ x: number; y: number; t: number }> = [];
+let roughCanvas: any = null;
+let jsConfetti: InstanceType<typeof JSConfetti> | null = null;
+const howlerCueCache = new Map<string, Howl>();
+interface MagicPhysicsField { x: number; y: number; radius: number; strength: number; kind: "vortex" | "repel" | "blackhole" | "wave"; until: number; spin: number; label: string; }
+const activeMagicPhysicsFields: MagicPhysicsField[] = [];
+let brokenResearchNoteUntil = 0;
+let brokenResearchNoteText = "";
 let temporaryPinPlacementEnabled = false;
 const temporaryPinBodies = new Set<Matter.Body>();
 
@@ -759,7 +771,13 @@ canvas.addEventListener("pointerup", (event) => {
     magicCirclePoints.push({ ...pt, t: performance.now() });
     const def = classifyMagicCircle(magicCirclePoints);
     activateMagicCircle(def, magicCirclePoints);
-    magicCirclePoints = [];
+    const completedTrace = magicCirclePoints.slice();
+    magicCirclePoints = completedTrace;
+    window.setTimeout(() => {
+        if (!magicCircleDrawing && !magicCircleModeEnabled && magicCirclePoints === completedTrace) {
+            magicCirclePoints = [];
+        }
+    }, 1200);
 }, { passive: false });
 canvas.addEventListener("pointercancel", () => {
     magicCircleDrawing = false;
@@ -913,11 +931,11 @@ topRow.style.display = "grid";
 topRow.style.gridTemplateColumns = isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(170px, 1fr))";
 topRow.style.gap = isMobile ? "10px 14px" : "8px 14px";
 topRow.style.alignItems = "center";
-info.appendChild(topRow);
+// topRowは設定画面/情報エリアの最下部へ移動します。
 
 const controlArea = document.createElement("div");
 controlArea.style.display = "grid";
-controlArea.style.gridTemplateColumns = isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))";
+controlArea.style.gridTemplateColumns = isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(auto-fit, minmax(150px, 1fr))";
 controlArea.style.gap = isMobile ? "14px" : "10px 14px";
 controlArea.style.marginTop = "14px";
 controlArea.style.alignItems = "end";
@@ -939,6 +957,7 @@ info.appendChild(buttonArea);
 const randomGraphArea = document.createElement("div");
 randomGraphArea.style.marginTop = "14px";
 info.appendChild(randomGraphArea);
+info.appendChild(topRow);
 
 function createField(label: string, input: HTMLElement): { wrapper: HTMLDivElement; labelEl: HTMLLabelElement } {
     const wrapper = document.createElement("div");
@@ -951,7 +970,7 @@ function createField(label: string, input: HTMLElement): { wrapper: HTMLDivEleme
     labelElement.textContent = label;
     labelElement.style.fontWeight = "800";
     labelElement.style.color = "#273042";
-    labelElement.style.fontSize = `${Math.max(17, uiFontPx - 2)}px`;
+    labelElement.style.fontSize = `${Math.max(12, uiFontPx - 6)}px`;
 
     wrapper.appendChild(labelElement);
     wrapper.appendChild(input);
@@ -1157,6 +1176,16 @@ const pinRowInput = createInput(String(settings.pinRows), "number");
 pinRowInput.min = "1";
 pinRowInput.max = "30";
 
+function compactPrimaryNumberInput(input: HTMLInputElement): void {
+    input.style.width = isMobile ? "112px" : "128px";
+    input.style.maxWidth = "50%";
+    input.style.height = isMobile ? "34px" : "32px";
+    input.style.padding = "4px 8px";
+    input.style.borderRadius = "13px";
+    input.style.fontSize = `${Math.max(13, uiFontPx - 6)}px`;
+}
+[targetInput, activeBallInput, binCountInput, pinRowInput].forEach(compactPrimaryNumberInput);
+
 const settingsZoomInput = createInput(String(Math.round(settingsUiZoom * 100)), "range");
 settingsZoomInput.min = "82";
 settingsZoomInput.max = "122";
@@ -1314,7 +1343,7 @@ const homeButton = setTooltip(setButtonLabel(createButton("研究所ホーム", 
 utilityButtons.appendChild(homeButton);
 const miracleGachaButton = setTooltip(setButtonLabel(createButton("奇跡ガチャ", () => showMiracleGachaPopup()), "奇跡ガチャ", "Gacha"), "保存動画や超レア演出と連動するド派手なガチャを開きます。", "Open the dramatic miracle gacha.");
 utilityButtons.appendChild(miracleGachaButton);
-const magicCircleButton = setTooltip(setButtonLabel(createButton("魔法陣を書く", () => enableMagicCircleMode()), "魔法陣を書く", "Magic circle"), "画面を指やマウスでなぞって、15種類以上の盤面魔法を発動します。", "Draw on the board to trigger magic effects.");
+const magicCircleButton = setTooltip(setButtonLabel(createButton("魔法陣を書く", () => enableMagicCircleMode()), "魔法陣を書く", "Magic circle"), "画面を指やマウスでなぞって、大量のの盤面魔法を発動します。", "Draw on the board to trigger magic effects.");
 utilityButtons.appendChild(magicCircleButton);
 tiltExperimentButton = setTooltip(setButtonLabel(createButton("傾き実験: OFF", () => { void toggleTiltExperimentMode(); }), "傾き実験: OFF", "Tilt: OFF"), "スマホを傾けて玉の流れを少し変えます。", "Tilt your phone to influence gravity.");
 utilityButtons.appendChild(tiltExperimentButton);
@@ -2565,7 +2594,7 @@ function setupMobileLayout(): void {
     mobileSettingsOverlay.style.display = "none";
     mobileSettingsOverlay.style.alignItems = "stretch";
     mobileSettingsOverlay.style.justifyContent = "center";
-    mobileSettingsOverlay.style.background = "rgba(5,8,18,.40)";
+    mobileSettingsOverlay.style.background = "rgba(5,8,18,.22)";
     mobileSettingsOverlay.style.backdropFilter = "blur(8px)";
     mobileSettingsOverlay.style.zIndex = "140";
     mobileSettingsOverlay.style.padding = "0";
@@ -2579,8 +2608,8 @@ function setupMobileLayout(): void {
     mobileSettingsPanel.style.width = "100%";
     mobileSettingsPanel.style.height = "100dvh";
     mobileSettingsPanel.style.maxHeight = "100dvh";
-    mobileSettingsPanel.style.background = "linear-gradient(135deg,rgba(255,255,255,.36),rgba(190,205,224,.24),rgba(255,255,255,.30))";
-    mobileSettingsPanel.style.backdropFilter = "blur(22px) saturate(1.35) contrast(1.04)";
+    mobileSettingsPanel.style.background = "linear-gradient(135deg,rgba(255,255,255,.20),rgba(190,205,224,.12),rgba(255,255,255,.16))";
+    mobileSettingsPanel.style.backdropFilter = "blur(30px) saturate(1.55) contrast(1.08)";
     mobileSettingsPanel.style.borderTopLeftRadius = "0";
     mobileSettingsPanel.style.borderTopRightRadius = "0";
     mobileSettingsPanel.style.boxShadow = "0 -12px 40px rgba(0,0,0,.28)";
@@ -2625,9 +2654,9 @@ function setupMobileLayout(): void {
 
     inner.appendChild(appHeader);
     inner.appendChild(recordHero);
-    inner.appendChild(topRow);
     inner.appendChild(controlArea);
     inner.appendChild(buttonArea);
+    inner.appendChild(topRow);
     randomGraphArea.style.display = "none";
 
     applySettingsUiZoom();
@@ -2902,7 +2931,7 @@ function applyDynamicUiPalette(): void {
     buttonArea.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
     randomGraphArea.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
     if (mobileSettingsPanel) {
-        mobileSettingsPanel.style.background = settings.blackModeEnabled ? "linear-gradient(135deg,rgba(15,23,42,.58),rgba(51,65,85,.36),rgba(148,163,184,.18))" : "linear-gradient(135deg,rgba(255,255,255,.36),rgba(190,205,224,.24),rgba(255,255,255,.30))";
+        mobileSettingsPanel.style.background = settings.blackModeEnabled ? "linear-gradient(135deg,rgba(15,23,42,.38),rgba(51,65,85,.22),rgba(148,163,184,.12))" : "linear-gradient(135deg,rgba(255,255,255,.20),rgba(190,205,224,.12),rgba(255,255,255,.16))";
         mobileSettingsPanel.style.color = palette.fieldText;
         applyThemePaletteToPanel(mobileSettingsPanel, {
             body: palette.panel,
@@ -4155,6 +4184,7 @@ function showAdminPanelPopup(): void {
             <button id="admin-all-effects-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#dcfce7 0%,#bbf7d0 100%);color:#14532d;cursor:pointer;">演出系を全部ON</button>
             <button id="admin-r2-video-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">R2動画確認</button>
             <button id="admin-log-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;cursor:pointer;">管理者ログ</button>
+            <button id="admin-tempura-secret-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(245,158,11,.32);background:linear-gradient(180deg,#fff7ed 0%,#fdba74 100%);color:#7c2d12;cursor:pointer;">穴子天ぷら</button>
             <button id="admin-magic-answer-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(88,28,135,.25);background:linear-gradient(180deg,#f3e8ff 0%,#ddd6fe 100%);color:#581c87;cursor:pointer;">魔法陣回答</button>
             <button id="admin-skill-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#eef2ff 0%,#c7d2fe 100%);color:#312e81;cursor:pointer;">スキル+99</button>
             <button id="admin-unlock-book-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#fef9c3 0%,#fde68a 100%);color:#713f12;cursor:pointer;">図鑑テスト解放</button>
@@ -4169,12 +4199,23 @@ function showAdminPanelPopup(): void {
     document.getElementById("admin-r2-video-button")!.onclick = () => { void showAdminRemoteVideoTestPopup(); };
     document.getElementById("admin-log-button")!.onclick = () => showAdminStatsPopup();
     document.getElementById("admin-magic-answer-button")!.onclick = () => showAdminMagicCircleAnswerPopup();
+    document.getElementById("admin-tempura-secret-button")!.onclick = () => showAnagoTempuraSecretPopup();
     document.getElementById("admin-skill-button")!.onclick = () => adminAddSkillStock();
     document.getElementById("admin-unlock-book-button")!.onclick = () => adminUnlockMiracleBookForTest();
     document.getElementById("admin-lock-button")!.onclick = () => adminLockMode();
     document.querySelectorAll<HTMLButtonElement>(".admin-miracle-button").forEach((button) => {
         button.onclick = () => triggerAdminMiracle(button.dataset.kind || "");
     });
+}
+
+function showAnagoTempuraSecretPopup(): void {
+    showPopup("隠し要素：穴子の天ぷら", `
+        <div class="miracle-user-card" style="text-align:center;background:radial-gradient(circle at 50% 0%,rgba(255,247,237,.96),rgba(251,191,36,.58),rgba(124,45,18,.20));">
+            <div style="font-size:clamp(54px,12vw,110px);line-height:1;">🍤</div>
+            <div style="font-size:clamp(24px,5vw,44px);font-weight:1000;margin-top:10px;">穴子の天ぷら、研究所奥義</div>
+            <p style="line-height:1.9;text-align:left;max-width:720px;margin:16px auto 0;">管理者用メモ：隠し魔法陣 <b>穴子天ぷら陣</b> を追加済みです。魔法陣判定で選ばれると、衣が流星のように舞う演出として扱われます。表向きはただの研究所ですが、奥では穴子が揚がっています。</p>
+        </div>
+    `);
 }
 
 function triggerAdminMiracle(kind: string): void {
@@ -4454,7 +4495,7 @@ function applyTheme(): void {
     randomGraphArea.style.background = getMetallicPanelBackground(settings.blackModeEnabled);
     applyThemePaletteToPanel(info, palette);
     if (mobileSettingsPanel) {
-        mobileSettingsPanel.style.background = settings.blackModeEnabled ? "linear-gradient(135deg,rgba(15,23,42,.58),rgba(51,65,85,.36),rgba(148,163,184,.18))" : "linear-gradient(135deg,rgba(255,255,255,.36),rgba(190,205,224,.24),rgba(255,255,255,.30))";
+        mobileSettingsPanel.style.background = settings.blackModeEnabled ? "linear-gradient(135deg,rgba(15,23,42,.38),rgba(51,65,85,.22),rgba(148,163,184,.12))" : "linear-gradient(135deg,rgba(255,255,255,.20),rgba(190,205,224,.12),rgba(255,255,255,.16))";
         mobileSettingsPanel.style.color = palette.fieldText;
         mobileSettingsPanel.style.borderColor = palette.buttonBorder;
         applyThemePaletteToPanel(mobileSettingsPanel, palette);
@@ -4806,66 +4847,12 @@ async function playGachaRemoteMiracleVideo(def: SpecialEventDef): Promise<void> 
     }
 }
 
-type MagicCircleKind = "sun" | "moon" | "star" | "thunder" | "wave" | "earth" | "wind" | "gate" | "mirror" | "dragon" | "void" | "flower" | "gear" | "meteor" | "clock" | "crown";
-
-interface MagicCircleDef {
-    kind: MagicCircleKind;
-    label: string;
-    emoji: string;
-    color: string;
-    description: string;
-}
-
-const MAGIC_CIRCLE_DEFS: MagicCircleDef[] = [
-    { kind: "sun", label: "太陽輪", emoji: "☀️", color: "#facc15", description: "盤面を発光させ、外から銀玉を呼び込みます。" },
-    { kind: "moon", label: "月影輪", emoji: "🌙", color: "#bfdbfe", description: "重力を少し弱め、玉をふわっと流します。" },
-    { kind: "star", label: "星芒陣", emoji: "⭐", color: "#fde68a", description: "流れ星のように外側から玉が飛び込みます。" },
-    { kind: "thunder", label: "雷鳴陣", emoji: "⚡", color: "#fef08a", description: "落雷系の盤面崩壊を呼びます。" },
-    { kind: "wave", label: "水渦陣", emoji: "🌊", color: "#38bdf8", description: "津波のように盤面の流れを横へ押します。" },
-    { kind: "earth", label: "地脈陣", emoji: "🪨", color: "#d6d3d1", description: "大地震のように盤面を揺らします。" },
-    { kind: "wind", label: "旋風陣", emoji: "🌀", color: "#67e8f9", description: "横風で玉の流れを乱します。" },
-    { kind: "gate", label: "門陣", emoji: "🌀", color: "#c4b5fd", description: "左右の画面外から玉を侵入させます。" },
-    { kind: "mirror", label: "鏡陣", emoji: "🪞", color: "#e0f2fe", description: "反射世界のように盤面を反転気味に揺らします。" },
-    { kind: "dragon", label: "龍脈陣", emoji: "🐉", color: "#34d399", description: "龍脈崩壊を呼びます。" },
-    { kind: "void", label: "虚無陣", emoji: "⬛", color: "#e5e7eb", description: "虚無領域を開きます。" },
-    { kind: "flower", label: "花冠陣", emoji: "🌸", color: "#f9a8d4", description: "一時ピンを花のように配置します。" },
-    { kind: "gear", label: "歯車陣", emoji: "⚙️", color: "#cbd5e1", description: "ピンの反応を一時的に暴走させます。" },
-    { kind: "meteor", label: "隕石陣", emoji: "☄️", color: "#fb923c", description: "隕石玉を画面外から突入させます。" },
-    { kind: "clock", label: "時辰陣", emoji: "⏳", color: "#a78bfa", description: "時間断層崩壊を呼びます。" },
-    { kind: "crown", label: "王冠陣", emoji: "👑", color: "#facc15", description: "強い光とともに観測ピンを置きます。" },
-];
-
-function getMagicCircleMarkSvg(def: MagicCircleDef): string {
-    const stroke = escapeHtml(def.color);
-    const common = `fill="none" stroke="${stroke}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"`;
-    const markMap: Record<string, string> = {
-        sun: `<circle cx="60" cy="60" r="28" ${common}/><path d="M60 12v14M60 94v14M12 60h14M94 60h14M26 26l10 10M84 84l10 10M94 26 84 36M36 84 26 94" ${common}/>` ,
-        moon: `<path d="M74 18c-22 5-36 22-36 42s14 37 36 42c-30 8-58-12-58-42s28-50 58-42Z" fill="${stroke}" opacity=".82"/>`,
-        star: `<path d="M60 14 72 45 106 45 78 64 88 98 60 78 32 98 42 64 14 45 48 45Z" ${common}/>` ,
-        thunder: `<path d="M70 10 28 64h28L46 110 92 50H63Z" fill="${stroke}" opacity=".86"/>`,
-        wave: `<path d="M12 70c18-20 32-20 50 0s32 20 50 0M12 88c18-16 32-16 50 0s32 16 50 0" ${common}/>` ,
-        earth: `<path d="M18 74c16-10 26-30 42-30s26 20 42 30M24 88h72M36 58l24-32 24 32" ${common}/>` ,
-        wind: `<path d="M18 42h54c18 0 18-22 0-22M18 62h78c18 0 18 24-2 24H72M18 82h36" ${common}/>` ,
-        gate: `<path d="M26 102V34c0-14 12-24 34-24s34 10 34 24v68M42 102V42c0-8 6-14 18-14s18 6 18 14v60" ${common}/>` ,
-        mirror: `<path d="M24 16h72v88H24zM60 18v84M40 38l14 12-14 12M80 38 66 50l14 12" ${common}/>` ,
-        dragon: `<path d="M22 82c20-52 58 22 76-30 4-12-2-24-16-26M82 26l18-8-8 18M30 86l-12 18" ${common}/>` ,
-        void: `<circle cx="60" cy="60" r="42" fill="${stroke}" opacity=".18"/><circle cx="60" cy="60" r="24" fill="${stroke}" opacity=".82"/>`,
-        flower: `<circle cx="60" cy="60" r="12" fill="${stroke}"/><path d="M60 18c18 18 18 28 0 42-18-14-18-24 0-42ZM60 102c-18-18-18-28 0-42 18 14 18 24 0 42ZM18 60c18-18 28-18 42 0-14 18-24 18-42 0ZM102 60c-18 18-28 18-42 0 14-18 24-18 42 0Z" fill="${stroke}" opacity=".55"/>`,
-        gear: `<circle cx="60" cy="60" r="18" ${common}/><path d="M60 12v18M60 90v18M12 60h18M90 60h18M26 26l13 13M81 81l13 13M94 26 81 39M39 81 26 94" ${common}/>` ,
-        meteor: `<path d="M18 28c20 5 38 18 58 38M28 18c12 20 24 38 44 58M76 70c18-8 32 6 24 24s-32 14-40 0 0-20 16-24Z" ${common}/>` ,
-        clock: `<circle cx="60" cy="60" r="44" ${common}/><path d="M60 32v30l22 12M36 16l-12 12M84 16l12 12" ${common}/>` ,
-        crown: `<path d="M18 86h84M24 80l8-46 22 28 6-42 6 42 22-28 8 46Z" ${common}/>` ,
-    };
-    const mark = markMap[def.kind] ?? `<circle cx="60" cy="60" r="40" ${common}/>`;
-    return `<svg viewBox="0 0 120 120" width="96" height="96" role="img" aria-label="${escapeHtml(def.label)}" style="display:block;margin:0 auto 10px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.18));">${mark}</svg>`;
-}
-
 function showAdminMagicCircleAnswerPopup(): void {
     const rows = MAGIC_CIRCLE_DEFS.map((def, index) => `
         <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);border:1px solid rgba(80,90,120,.16);text-align:center;">
             ${getMagicCircleMarkSvg(def)}
             <div style="font-weight:1000;font-size:1.05em;">${index + 1}. ${def.emoji} ${escapeHtml(def.label)}</div>
-            <div style="margin-top:6px;opacity:.76;line-height:1.65;text-align:left;">${escapeHtml(def.description)}</div>
+            <div style="margin-top:6px;opacity:.76;line-height:1.65;text-align:left;"><b>${escapeHtml(def.chant)}</b><br>${escapeHtml(def.description)}</div>
             <div style="margin-top:5px;font-size:.84em;opacity:.62;text-align:left;">内部ID: ${escapeHtml(def.kind)}</div>
         </div>
     `).join("");
@@ -4881,6 +4868,198 @@ function getCanvasPointFromEvent(event: PointerEvent): { x: number; y: number } 
     const x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * geometry.width;
     const y = ((event.clientY - rect.top) / Math.max(1, rect.height)) * geometry.height;
     return { x: clamp(x, 0, geometry.width), y: clamp(y, 0, geometry.height) };
+}
+
+function getRoughCanvas(): any {
+    if (!roughCanvas) {
+        try { roughCanvas = rough.canvas(render.canvas); } catch { roughCanvas = null; }
+    }
+    return roughCanvas;
+}
+
+function getJsConfetti(): InstanceType<typeof JSConfetti> | null {
+    if (!jsConfetti) {
+        try { jsConfetti = new JSConfetti({ canvas: render.canvas }); } catch { jsConfetti = null; }
+    }
+    return jsConfetti;
+}
+
+function playHowlerCue(kind: string, volume = 0.38, rate = 1): void {
+    if (!soundEnabled || settings.simpleMode) return;
+    try {
+        const key = kind;
+        let howl = howlerCueCache.get(key);
+        if (!howl) {
+            const srcMap: Record<string, string> = {
+                magic: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=",
+                gacha: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=",
+                crystal: "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="
+            };
+            howl = new Howl({ src: [srcMap[key] ?? srcMap.magic], volume, rate, html5: false });
+            howlerCueCache.set(key, howl);
+        }
+        howl.rate(rate);
+        howl.volume(volume);
+        howl.play();
+        // Howler 管理の入口として使い、実際の音階は既存 Tone 音源で重ねます。
+        if (toneReady) {
+            const synth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: kind === "gacha" ? "sawtooth" : "triangle" },
+                envelope: { attack: 0.005, decay: 0.18, sustain: 0.08, release: 0.22 }
+            }).toDestination();
+            synth.volume.value = kind === "gacha" ? -18 : -21;
+            const now = Tone.now();
+            const notes = kind === "gacha" ? ["C4", "E4", "G4", "B4"] : kind === "crystal" ? ["A5", "E6", "B6"] : ["D5", "A5", "E6"];
+            notes.forEach((note, i) => synth.triggerAttackRelease(note, "16n", now + i * 0.055));
+            window.setTimeout(() => synth.dispose(), 900);
+        }
+    } catch {
+        // 音演出は失敗してもゲーム本体を止めない
+    }
+}
+
+function fireLibraryParticleBurst(mode: "magic" | "gacha" | "title" | "tempura", x = geometry.width / 2, y = geometry.height * 0.35): void {
+    if (settings.simpleMode || !confettiEnabled) return;
+    try {
+        const canvasRect = render.canvas.getBoundingClientRect();
+        const source = {
+            x: canvasRect.left + x / Math.max(1, geometry.width) * canvasRect.width,
+            y: canvasRect.top + y / Math.max(1, geometry.height) * canvasRect.height,
+        };
+        party.confetti(source as any, {
+            count: mode === "gacha" ? party.variation.range(80, 150) : party.variation.range(35, 80),
+            size: party.variation.range(0.8, mode === "tempura" ? 2.0 : 1.45),
+            spread: party.variation.range(40, 85),
+        });
+    } catch {
+        // party.js が使えない環境では canvas-confetti 側だけに任せる
+    }
+    try {
+        const jc = getJsConfetti();
+        const emojis = mode === "tempura" ? ["🍤", "✨", "🍚"] : mode === "gacha" ? ["💎", "👑", "✨", "🌈"] : mode === "title" ? ["🏅", "✨", "🎉"] : ["🔯", "✨", "⚡", "🌙"];
+        void jc?.addConfetti({ emojis, emojiSize: mode === "gacha" ? 44 : 34, confettiNumber: mode === "gacha" ? 55 : 30 });
+    } catch {
+        // 絵文字紙吹雪失敗は無視
+    }
+}
+
+function addMagicPhysicsField(kind: MagicPhysicsField["kind"], x: number, y: number, radius: number, strength: number, durationMs: number, label: string): void {
+    activeMagicPhysicsFields.push({
+        x,
+        y,
+        radius,
+        strength: strength * 7.5,
+        kind,
+        until: performance.now() + durationMs,
+        spin: appRandom() > 0.5 ? 1 : -1,
+        label,
+    });
+    addFloatingText(`物理変態化: ${label}`, x, y - radius * 0.35, "#e0f2fe");
+}
+
+function updateMagicPhysicsFields(): void {
+    if (activeMagicPhysicsFields.length === 0) return;
+    const now = performance.now();
+    for (let i = activeMagicPhysicsFields.length - 1; i >= 0; i--) {
+        const field = activeMagicPhysicsFields[i];
+        if (!field || now > field.until) {
+            activeMagicPhysicsFields.splice(i, 1);
+            continue;
+        }
+        const ageRatio = clamp((field.until - now) / 5000, 0.15, 1);
+        for (const body of engine.world.bodies) {
+            const plugin = (body as any).plugin;
+            if (!plugin?.isDrop) continue;
+            const dx = field.x - body.position.x;
+            const dy = field.y - body.position.y;
+            const distSq = dx * dx + dy * dy;
+            const maxDist = field.radius;
+            if (distSq > maxDist * maxDist || distSq < 1) continue;
+            const dist = Math.sqrt(distSq);
+            const power = (1 - dist / maxDist) * field.strength * ageRatio;
+            let fx = 0;
+            let fy = 0;
+            if (field.kind === "vortex") {
+                fx = (-dy / dist) * power * field.spin;
+                fy = (dx / dist) * power * field.spin;
+            } else if (field.kind === "repel") {
+                fx = (-dx / dist) * power;
+                fy = (-dy / dist) * power;
+            } else if (field.kind === "blackhole") {
+                fx = (dx / dist) * power * 1.25;
+                fy = (dy / dist) * power * 1.25;
+            } else {
+                fx = Math.sin(now / 140 + body.id) * power * 0.9;
+                fy = Math.cos(now / 170 + body.id) * power * 0.45;
+            }
+            Body.applyForce(body, body.position, { x: fx, y: fy });
+        }
+    }
+}
+
+function drawMagicPhysicsFields(context: CanvasRenderingContext2D): void {
+    if (activeMagicPhysicsFields.length === 0) return;
+    const now = performance.now();
+    context.save();
+    context.globalCompositeOperation = "lighter";
+    for (const field of activeMagicPhysicsFields) {
+        const life = clamp((field.until - now) / 5000, 0, 1);
+        const pulse = 0.82 + Math.sin(now / 120) * 0.12;
+        const grad = context.createRadialGradient(field.x, field.y, field.radius * 0.05, field.x, field.y, field.radius * pulse);
+        const color = field.kind === "blackhole" ? "124,58,237" : field.kind === "repel" ? "250,204,21" : field.kind === "wave" ? "56,189,248" : "34,211,238";
+        grad.addColorStop(0, `rgba(${color},${0.20 * life})`);
+        grad.addColorStop(0.58, `rgba(${color},${0.08 * life})`);
+        grad.addColorStop(1, `rgba(${color},0)`);
+        context.fillStyle = grad;
+        context.beginPath();
+        context.arc(field.x, field.y, field.radius * pulse, 0, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = `rgba(${color},${0.28 * life})`;
+        context.lineWidth = Math.max(1.5, 3 * geometry.scale);
+        context.beginPath();
+        context.arc(field.x, field.y, field.radius * (0.45 + 0.08 * Math.sin(now / 160)), 0, Math.PI * 2);
+        context.stroke();
+    }
+    context.restore();
+}
+
+function showBrokenResearchNote(reason: string): void {
+    const lines = [
+        "記録線が震えている。魔法陣は円ではなく、昨日の記憶を描いていた。",
+        "研究ノートの端に、存在しないピン番号が浮かんだ。",
+        "玉は落下していない。研究所が上昇している可能性がある。",
+        "穴子の天ぷらの衣から、微小な重力波を検出した。",
+        "このページは手で書かれたように見えるが、誰も筆記していない。",
+    ];
+    brokenResearchNoteText = `${reason}：${lines[Math.floor(appRandom() * lines.length)] ?? lines[0]}`;
+    brokenResearchNoteUntil = performance.now() + 5200;
+}
+
+function drawBrokenResearchNote(context: CanvasRenderingContext2D): void {
+    if (!brokenResearchNoteText || performance.now() > brokenResearchNoteUntil || settings.simpleMode) return;
+    const alpha = clamp((brokenResearchNoteUntil - performance.now()) / 900, 0, 1);
+    const w = Math.min(geometry.width * 0.70, 620 * geometry.scale);
+    const h = 92 * geometry.scale;
+    const x = geometry.width / 2 - w / 2;
+    const y = geometry.height * 0.12;
+    context.save();
+    context.globalAlpha = alpha * 0.92;
+    context.fillStyle = "rgba(255,251,235,.88)";
+    roundRect(context, x, y, w, h, 20 * geometry.scale);
+    context.fill();
+    const rc = getRoughCanvas();
+    if (rc) {
+        rc.rectangle(x + 6, y + 6, w - 12, h - 12, { stroke: "rgba(120,53,15,.70)", strokeWidth: 2.2, roughness: 2.8, bowing: 2.2 });
+        rc.line(x + 24, y + h * 0.44, x + w - 24, y + h * 0.38, { stroke: "rgba(180,83,9,.34)", strokeWidth: 1.6, roughness: 3.5 });
+    }
+    context.fillStyle = "rgba(67,20,7,.92)";
+    context.font = `900 ${Math.round(clamp(19 * geometry.scale, 14, 28))}px ${ROUNDED_UI_FONT}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("壊れた研究ノート", x + w / 2, y + 28 * geometry.scale);
+    context.font = `800 ${Math.round(clamp(15 * geometry.scale, 11, 20))}px ${ROUNDED_UI_FONT}`;
+    context.fillText(brokenResearchNoteText.slice(0, 46), x + w / 2, y + 62 * geometry.scale);
+    context.restore();
 }
 
 function classifyMagicCircle(points: Array<{ x: number; y: number; t: number }>): MagicCircleDef {
@@ -4974,9 +5153,27 @@ function activateMagicCircle(def: MagicCircleDef, points: Array<{ x: number; y: 
         ? points.reduce((acc, p) => ({ x: acc.x + p.x / points.length, y: acc.y + p.y / points.length }), { x: 0, y: 0 })
         : { x: geometry.width / 2, y: geometry.height * 0.36 };
     addFloatingText(`${def.emoji} ${def.label}`, center.x, center.y, def.color);
+    addFloatingText(`魔法陣発動: ${def.chant}`, center.x, center.y - 34 * geometry.scale, def.color);
     createTapRipple(center.x, center.y, true);
-    triggerCameraShake(16 * geometry.scale, 360);
-    switch (def.kind) {
+    for (let i = 0; i < 10; i++) {
+        const a = i * Math.PI * 2 / 10;
+        createTapRipple(center.x + Math.cos(a) * 80 * geometry.scale, center.y + Math.sin(a) * 80 * geometry.scale, i % 2 === 0);
+    }
+    fireConfetti(def.effect === "void" ? "black" : "miracle", true);
+    fireLibraryParticleBurst(def.kind === "tempura" ? "tempura" : "magic", center.x, center.y);
+    playHowlerCue(def.effect === "gear" || def.effect === "mirror" ? "crystal" : "magic", 0.42, 0.85 + appRandom() * 0.35);
+    showBrokenResearchNote(def.label);
+    showSoftToast(`魔法陣発動: ${def.label} / ${def.chant}`);
+    // 発動したことが必ず分かるように、どの魔法陣でも軽い侵入玉と物理場を出します。
+    // 個別効果はこの後の switch でさらに上乗せします。
+    spawnExternalIntruderBalls(Math.max(4, Math.min(10, Math.round(6 * geometry.scale))), def.label);
+    const fieldRadius = clamp(230 * geometry.scale, 150, 420);
+    if (["wind", "wave", "gate", "dragon"].includes(def.effect)) addMagicPhysicsField("vortex", center.x, center.y, fieldRadius, 0.00009, 5600, def.label);
+    else if (["void", "moon", "clock"].includes(def.effect)) addMagicPhysicsField("blackhole", center.x, center.y, fieldRadius * 1.1, 0.000075, 5200, def.label);
+    else if (["sun", "crown", "flower", "earth"].includes(def.effect)) addMagicPhysicsField("repel", center.x, center.y, fieldRadius, 0.000075, 4400, def.label);
+    else addMagicPhysicsField("wave", center.x, center.y, fieldRadius, 0.00007, 4800, def.label);
+    triggerCameraShake(26 * geometry.scale, 620);
+    switch (def.effect) {
         case "sun": spawnExternalIntruderBalls(8, def.label); break;
         case "moon": engine.gravity.y = 4.2; window.setTimeout(() => { if (tiltExperimentEnabled) return; engine.gravity.y = 8; }, 3600); break;
         case "star": spawnExternalIntruderBalls(18, def.label); break;
@@ -7152,7 +7349,7 @@ async function playFirstRunShowcaseVideo(): Promise<void> {
 
 async function playRemoteMiracleVideo(def?: SpecialEventDef): Promise<void> {
     if (isAppTerminated) return;
-    if (settings.simpleMode) return;
+    if (settings.simpleMode && !def) return;
     if (!settings.effectsEnabled && !shouldForceMiracleEffects(def)) return;
 
     const assets = await loadRemoteMiracleAssets();
@@ -8350,6 +8547,7 @@ async function fireConfetti(mode: "normal" | "miracle" | "black" | "cosmic" = "n
     confetti({ particleCount: mainCount, spread: mode === "normal" ? 70 : 140, origin: { y: 0.55 }, colors });
     confetti({ particleCount: sideCount, angle: 60, spread: 80, origin: { x: 0, y: 0.65 }, colors });
     confetti({ particleCount: sideCount, angle: 120, spread: 80, origin: { x: 1, y: 0.65 }, colors });
+    if (force || mode !== "normal") fireLibraryParticleBurst(mode === "cosmic" ? "gacha" : mode === "black" ? "magic" : "title");
 }
 
 async function togglePixiBackground(): Promise<void> {
@@ -8898,9 +9096,8 @@ function drawTimeBallSkins(context: CanvasRenderingContext2D): void {
 }
 
 function draw3DBallShading(context: CanvasRenderingContext2D): void {
-    if (settings.simpleMode) return;
     const dropBodies = engine.world.bodies.filter((body) => (body as any).plugin?.isDrop);
-    const maxShaded = isMobile || settings.lowSpecMode ? 260 : 520;
+    const maxShaded = settings.simpleMode ? 220 : (isMobile || settings.lowSpecMode ? 320 : 720);
     const step = dropBodies.length > maxShaded ? Math.ceil(dropBodies.length / maxShaded) : 1;
     const timeSec = performance.now() * 0.001;
     context.save();
@@ -8924,8 +9121,8 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
         context.clip();
 
         const silverSheen = context.createLinearGradient(x - radius * 1.04, y - radius * 1.08, x + radius * 1.02, y + radius * 1.06);
-        silverSheen.addColorStop(0, isDarkBall ? 'rgba(255,255,255,.30)' : 'rgba(255,255,255,.58)');
-        silverSheen.addColorStop(0.18, isDarkBall ? 'rgba(220,230,245,.10)' : 'rgba(232,238,248,.36)');
+        silverSheen.addColorStop(0, isDarkBall ? 'rgba(255,255,255,.36)' : 'rgba(255,255,255,.72)');
+        silverSheen.addColorStop(0.18, isDarkBall ? 'rgba(220,230,245,.16)' : 'rgba(232,238,248,.46)');
         silverSheen.addColorStop(0.46, 'rgba(255,255,255,0)');
         silverSheen.addColorStop(0.74, 'rgba(24,32,44,.10)');
         silverSheen.addColorStop(1, 'rgba(0,0,0,.25)');
@@ -8939,7 +9136,7 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
             sweep.addColorStop(0, 'rgba(255,255,255,0)');
             sweep.addColorStop(0.14, 'rgba(220,230,245,.18)');
             sweep.addColorStop(0.30, 'rgba(250,252,255,.48)');
-            sweep.addColorStop(0.48, 'rgba(255,255,255,.96)');
+            sweep.addColorStop(0.48, 'rgba(255,255,255,.98)');
             sweep.addColorStop(0.58, 'rgba(208,220,240,.56)');
             sweep.addColorStop(0.76, 'rgba(255,255,255,.08)');
             sweep.addColorStop(1, 'rgba(255,255,255,0)');
@@ -8970,9 +9167,14 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
         context.arc(x, y, radius, 0, Math.PI * 2);
         context.fill();
 
-        context.fillStyle = isDarkBall ? 'rgba(255,255,255,.62)' : 'rgba(255,255,255,.88)';
+        context.fillStyle = isDarkBall ? 'rgba(255,255,255,.66)' : 'rgba(255,255,255,.94)';
         context.beginPath();
         context.ellipse(x - radius * 0.30, y - radius * 0.42, radius * 0.29, radius * 0.18, -0.56, 0, Math.PI * 2);
+        context.fill();
+
+        context.fillStyle = 'rgba(255,255,255,.82)';
+        context.beginPath();
+        context.arc(x - radius * 0.42, y - radius * 0.52, Math.max(1.2, radius * 0.08), 0, Math.PI * 2);
         context.fill();
 
         context.fillStyle = metallicBall ? 'rgba(255,255,255,.42)' : 'rgba(255,255,255,.16)';
@@ -9152,6 +9354,23 @@ function drawMagicCircleTrace(context: CanvasRenderingContext2D): void {
         context.strokeStyle = "rgba(255,255,255,.92)";
         context.lineWidth = Math.max(1.5 * geometry.scale, 1.2);
         context.stroke();
+        const rc = getRoughCanvas();
+        if (rc && points.length > 4 && !settings.simpleMode) {
+            const xs = points.map((p) => p.x);
+            const ys = points.map((p) => p.y);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            const w = Math.max(24 * geometry.scale, maxX - minX);
+            const h = Math.max(24 * geometry.scale, maxY - minY);
+            rc.ellipse(minX + w / 2, minY + h / 2, w * 1.16, h * 1.16, {
+                stroke: "rgba(255,255,255,.56)",
+                strokeWidth: Math.max(1.2, 2 * geometry.scale),
+                roughness: 2.4,
+                bowing: 1.6,
+            });
+        }
     }
     if (magicCircleModeEnabled) {
         const last = points[points.length - 1];
@@ -9483,7 +9702,9 @@ Events.on(render, "afterRender", () => {
     drawRareBoardCatastrophe(context);
     drawBoardDepthOverlay(context);
     drawTapRipples(context);
+    drawMagicPhysicsFields(context);
     drawMagicCircleTrace(context);
+    drawBrokenResearchNote(context);
     drawRealisticPins(context);
     draw3DBallShading(context);
     drawSpecialGlows(context);
@@ -9682,6 +9903,7 @@ Events.on(engine, "collisionStart", (event) => {
 Events.on(engine, "afterUpdate", () => {
     if (isAppTerminated) return;
     updateCameraShake();
+    updateMagicPhysicsFields();
     updatePinWiggles();
     updateBoardAnomaly();
     maybeTriggerBoardAnomaly();
