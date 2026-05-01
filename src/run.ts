@@ -730,6 +730,27 @@ appRoot.style.flexDirection = "column";
 appRoot.style.overflow = "hidden";
 document.body.appendChild(appRoot);
 
+function normalizeAppViewportStyles(): void {
+    if (!isMobile) return;
+    document.documentElement.style.width = "100%";
+    document.documentElement.style.minWidth = "100%";
+    document.documentElement.style.height = "100%";
+    document.documentElement.style.minHeight = "100%";
+    document.body.style.width = "100vw";
+    document.body.style.minWidth = "100vw";
+    document.body.style.height = "100dvh";
+    document.body.style.minHeight = "100dvh";
+    appRoot.style.width = "100vw";
+    appRoot.style.minWidth = "100vw";
+    appRoot.style.height = "100dvh";
+    appRoot.style.minHeight = "100dvh";
+    appRoot.style.maxWidth = "100vw";
+    appRoot.style.maxHeight = "100dvh";
+    appRoot.style.overflow = "hidden";
+}
+
+normalizeAppViewportStyles();
+
 const gameArea = document.createElement("div");
 gameArea.id = "miracle-game-area";
 gameArea.style.flex = "1";
@@ -1925,8 +1946,22 @@ comboOverlay.style.boxShadow = "0 8px 20px rgba(0,0,0,.22)";
 document.body.appendChild(comboOverlay);
 
 helpOverlay.addEventListener("click", (event) => {
+    const actionButton = (event.target as HTMLElement | null)?.closest?.("[data-home-action]") as HTMLElement | null;
+    if (actionButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        runLabHomeAction(actionButton.dataset.homeAction || "");
+        return;
+    }
     if (event.target === helpOverlay) closeHelpPopup();
-});
+}, true);
+helpOverlay.addEventListener("pointerup", (event) => {
+    const actionButton = (event.target as HTMLElement | null)?.closest?.("[data-home-action]") as HTMLElement | null;
+    if (!actionButton) return;
+    event.preventDefault();
+    event.stopPropagation();
+    runLabHomeAction(actionButton.dataset.homeAction || "");
+}, { capture: true, passive: false });
 window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && helpOverlay.style.display !== "none") closeHelpPopup();
     if (event.key === "Escape" && mobileSettingsOverlay && mobileSettingsOverlay.style.display !== "none") closeMobileSettingsPopup();
@@ -5179,10 +5214,54 @@ function spawnExternalIntruderBalls(count = 12, reason = "event"): void {
     maybeShowCommentary(`外部侵入イベント「${reason}」`, true);
 }
 
+function showMagicCircleSummonOverlay(def: MagicCircleDef, center: { x: number; y: number }): void {
+    const isDragon = def.effect === "dragon" || /龍|竜|dragon/i.test(`${def.label} ${def.chant}`);
+    const isVoid = def.effect === "void";
+    const isThunder = def.effect === "thunder";
+    const isWave = def.effect === "wave";
+    const icon = isDragon ? "🐉" : isVoid ? "🕳️" : isThunder ? "⚡" : isWave ? "🌊" : def.emoji || "✦";
+    const title = isDragon ? "龍脈召喚" : `${def.label} 発動`;
+    const subtitle = isDragon
+        ? "盤面の奥から巨大な龍がうねり、玉の流れを書き換えます。"
+        : `${def.chant} / 魔法陣が盤面へ干渉します。`;
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.pointerEvents = "none";
+    overlay.style.zIndex = "126";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.overflow = "hidden";
+    overlay.innerHTML = `
+        <style>
+            @keyframes miracleSummonFade { 0%{opacity:0;transform:scale(.86) rotate(-3deg);} 15%{opacity:1;transform:scale(1.02) rotate(1deg);} 72%{opacity:1;} 100%{opacity:0;transform:scale(1.22) rotate(6deg);} }
+            @keyframes miracleSummonRing { 0%{transform:scale(.25) rotate(0deg);opacity:0;} 25%{opacity:.95;} 100%{transform:scale(1.85) rotate(220deg);opacity:0;} }
+            @keyframes miracleDragonFly { 0%{transform:translateX(-42vw) scale(.7) rotate(-10deg);opacity:0;} 20%{opacity:1;} 50%{transform:translateX(0) scale(1.35) rotate(4deg);} 100%{transform:translateX(42vw) scale(.9) rotate(12deg);opacity:0;} }
+        </style>
+        <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 38%, rgba(255,255,255,.24), rgba(8,12,28,.48) 42%, rgba(0,0,0,.74));mix-blend-mode:screen;"></div>
+        <div style="position:absolute;width:min(78vw,760px);height:min(78vw,760px);border-radius:999px;border:5px solid ${def.color};box-shadow:0 0 44px ${def.color}, inset 0 0 34px ${def.color};animation:miracleSummonRing 1500ms ease-out forwards;"></div>
+        <div style="position:absolute;width:min(60vw,520px);height:min(60vw,520px);border-radius:999px;background:repeating-conic-gradient(from 0deg, rgba(255,255,255,.72) 0 5deg, transparent 5deg 17deg);clip-path:circle(50%);mix-blend-mode:screen;animation:miracleSummonRing 1650ms ease-out forwards reverse;"></div>
+        <div style="text-align:center;color:#fff;text-shadow:0 6px 24px rgba(0,0,0,.7);animation:miracleSummonFade 1900ms ease-out forwards;">
+            <div style="font-size:clamp(70px,22vw,210px);line-height:1;filter:drop-shadow(0 0 30px ${def.color});animation:${isDragon ? "miracleDragonFly" : "none"} 1900ms ease-out forwards;">${icon}</div>
+            <div style="margin-top:10px;font-size:clamp(28px,7vw,72px);font-weight:1000;letter-spacing:.08em;color:#fff7cc;">${escapeHtml(title)}</div>
+            <div style="margin-top:8px;font-size:clamp(15px,3.2vw,26px);font-weight:900;max-width:min(92vw,860px);line-height:1.6;">${escapeHtml(subtitle)}</div>
+        </div>`;
+    document.body.appendChild(overlay);
+    window.setTimeout(() => overlay.remove(), 2050);
+    if (isDragon) {
+        for (let i = 0; i < 3; i++) {
+            window.setTimeout(() => spawnExternalIntruderBalls(8, "龍脈召喚"), 220 + i * 360);
+        }
+        triggerCameraShake(48 * geometry.scale, 1300);
+    }
+}
+
 function activateMagicCircle(def: MagicCircleDef, points: Array<{ x: number; y: number; t: number }>): void {
     const center = points.length > 0
         ? points.reduce((acc, p) => ({ x: acc.x + p.x / points.length, y: acc.y + p.y / points.length }), { x: 0, y: 0 })
         : { x: geometry.width / 2, y: geometry.height * 0.36 };
+    showMagicCircleSummonOverlay(def, center);
     addFloatingText(`${def.emoji} ${def.label}`, center.x, center.y, def.color);
     addFloatingText(`魔法陣発動: ${def.chant}`, center.x, center.y - 34 * geometry.scale, def.color);
     createTapRipple(center.x, center.y, true);
@@ -5214,7 +5293,7 @@ function activateMagicCircle(def: MagicCircleDef, points: Array<{ x: number; y: 
         case "wind": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "typhoon"); break;
         case "gate": spawnExternalIntruderBalls(24, def.label); break;
         case "mirror": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "mirror"); break;
-        case "dragon": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "dragon"); break;
+        case "dragon": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "dragon"); addMagicPhysicsField("vortex", center.x, center.y, fieldRadius * 1.45, 0.00013, 7600, "龍脈暴走"); spawnExternalIntruderBalls(32, "龍脈暴走"); break;
         case "void": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "void"); break;
         case "flower": for (let i = 0; i < 6; i++) createTemporaryPinAt(center.x + Math.cos(i * Math.PI / 3) * 58 * geometry.scale, center.y + Math.sin(i * Math.PI / 3) * 58 * geometry.scale, "花冠ピン", 12000); break;
         case "gear": for (const body of engine.world.bodies) { const plugin = (body as any).plugin; if (plugin?.isPin) plugin.wiggleFrames = Math.max(plugin.wiggleFrames ?? 0, 120); } break;
@@ -5362,6 +5441,35 @@ function showMiracleGachaPopup(): void {
     document.getElementById("miracle-gacha-ten-button")?.addEventListener("click", () => run(10));
 }
 
+function runLabHomeAction(action: string): void {
+    if (!action) return;
+    if (action === "start") {
+        closeHelpPopup();
+        startExperiment();
+        scheduleViewportStabilize(true);
+        return;
+    }
+    if (action === "daily") { showDailyMissionPopup(); return; }
+    if (action === "album") { showMiracleAlbumPopup(); return; }
+    if (action === "book") { showMiracleBookPopup(); return; }
+    if (action === "guide") { showUserGuidePopup(); return; }
+}
+
+function bindLabHomeButtons(): void {
+    helpOverlay.querySelectorAll<HTMLElement>("[data-home-action]").forEach((button) => {
+        button.addEventListener("pointerup", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            runLabHomeAction(button.dataset.homeAction || "");
+        }, { passive: false });
+        button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            runLabHomeAction(button.dataset.homeAction || "");
+        });
+    });
+}
+
 function showLabHome(): void {
     const rank = getCurrentResearchRankInfo();
     const discoveredKinds = getDiscoveredKindCount();
@@ -5390,11 +5498,7 @@ function showLabHome(): void {
         </div>
     `;
     showPopup("研究所ホーム", homeHtml);
-    helpOverlay.querySelector('[data-home-action="start"]')?.addEventListener("click", () => { closeHelpPopup(); startExperiment(); });
-    helpOverlay.querySelector('[data-home-action="daily"]')?.addEventListener("click", () => showDailyMissionPopup());
-    helpOverlay.querySelector('[data-home-action="album"]')?.addEventListener("click", () => showMiracleAlbumPopup());
-    helpOverlay.querySelector('[data-home-action="book"]')?.addEventListener("click", () => showMiracleBookPopup());
-    helpOverlay.querySelector('[data-home-action="guide"]')?.addEventListener("click", () => showUserGuidePopup());
+    bindLabHomeButtons();
 }
 
 function getPlainResearchMemo(): string {
@@ -6294,17 +6398,43 @@ function fullscreenLikeCanvasHeight(): string {
     return isFullscreenMode || isPseudoFullscreenMode ? "100dvh" : "100%";
 }
 
+function scheduleViewportStabilize(startAgain = false): void {
+    if (isAppTerminated) return;
+    normalizeAppViewportStyles();
+    const keepRunning = startAgain || (isStarted && !isFinished);
+    const delays = [0, 80, 220, 520];
+    for (const delay of delays) {
+        window.setTimeout(() => {
+            if (isAppTerminated) return;
+            normalizeAppViewportStyles();
+            const currentWidth = Math.floor(window.innerWidth || document.documentElement.clientWidth || geometry.width);
+            const currentHeight = Math.floor(window.innerHeight || document.documentElement.clientHeight || geometry.height);
+            const canvasTooSmall = isMobile && (canvas.clientWidth < currentWidth * 0.86 || canvas.clientHeight < Math.max(320, currentHeight * 0.32));
+            if (keepRunning || canvasTooSmall) resetExperiment(keepRunning && !isFinished);
+            appRoot.style.width = "100vw";
+            appRoot.style.height = "100dvh";
+            gameArea.style.width = "100%";
+            gameArea.style.minHeight = "0";
+            canvas.style.maxWidth = "100vw";
+            canvas.style.maxHeight = fullscreenLikeCanvasHeight();
+        }, delay);
+    }
+}
+
 function forceViewportRelayout(startAgain = false): void {
     if (isAppTerminated) return;
     ensureMobileViewportMeta();
+    normalizeAppViewportStyles();
     const shouldKeepRunning = startAgain || (isStarted && !isFinished);
     resetExperiment(shouldKeepRunning);
     window.setTimeout(() => {
         if (!isAppTerminated) resetExperiment(shouldKeepRunning && !isFinished);
     }, 80);
+    window.setTimeout(() => normalizeAppViewportStyles(), 180);
 }
 
 function resetExperiment(startNow = false): void {
+    normalizeAppViewportStyles();
     ensureRenderLoop();
     geometry = calculateGeometry();
     info.style.height = `${geometry.infoHeight}px`;
@@ -6325,8 +6455,13 @@ function resetExperiment(startNow = false): void {
     canvas.style.maxWidth = "100vw";
     canvas.style.maxHeight = fullscreenLikeCanvasHeight();
     appRoot.style.width = "100vw";
+    appRoot.style.minWidth = "100vw";
     appRoot.style.height = "100dvh";
+    appRoot.style.minHeight = "100dvh";
     gameArea.style.width = "100%";
+    gameArea.style.minWidth = "100%";
+    gameArea.style.minHeight = "0";
+    normalizeAppViewportStyles();
     applyBackgroundImage();
 
     for (const pin of temporaryPinBodies) Composite.remove(engine.world, pin);
@@ -7589,6 +7724,7 @@ function togglePause(): void {
 
     updateStopButton();
     updateInfo();
+    scheduleViewportStabilize(false);
 }
 
 // ======================================================
@@ -7670,6 +7806,7 @@ function terminateExperimentSafely(): void {
     isPaused = true;
     isStarted = false;
     isFinished = true;
+scheduleViewportStabilize(false);
     try { Runner.stop(runner); } catch {}
     stopRenderLoop();
     try { Engine.clear(engine); } catch {}
@@ -10136,6 +10273,7 @@ Events.on(engine, "afterUpdate", () => {
 
     if (targetReachedTime !== null && activeDropCount === 0) {
         isFinished = true;
+scheduleViewportStabilize(false);
         endTime = Date.now();
         Runner.stop(runner);
         updateInfo();
@@ -10167,7 +10305,7 @@ void ensureGifReady();
 void ensureTippyReady();
 void loadRemoteMiracleAssets();
 hideBootOverlay();
-window.setTimeout(() => forceViewportRelayout(false), 180);
+window.setTimeout(() => scheduleViewportStabilize(false), 180);
 window.setTimeout(() => {
     if (!isStarted && !isAppTerminated && helpOverlay.style.display === "none") showLabHome();
 }, bootMinimumDurationMs + 650);
@@ -10178,13 +10316,13 @@ function scheduleResize(): void {
     if (resizeTimer !== undefined) window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => {
         if (!applySettingsFromInputs(false)) return;
-        resetExperiment(isStarted && !isFinished);
+        scheduleViewportStabilize(isStarted && !isFinished);
     }, 300);
 }
 window.addEventListener("resize", scheduleResize);
-window.addEventListener("orientationchange", () => { window.setTimeout(() => forceViewportRelayout(), 120); });
-window.addEventListener("pageshow", () => { window.setTimeout(() => forceViewportRelayout(), 80); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden) window.setTimeout(() => forceViewportRelayout(), 80); });
+window.addEventListener("orientationchange", () => { window.setTimeout(() => scheduleViewportStabilize(isStarted && !isFinished), 120); });
+window.addEventListener("pageshow", () => { window.setTimeout(() => scheduleViewportStabilize(isStarted && !isFinished), 80); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) window.setTimeout(() => scheduleViewportStabilize(isStarted && !isFinished), 80); });
 window.visualViewport?.addEventListener("resize", scheduleResize);
 window.visualViewport?.addEventListener("scroll", scheduleResize);
 window.addEventListener("online", () => { showOfflineModeEventPopup(); updateInfo(); });
