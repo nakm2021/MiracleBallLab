@@ -119,6 +119,28 @@ const Body = Matter.Body;
 const Composite = Matter.Composite;
 
 const browserName = getBrowserName();
+function ensureMobileViewportMeta(): void {
+    let viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    if (!viewport) {
+        viewport = document.createElement("meta");
+        viewport.name = "viewport";
+        document.head.appendChild(viewport);
+    }
+    viewport.content = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+    document.documentElement.style.width = "100%";
+    document.documentElement.style.height = "100%";
+    document.documentElement.style.margin = "0";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.width = "100vw";
+    document.body.style.minWidth = "100vw";
+    document.body.style.height = "100dvh";
+    document.body.style.margin = "0";
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+}
+
+ensureMobileViewportMeta();
+
 const isMobile = isMobileDevice();
 const uiFontPx = isMobile ? 25 : 20;
 const uiButtonFontPx = isMobile ? 26 : 20;
@@ -694,8 +716,13 @@ window.setTimeout(() => {
 
 const appRoot = document.createElement("div");
 appRoot.id = "miracle-horizontal-guard";
-appRoot.style.width = "100%";
-appRoot.style.maxWidth = "100%";
+appRoot.style.position = "fixed";
+appRoot.style.left = "0";
+appRoot.style.top = "0";
+appRoot.style.right = "0";
+appRoot.style.bottom = "0";
+appRoot.style.width = "100vw";
+appRoot.style.maxWidth = "100vw";
 appRoot.style.height = "100dvh";
 appRoot.style.boxSizing = "border-box";
 appRoot.style.display = "flex";
@@ -706,6 +733,8 @@ document.body.appendChild(appRoot);
 const gameArea = document.createElement("div");
 gameArea.id = "miracle-game-area";
 gameArea.style.flex = "1";
+gameArea.style.width = "100%";
+gameArea.style.maxWidth = "100vw";
 gameArea.style.minHeight = "0";
 gameArea.style.display = "flex";
 gameArea.style.alignItems = "center";
@@ -1691,8 +1720,10 @@ remoteMiracleVideoOverlay.style.left = "0";
 remoteMiracleVideoOverlay.style.top = "0";
 remoteMiracleVideoOverlay.style.width = "100vw";
 remoteMiracleVideoOverlay.style.height = "100dvh";
-remoteMiracleVideoOverlay.style.zIndex = "100002";
+remoteMiracleVideoOverlay.style.zIndex = "2147483000";
 remoteMiracleVideoOverlay.style.pointerEvents = "none";
+remoteMiracleVideoOverlay.style.isolation = "isolate";
+remoteMiracleVideoOverlay.style.opacity = "1";
 remoteMiracleVideoOverlay.style.display = "none";
 remoteMiracleVideoOverlay.style.overflow = "hidden";
 remoteMiracleVideoOverlay.style.background = "transparent";
@@ -6178,8 +6209,10 @@ function autoApplyLayoutSetting(): void {
 
 function calculateGeometry(): Geometry {
     const visual = window.visualViewport;
-    const viewportWidth = Math.max(320, Math.floor(visual?.width ?? window.innerWidth));
-    const viewportHeight = Math.max(480, Math.floor(visual?.height ?? window.innerHeight));
+    const layoutWidth = document.documentElement.clientWidth || window.innerWidth;
+    const layoutHeight = document.documentElement.clientHeight || window.innerHeight;
+    const viewportWidth = Math.max(320, Math.floor(isMobile ? Math.min(window.innerWidth || layoutWidth, layoutWidth || window.innerWidth) : (visual?.width ?? window.innerWidth)));
+    const viewportHeight = Math.max(480, Math.floor(isMobile ? Math.min(window.innerHeight || layoutHeight, layoutHeight || window.innerHeight) : (visual?.height ?? window.innerHeight)));
     const small = isMobile || viewportWidth < 700;
     const fullscreenLike = isFullscreenMode || isPseudoFullscreenMode;
     const infoHeight = fullscreenLike
@@ -6257,6 +6290,20 @@ function applyBackgroundImage(): void {
     gameArea.style.backgroundPosition = "center";
 }
 
+function fullscreenLikeCanvasHeight(): string {
+    return isFullscreenMode || isPseudoFullscreenMode ? "100dvh" : "100%";
+}
+
+function forceViewportRelayout(startAgain = false): void {
+    if (isAppTerminated) return;
+    ensureMobileViewportMeta();
+    const shouldKeepRunning = startAgain || (isStarted && !isFinished);
+    resetExperiment(shouldKeepRunning);
+    window.setTimeout(() => {
+        if (!isAppTerminated) resetExperiment(shouldKeepRunning && !isFinished);
+    }, 80);
+}
+
 function resetExperiment(startNow = false): void {
     ensureRenderLoop();
     geometry = calculateGeometry();
@@ -6275,6 +6322,11 @@ function resetExperiment(startNow = false): void {
     Render.setSize(render, geometry.width, geometry.height);
     canvas.style.width = `${geometry.width}px`;
     canvas.style.height = `${geometry.height}px`;
+    canvas.style.maxWidth = "100vw";
+    canvas.style.maxHeight = fullscreenLikeCanvasHeight();
+    appRoot.style.width = "100vw";
+    appRoot.style.height = "100dvh";
+    gameArea.style.width = "100%";
     applyBackgroundImage();
 
     for (const pin of temporaryPinBodies) Composite.remove(engine.world, pin);
@@ -7185,9 +7237,10 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     video.style.width = "100%";
     video.style.height = "100%";
     video.style.objectFit = "cover";
-    video.style.opacity = String(clamp(Number(asset.opacity ?? 0.45), 0.05, 0.9));
-    video.style.filter = "saturate(1.15) contrast(1.08)";
-    video.style.mixBlendMode = "screen";
+    video.style.opacity = String(isMobile ? clamp(Number(asset.opacity ?? 0.58), 0.22, 0.92) : clamp(Number(asset.opacity ?? 0.92), 0.82, 1));
+    video.style.filter = isMobile ? "saturate(1.22) contrast(1.10) brightness(1.05)" : "saturate(1.35) contrast(1.18) brightness(1.08)";
+    video.style.mixBlendMode = isMobile ? "screen" : "normal";
+    video.style.zIndex = "1";
     video.style.pointerEvents = "none";
 
     for (const sourceDef of playbackSources) {
@@ -7202,7 +7255,9 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
     remoteMiracleVideoOverlay.innerHTML = "";
     remoteMiracleVideoOverlay.appendChild(video);
     remoteMiracleVideoOverlay.style.display = "block";
-    remoteMiracleVideoOverlay.style.background = isMobile ? "rgba(0,0,0,.02)" : "transparent";
+    remoteMiracleVideoOverlay.style.background = isMobile ? "rgba(0,0,0,.04)" : "rgba(0,0,0,.52)";
+    remoteMiracleVideoOverlay.style.zIndex = "2147483000";
+    remoteMiracleVideoOverlay.style.opacity = "1";
 
     const ready = await new Promise<boolean>((resolve) => {
         let settled = false;
@@ -7299,25 +7354,23 @@ async function playRemoteMiracleVideoAsset(asset: RemoteMiracleAsset, force = fa
         console.warn("[Miracle R2] video autoplay/load failed", error);
         recordAdminEvent({ type: "video_fail", at: Date.now(), label: getRemoteMiracleAssetLabel(asset), rank: String(asset.rank ?? "common").toUpperCase(), detail: "autoplay failed" });
 
-        if (isMobile) {
-            // iPhone/Safariでは、演出発生のタイミングがユーザー操作から離れていると
-            // 音声付き再生が止められる場合があります。その場合は動画自体はミュートで見せつつ、
-            // 画面下のボタンを1回タップすれば音声付きで再再生できるようにします。
-            try {
-                video.muted = true;
-                video.defaultMuted = true;
-                video.setAttribute("muted", "");
-                video.volume = 0;
-                await video.play();
-                recordAdminEvent({ type: "video_play", at: Date.now(), label: `${nextLabel} / mobile muted fallback with sound retry`, rank: String(asset.rank ?? "common").toUpperCase() });
-                showMobileVideoSoundRetryButton(video, remoteVideoVolume);
-                if (remoteMiracleVideoTimer !== undefined) window.clearTimeout(remoteMiracleVideoTimer);
-                remoteMiracleVideoTimer = window.setTimeout(() => {
-                    stopRemoteMiracleVideo();
-                }, REMOTE_MIRACLE_VIDEO_DISPLAY_MS);
-                return true;
-            } catch {}
-        }
+        // Chrome/Edge/PCでも、ユーザー操作から離れたタイミングでは音声付き autoplay が
+        // ブロックされることがあります。映像だけは確実に見せるため、PC/スマホ共通で
+        // ミュート再生へフォールバックします。
+        try {
+            video.muted = true;
+            video.defaultMuted = true;
+            video.setAttribute("muted", "");
+            video.volume = 0;
+            await video.play();
+            recordAdminEvent({ type: "video_play", at: Date.now(), label: `${nextLabel} / muted autoplay fallback`, rank: String(asset.rank ?? "common").toUpperCase() });
+            if (isMobile) showMobileVideoSoundRetryButton(video, remoteVideoVolume);
+            if (remoteMiracleVideoTimer !== undefined) window.clearTimeout(remoteMiracleVideoTimer);
+            remoteMiracleVideoTimer = window.setTimeout(() => {
+                stopRemoteMiracleVideo();
+            }, REMOTE_MIRACLE_VIDEO_DISPLAY_MS);
+            return true;
+        } catch {}
 
         if (!isMobile && offlineResolvedSources.sources.length === 0) markRemoteMiracleAssetBad(asset);
         stopRemoteMiracleVideo();
@@ -7352,15 +7405,36 @@ async function playRemoteMiracleVideo(def?: SpecialEventDef): Promise<void> {
     if (settings.simpleMode && !def) return;
     if (!settings.effectsEnabled && !shouldForceMiracleEffects(def)) return;
 
-    const assets = await loadRemoteMiracleAssets();
+    // 通常レア演出側でも、管理者モードのR2動画確認と同じく
+    // manifestを強制再読込して動画候補を取り直します。
+    const assets = await loadRemoteMiracleAssets(true);
+    const forceVideo = !!def;
+    const videos = assets.filter((asset) => asset.kind === "video");
+    if (videos.length === 0) {
+        recordAdminEvent({ type: "video_fail", at: Date.now(), label: def?.label ?? "miracle", rank: def?.rank ?? "unknown", detail: "no video assets in manifest" });
+        return;
+    }
 
-    for (let i = 0; i < 5; i++) {
-        const asset = selectRemoteMiracleVideoAsset(assets, def);
+    const tried = new Set<string>();
+    for (let i = 0; i < 10; i++) {
+        const asset = selectRemoteMiracleVideoAsset(assets, def) ?? weightedPickRemoteAsset(videos) ?? videos[0];
         if (!asset) return;
+        tried.add(asset.id || getRemoteMiracleAssetMainUrl(asset));
 
-        const played = await playRemoteMiracleVideoAsset(asset, false);
+        const played = await playRemoteMiracleVideoAsset(asset, forceVideo);
         if (played) return;
     }
+
+    // ランク一致・使用可能判定で落ちた場合の最終保険です。
+    // 管理者モードで再生できる動画を通常演出側でも同じ再生関数へ流します。
+    for (const asset of videos) {
+        const key = asset.id || getRemoteMiracleAssetMainUrl(asset);
+        if (tried.has(key)) continue;
+        const played = await playRemoteMiracleVideoAsset(asset, true);
+        if (played) return;
+    }
+
+    recordAdminEvent({ type: "video_fail", at: Date.now(), label: def?.label ?? "miracle", rank: def?.rank ?? "unknown", detail: "normal miracle video route exhausted" });
 }
 
 function hideMiracleOverlayNow(stopRemoteVideo = false): void {
@@ -8329,6 +8403,11 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     vibrateOnMobile(def?.rank === "GOD" ? [90, 50, 160, 60, 220] : def?.rank === "EX" ? [70, 40, 120, 40, 140] : [55, 28, 80]);
     triggerCameraShake(def?.rank === "GOD" ? 46 * geometry.scale : def?.rank === "EX" ? 34 * geometry.scale : 18 * geometry.scale, def?.rank === "GOD" ? 1200 : def?.rank === "EX" ? 760 : 420, forceRareEffect);
     if (kind === "swordImpact") triggerSwordImpactEffect();
+
+    // 動画演出は、シンプル/低スペック寄りでもレア演出が発生したら試行します。
+    // 以前はこの下の simpleMode return により、PC通常演出側だけ動画に到達しないケースがありました。
+    if (def) void playRemoteMiracleVideo(def);
+
     if (settings.simpleMode) return;
     const repeatedInRun = !!def && (repeatedMiracleRunCounts[def.kind] ?? 0) >= 2;
     const overlayDurationMs = getMiraclePauseDuration(def, repeatedInRun);
@@ -8349,7 +8428,6 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     }
     miracleOverlay.style.display = "flex";
 
-    void playRemoteMiracleVideo(def);
     void playAnimeMiracleEffect(def);
 
     fireConfetti(kind === "blackSun" ? "black" : kind === "cosmicEgg" ? "cosmic" : "miracle", forceRareEffect);
@@ -10089,6 +10167,7 @@ void ensureGifReady();
 void ensureTippyReady();
 void loadRemoteMiracleAssets();
 hideBootOverlay();
+window.setTimeout(() => forceViewportRelayout(false), 180);
 window.setTimeout(() => {
     if (!isStarted && !isAppTerminated && helpOverlay.style.display === "none") showLabHome();
 }, bootMinimumDurationMs + 650);
@@ -10103,7 +10182,11 @@ function scheduleResize(): void {
     }, 300);
 }
 window.addEventListener("resize", scheduleResize);
+window.addEventListener("orientationchange", () => { window.setTimeout(() => forceViewportRelayout(), 120); });
+window.addEventListener("pageshow", () => { window.setTimeout(() => forceViewportRelayout(), 80); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) window.setTimeout(() => forceViewportRelayout(), 80); });
 window.visualViewport?.addEventListener("resize", scheduleResize);
+window.visualViewport?.addEventListener("scroll", scheduleResize);
 window.addEventListener("online", () => { showOfflineModeEventPopup(); updateInfo(); });
 window.addEventListener("offline", () => { showOfflineModeEventPopup(); updateInfo(); });
 if (!navigator.onLine) {
