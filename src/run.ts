@@ -969,6 +969,59 @@ info.style.zIndex = isMobile ? "2200" : "2";
 info.style.pointerEvents = "auto";
 appRoot.appendChild(info);
 
+function getMobileDockHeightPx(): number {
+    if (!isMobile) return 0;
+    return 108;
+}
+
+function forceMobileFullViewportLayout(): void {
+    if (!isMobile) return;
+    ensureMobileViewportMeta();
+    const dockHeight = getMobileDockHeightPx();
+    document.documentElement.style.width = "100vw";
+    document.documentElement.style.maxWidth = "100vw";
+    document.documentElement.style.height = "100dvh";
+    document.documentElement.style.maxHeight = "100dvh";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.width = "100vw";
+    document.body.style.maxWidth = "100vw";
+    document.body.style.height = "100dvh";
+    document.body.style.maxHeight = "100dvh";
+    document.body.style.margin = "0";
+    document.body.style.overflow = "hidden";
+    appRoot.style.position = "fixed";
+    appRoot.style.inset = "0";
+    appRoot.style.width = "100vw";
+    appRoot.style.height = "100dvh";
+    appRoot.style.maxWidth = "100vw";
+    appRoot.style.maxHeight = "100dvh";
+    appRoot.style.overflow = "hidden";
+    gameArea.style.position = "fixed";
+    gameArea.style.left = "0";
+    gameArea.style.top = "0";
+    gameArea.style.right = "0";
+    gameArea.style.bottom = `${dockHeight}px`;
+    gameArea.style.width = "100vw";
+    gameArea.style.height = `calc(100dvh - ${dockHeight}px)`;
+    gameArea.style.maxWidth = "100vw";
+    gameArea.style.maxHeight = `calc(100dvh - ${dockHeight}px)`;
+    gameArea.style.zIndex = "1";
+    gameArea.style.pointerEvents = helpOverlay.style.display !== "none" ? "none" : "auto";
+    info.style.position = "fixed";
+    info.style.left = "0";
+    info.style.right = "0";
+    info.style.bottom = "0";
+    info.style.width = "100vw";
+    info.style.height = `${dockHeight}px`;
+    info.style.minHeight = `${dockHeight}px`;
+    info.style.maxHeight = `${dockHeight}px`;
+    info.style.zIndex = "2147483400";
+    info.style.pointerEvents = helpOverlay.style.display !== "none" ? "none" : "auto";
+    canvas.style.maxWidth = "100vw";
+    canvas.style.maxHeight = `calc(100dvh - ${dockHeight}px)`;
+    canvas.style.transformOrigin = "center center";
+}
+
 const appHeader = document.createElement("div");
 appHeader.className = "miracle-user-card";
 appHeader.style.display = "flex";
@@ -1990,8 +2043,14 @@ function forcePopupToFront(): void {
         boot.style.display = "none";
         boot.remove();
     }
+    helpOverlay.style.position = "fixed";
+    helpOverlay.style.inset = "0";
+    helpOverlay.style.width = "100vw";
+    helpOverlay.style.height = "100dvh";
     helpOverlay.style.pointerEvents = "auto";
     helpOverlay.style.zIndex = "2147483600";
+    gameArea.style.pointerEvents = "none";
+    info.style.pointerEvents = "none";
     const panel = helpOverlay.querySelector<HTMLElement>(".miracle-popup-panel");
     if (panel) {
         panel.style.pointerEvents = "auto";
@@ -2713,10 +2772,7 @@ function setupMobileLayout(): void {
         button.addEventListener("pointerup", activate, { passive: false });
         button.addEventListener("touchstart", activate, { passive: false });
         button.addEventListener("touchend", activate, { passive: false });
-        button.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-        });
+        button.addEventListener("click", activate, { passive: false });
     };
 
     mobileDockRunButton = createButton(t("実行", "Run"), () => startExperiment());
@@ -2821,6 +2877,7 @@ function setupMobileLayout(): void {
     applySettingsUiZoom();
 
     gameArea.style.flex = "1 1 auto";
+    forceMobileFullViewportLayout();
 }
 
 let lastMobileDockGlobalActionAt = 0;
@@ -5625,11 +5682,10 @@ function bindLabHomeButtons(): void {
             event.stopPropagation();
             handlePopupActionEvent(event);
         };
-        button.addEventListener("pointerdown", activate, { passive: false });
+        button.onclick = activate;
         button.addEventListener("pointerup", activate, { passive: false });
-        button.addEventListener("touchstart", activate, { passive: false });
         button.addEventListener("touchend", activate, { passive: false });
-        button.addEventListener("click", activate);
+        button.addEventListener("click", activate, { passive: false });
     });
 }
 
@@ -6114,6 +6170,9 @@ function triggerSwordImpactEffect(): void {
 function closeHelpPopup(): void {
     helpOverlay.style.display = "none";
     helpOverlay.innerHTML = "";
+    gameArea.style.pointerEvents = "auto";
+    info.style.pointerEvents = "auto";
+    forceMobileFullViewportLayout();
 }
 
 function showPopup(title: string, bodyHtml: string): void {
@@ -6183,6 +6242,7 @@ function showPopup(title: string, bodyHtml: string): void {
             <div style="margin-top:24px;text-align:center;"><button id="bottom-close-help-popup-button" style="font-size:20px;padding:12px 28px;border-radius:999px;border:1px solid rgba(70,88,112,.42);cursor:pointer;font-weight:900;background:${getMetallicButtonBackground(false)};box-shadow:inset 0 1px 0 rgba(255,255,255,.92), inset 0 -5px 10px rgba(30,42,58,.16), 0 8px 18px rgba(30,42,58,.14);color:#142033;">閉じる</button></div>
         </div>`;
     helpOverlay.style.display = "flex";
+    forceMobileFullViewportLayout();
     forcePopupToFront();
     window.setTimeout(forcePopupToFront, 0);
     window.setTimeout(forcePopupToFront, 120);
@@ -6573,6 +6633,7 @@ function scheduleViewportStabilize(startAgain = false): void {
         window.setTimeout(() => {
             if (isAppTerminated) return;
             normalizeAppViewportStyles();
+            forceMobileFullViewportLayout();
             const currentWidth = Math.floor(window.innerWidth || document.documentElement.clientWidth || geometry.width);
             const currentHeight = Math.floor(window.innerHeight || document.documentElement.clientHeight || geometry.height);
             const canvasTooSmall = isMobile && (canvas.clientWidth < currentWidth * 0.86 || canvas.clientHeight < Math.max(320, currentHeight * 0.32));
@@ -6628,6 +6689,7 @@ function resetExperiment(startNow = false): void {
     gameArea.style.minWidth = "100%";
     gameArea.style.minHeight = "0";
     normalizeAppViewportStyles();
+    forceMobileFullViewportLayout();
     applyBackgroundImage();
 
     for (const pin of temporaryPinBodies) Composite.remove(engine.world, pin);
@@ -10480,12 +10542,24 @@ window.setTimeout(() => {
     if (!isStarted && !isAppTerminated && helpOverlay.style.display === "none") showLabHome();
 }, bootMinimumDurationMs + 650);
 
+window.setInterval(() => {
+    if (!isMobile || isAppTerminated) return;
+    forceMobileFullViewportLayout();
+    const rect = canvas.getBoundingClientRect();
+    const minW = Math.max(260, window.innerWidth * 0.82);
+    const minH = Math.max(280, (window.innerHeight - getMobileDockHeightPx()) * 0.55);
+    if ((helpOverlay.style.display === "none") && (rect.width < minW || rect.height < minH || rect.left > 4 || rect.top > 4)) {
+        scheduleViewportStabilize(isStarted && !isFinished);
+    }
+}, 900);
+
 let resizeTimer: number | undefined;
 function scheduleResize(): void {
     if (isAppTerminated) return;
     if (isMobile && isStarted && !isFinished) {
         // スマホ実行中は visualViewport の細かい揺れで重い再レイアウトを連発しない。
         normalizeAppViewportStyles();
+        forceMobileFullViewportLayout();
         return;
     }
     if (resizeTimer !== undefined) window.clearTimeout(resizeTimer);
