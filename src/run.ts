@@ -182,6 +182,38 @@ let lastTiltGravityX = 0;
 let magicCircleModeEnabled = false;
 let magicCircleDrawing = false;
 let magicCirclePoints: Array<{ x: number; y: number; t: number }> = [];
+let runtimeInfoLastUpdatedAt = 0;
+let runtimePanelLastUpdatedAt = 0;
+let afterRenderFrameTick = 0;
+
+function getMobileRuntimeUiIntervalMs(): number {
+    return isMobile && isStarted && !isFinished ? 520 : 180;
+}
+
+function updateInfoDuringRun(): void {
+    if (!isMobile) {
+        updateInfo();
+        return;
+    }
+    const now = performance.now();
+    if (now - runtimeInfoLastUpdatedAt < getMobileRuntimeUiIntervalMs()) return;
+    runtimeInfoLastUpdatedAt = now;
+    updateInfo();
+}
+
+function updateRuntimePanelsDuringRun(): void {
+    if (!isMobile) {
+        updateTutorialMissions();
+        updateResearchProgressPanel();
+        return;
+    }
+    const now = performance.now();
+    if (now - runtimePanelLastUpdatedAt < 620) return;
+    runtimePanelLastUpdatedAt = now;
+    updateTutorialMissions();
+    updateResearchProgressPanel();
+}
+
 let roughCanvas: any = null;
 let jsConfetti: InstanceType<typeof JSConfetti> | null = null;
 const howlerCueCache = new Map<string, Howl>();
@@ -2653,23 +2685,36 @@ function setupMobileLayout(): void {
     dock.style.alignItems = "center";
     info.appendChild(dock);
 
+    const bindDockImmediateAction = (button: HTMLButtonElement, action: () => void): void => {
+        let lastActivatedAt = 0;
+        button.onclick = null;
+        button.style.touchAction = "manipulation";
+        button.style.setProperty("-webkit-tap-highlight-color", "transparent");
+        const activate = (event: Event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const now = performance.now();
+            if (now - lastActivatedAt < 260) return;
+            lastActivatedAt = now;
+            action();
+        };
+        button.addEventListener("pointerdown", activate, { passive: false });
+        button.addEventListener("touchstart", activate, { passive: false });
+        button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+        });
+    };
+
     mobileDockRunButton = createButton(t("実行", "Run"), () => startExperiment());
     mobileDockRunButton.style.width = "100%";
     mobileDockRunButton.style.height = "66px";
     mobileDockRunButton.style.fontSize = "21px";
+    bindDockImmediateAction(mobileDockRunButton, () => startExperiment());
     dock.appendChild(mobileDockRunButton);
 
     mobileDockPauseButton = createButton(t("一時停止", "Pause"), () => {});
-    mobileDockPauseButton.onclick = null;
-    mobileDockPauseButton.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        togglePause();
-    }, { passive: false });
-    mobileDockPauseButton.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-    });
+    bindDockImmediateAction(mobileDockPauseButton, () => togglePause());
     mobileDockPauseButton.style.width = "100%";
     mobileDockPauseButton.style.height = "66px";
     mobileDockPauseButton.style.fontSize = "20px";
@@ -2679,12 +2724,14 @@ function setupMobileLayout(): void {
     mobileDockMagicButton.style.width = "100%";
     mobileDockMagicButton.style.height = "66px";
     mobileDockMagicButton.style.fontSize = "19px";
+    bindDockImmediateAction(mobileDockMagicButton, () => enableMagicCircleMode());
     dock.appendChild(mobileDockMagicButton);
 
     mobileDockSettingsButton = createButton(t("設定", "Settings"), () => openMobileSettingsPopup());
     mobileDockSettingsButton.style.width = "100%";
     mobileDockSettingsButton.style.height = "66px";
     mobileDockSettingsButton.style.fontSize = "20px";
+    bindDockImmediateAction(mobileDockSettingsButton, () => openMobileSettingsPopup());
     dock.appendChild(mobileDockSettingsButton);
 
     mobileSettingsOverlay = document.createElement("div");
@@ -9352,7 +9399,7 @@ function drawTimeBallSkins(context: CanvasRenderingContext2D): void {
 
 function draw3DBallShading(context: CanvasRenderingContext2D): void {
     const dropBodies = engine.world.bodies.filter((body) => (body as any).plugin?.isDrop);
-    const maxShaded = settings.simpleMode ? 220 : (isMobile || settings.lowSpecMode ? 320 : 720);
+    const maxShaded = settings.simpleMode ? 90 : (isMobile || settings.lowSpecMode ? 140 : 720);
     const step = dropBodies.length > maxShaded ? Math.ceil(dropBodies.length / maxShaded) : 1;
     const timeSec = performance.now() * 0.001;
     context.save();
@@ -9951,21 +9998,25 @@ function kindYakumonoAlpha(kind: PachinkoYakumonoKind): number {
 }
 
 Events.on(render, "afterRender", () => {
+    afterRenderFrameTick++;
     const context = render.context;
+    const mobileRuntime = isMobile && isStarted && !isPaused && !isMiraclePaused && !isFinished;
+    const mobileMediumFrame = !mobileRuntime || afterRenderFrameTick % 2 === 0;
+    const mobileHeavyFrame = !mobileRuntime || afterRenderFrameTick % 3 === 0;
     context.save();
     drawPachinkoMachine(context);
-    drawRareBoardCatastrophe(context);
-    drawBoardDepthOverlay(context);
-    drawTapRipples(context);
-    drawMagicPhysicsFields(context);
+    if (mobileHeavyFrame) drawRareBoardCatastrophe(context);
+    if (mobileHeavyFrame) drawBoardDepthOverlay(context);
+    if (mobileMediumFrame) drawTapRipples(context);
+    if (mobileMediumFrame) drawMagicPhysicsFields(context);
     drawMagicCircleTrace(context);
-    drawBrokenResearchNote(context);
+    if (mobileHeavyFrame) drawBrokenResearchNote(context);
     drawRealisticPins(context);
     draw3DBallShading(context);
-    drawSpecialGlows(context);
-    drawTimeBallSkins(context);
-    drawNormalTraitMarks(context);
-    drawFamiliar(context);
+    if (mobileHeavyFrame) drawSpecialGlows(context);
+    if (mobileMediumFrame) drawTimeBallSkins(context);
+    if (!mobileRuntime || afterRenderFrameTick % 4 === 0) drawNormalTraitMarks(context);
+    if (mobileMediumFrame) drawFamiliar(context);
     context.textAlign = "center";
     context.textBaseline = "middle";
     drawDiscardBinLabel(context, 0);
@@ -10027,7 +10078,7 @@ Events.on(render, "afterRender", () => {
         }
         context.restore();
     }
-    drawLuxuryBoardForeground(context);
+    if (!mobileRuntime || afterRenderFrameTick % 3 === 0) drawLuxuryBoardForeground(context);
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
         const item = floatingTexts[i];
         const progress = item.life / item.maxLife;
@@ -10040,7 +10091,7 @@ Events.on(render, "afterRender", () => {
         if (!isPaused) item.life--;
         if (item.life <= 0) floatingTexts.splice(i, 1);
     }
-    if (isStarted && !isPaused && !isMiraclePaused) {
+    if (isStarted && !isPaused && !isMiraclePaused && !isMobile) {
         replayCaptureTick++;
         if (replayCaptureTick % 5 === 0) {
             try {
@@ -10309,7 +10360,7 @@ Events.on(engine, "afterUpdate", () => {
     while (targetReachedTime === null && finishedCount + activeDropCount < settings.targetCount && activeDropCount < settings.activeLimit) {
         Composite.add(engine.world, createDrop());
     }
-    updateInfo();
+    updateInfoDuringRun();
 
     if (targetReachedTime !== null && activeDropCount === 0) {
         isFinished = true;
@@ -10353,6 +10404,11 @@ window.setTimeout(() => {
 let resizeTimer: number | undefined;
 function scheduleResize(): void {
     if (isAppTerminated) return;
+    if (isMobile && isStarted && !isFinished) {
+        // スマホ実行中は visualViewport の細かい揺れで重い再レイアウトを連発しない。
+        normalizeAppViewportStyles();
+        return;
+    }
     if (resizeTimer !== undefined) window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => {
         if (!applySettingsFromInputs(false)) return;
