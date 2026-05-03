@@ -964,6 +964,9 @@ info.style.backdropFilter = "blur(18px)";
 info.style.borderTop = "1px solid rgba(255,255,255,0.78)";
 info.style.boxShadow = "0 -8px 28px rgba(0,0,0,0.08)";
 info.style.overflow = "auto";
+info.style.position = "relative";
+info.style.zIndex = isMobile ? "2200" : "2";
+info.style.pointerEvents = "auto";
 appRoot.appendChild(info);
 
 const appHeader = document.createElement("div");
@@ -1925,7 +1928,7 @@ tutorialMissionPanel.style.fontWeight = "800";
 tutorialMissionPanel.style.fontSize = isMobile ? "12px" : "14px";
 tutorialMissionPanel.style.lineHeight = "1.35";
 tutorialMissionPanel.style.zIndex = "94";
-tutorialMissionPanel.style.pointerEvents = isMobile ? "auto" : "none";
+tutorialMissionPanel.style.pointerEvents = "none";
 tutorialMissionPanel.style.cursor = isMobile ? "pointer" : "default";
 tutorialMissionPanel.style.userSelect = "none";
 tutorialMissionPanel.style.display = "none";
@@ -2654,6 +2657,8 @@ function createMiracleImageDataUri(def: SpecialEventDef): string {
 
 function openMobileSettingsPopup(): void {
     if (!mobileSettingsOverlay) return;
+    mobileSettingsOverlay.style.zIndex = "2147483300";
+    mobileSettingsOverlay.style.pointerEvents = "auto";
     mobileSettingsOverlay.style.display = "flex";
     mobileSettingsOpenCount++;
     playUiSound("open");
@@ -2683,6 +2688,12 @@ function setupMobileLayout(): void {
     dock.style.gap = "8px";
     dock.style.height = "100%";
     dock.style.alignItems = "center";
+    dock.style.position = "relative";
+    dock.style.zIndex = "2201";
+    dock.style.pointerEvents = "auto";
+    info.style.position = "relative";
+    info.style.zIndex = "2200";
+    info.style.pointerEvents = "auto";
     info.appendChild(dock);
 
     const bindDockImmediateAction = (button: HTMLButtonElement, action: () => void): void => {
@@ -2699,7 +2710,9 @@ function setupMobileLayout(): void {
             action();
         };
         button.addEventListener("pointerdown", activate, { passive: false });
+        button.addEventListener("pointerup", activate, { passive: false });
         button.addEventListener("touchstart", activate, { passive: false });
+        button.addEventListener("touchend", activate, { passive: false });
         button.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -2742,7 +2755,7 @@ function setupMobileLayout(): void {
     mobileSettingsOverlay.style.justifyContent = "center";
     mobileSettingsOverlay.style.background = "rgba(5,8,18,.22)";
     mobileSettingsOverlay.style.backdropFilter = "blur(8px)";
-    mobileSettingsOverlay.style.zIndex = "140";
+    mobileSettingsOverlay.style.zIndex = "2147483300";
     mobileSettingsOverlay.style.padding = "0";
     document.body.appendChild(mobileSettingsOverlay);
     mobileSettingsOverlay.onclick = (event) => {
@@ -2809,6 +2822,72 @@ function setupMobileLayout(): void {
 
     gameArea.style.flex = "1 1 auto";
 }
+
+let lastMobileDockGlobalActionAt = 0;
+
+function isElementVisible(el: HTMLElement | null | undefined): boolean {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+}
+
+function getClientPointFromAnyEvent(event: Event): { x: number; y: number } | null {
+    const touchEvent = event as TouchEvent;
+    const touch = touchEvent.changedTouches?.[0] ?? touchEvent.touches?.[0];
+    if (touch) return { x: touch.clientX, y: touch.clientY };
+    const pointerEvent = event as PointerEvent;
+    if (typeof pointerEvent.clientX === "number" && typeof pointerEvent.clientY === "number") {
+        return { x: pointerEvent.clientX, y: pointerEvent.clientY };
+    }
+    return null;
+}
+
+function handleMobileDockGlobalAction(event: Event): void {
+    if (!isMobile || isAppTerminated) return;
+    if (isElementVisible(mobileSettingsOverlay) || isElementVisible(helpOverlay) || resultOverlay.style.display !== "none") return;
+
+    const point = getClientPointFromAnyEvent(event);
+    if (!point) return;
+
+    const infoRect = info.getBoundingClientRect();
+    const fallbackDockHeight = 118;
+    const dockTop = Math.min(
+        infoRect.top || Number.POSITIVE_INFINITY,
+        window.innerHeight - Math.max(fallbackDockHeight, infoRect.height || fallbackDockHeight),
+    );
+    if (point.y < dockTop || point.y > window.innerHeight + 8) return;
+
+    const now = performance.now();
+    if (now - lastMobileDockGlobalActionAt < 300) return;
+    lastMobileDockGlobalActionAt = now;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const width = Math.max(1, window.innerWidth);
+    const index = Math.max(0, Math.min(3, Math.floor((point.x / width) * 4)));
+    if (index === 0) {
+        startExperiment();
+        return;
+    }
+    if (index === 1) {
+        togglePause();
+        return;
+    }
+    if (index === 2) {
+        enableMagicCircleMode();
+        return;
+    }
+    openMobileSettingsPopup();
+}
+
+function installMobileDockGlobalActionGuard(): void {
+    if (!isMobile) return;
+    document.addEventListener("pointerdown", handleMobileDockGlobalAction, { capture: true, passive: false });
+    document.addEventListener("touchstart", handleMobileDockGlobalAction, { capture: true, passive: false });
+}
+
+installMobileDockGlobalActionGuard();
 
 function applySettingsUiZoom(): void {
     const zoomText = String(settingsUiZoom);
