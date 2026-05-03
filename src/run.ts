@@ -1945,23 +1945,56 @@ comboOverlay.style.display = "none";
 comboOverlay.style.boxShadow = "0 8px 20px rgba(0,0,0,.22)";
 document.body.appendChild(comboOverlay);
 
-helpOverlay.addEventListener("click", (event) => {
-    const actionButton = (event.target as HTMLElement | null)?.closest?.("[data-home-action]") as HTMLElement | null;
-    if (actionButton) {
+let lastPopupActionAt = 0;
+let lastPopupActionKey = "";
+
+function forcePopupToFront(): void {
+    const boot = document.getElementById("miracle-boot-overlay") as HTMLElement | null;
+    if (boot) {
+        boot.style.pointerEvents = "none";
+        boot.style.display = "none";
+        boot.remove();
+    }
+    helpOverlay.style.pointerEvents = "auto";
+    helpOverlay.style.zIndex = "2147483600";
+    const panel = helpOverlay.querySelector<HTMLElement>(".miracle-popup-panel");
+    if (panel) {
+        panel.style.pointerEvents = "auto";
+        panel.style.touchAction = "manipulation";
+    }
+    helpOverlay.querySelectorAll<HTMLElement>("button, [data-home-action]").forEach((el) => {
+        el.style.pointerEvents = "auto";
+        el.style.touchAction = "manipulation";
+        el.style.setProperty("-webkit-tap-highlight-color", "rgba(255,255,255,.18)");
+    });
+}
+
+function handlePopupActionEvent(event: Event): boolean {
+    const target = event.target as HTMLElement | null;
+    const actionButton = target?.closest?.("[data-home-action]") as HTMLElement | null;
+    if (!actionButton) return false;
+    const action = actionButton.dataset.homeAction || "";
+    const now = performance.now();
+    if (lastPopupActionKey === action && now - lastPopupActionAt < 420) {
         event.preventDefault();
         event.stopPropagation();
-        runLabHomeAction(actionButton.dataset.homeAction || "");
-        return;
+        return true;
     }
-    if (event.target === helpOverlay) closeHelpPopup();
-}, true);
-helpOverlay.addEventListener("pointerup", (event) => {
-    const actionButton = (event.target as HTMLElement | null)?.closest?.("[data-home-action]") as HTMLElement | null;
-    if (!actionButton) return;
+    lastPopupActionAt = now;
+    lastPopupActionKey = action;
     event.preventDefault();
     event.stopPropagation();
-    runLabHomeAction(actionButton.dataset.homeAction || "");
-}, { capture: true, passive: false });
+    forcePopupToFront();
+    runLabHomeAction(action);
+    return true;
+}
+
+["pointerdown", "pointerup", "touchstart", "touchend", "click"].forEach((eventName) => {
+    helpOverlay.addEventListener(eventName, (event) => {
+        if (handlePopupActionEvent(event)) return;
+        if (eventName === "click" && event.target === helpOverlay) closeHelpPopup();
+    }, { capture: true, passive: false });
+});
 window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && helpOverlay.style.display !== "none") closeHelpPopup();
     if (event.key === "Escape" && mobileSettingsOverlay && mobileSettingsOverlay.style.display !== "none") closeMobileSettingsPopup();
@@ -5456,17 +5489,21 @@ function runLabHomeAction(action: string): void {
 }
 
 function bindLabHomeButtons(): void {
+    forcePopupToFront();
     helpOverlay.querySelectorAll<HTMLElement>("[data-home-action]").forEach((button) => {
-        button.addEventListener("pointerup", (event) => {
+        button.setAttribute("role", "button");
+        button.style.pointerEvents = "auto";
+        button.style.touchAction = "manipulation";
+        const activate = (event: Event) => {
             event.preventDefault();
             event.stopPropagation();
-            runLabHomeAction(button.dataset.homeAction || "");
-        }, { passive: false });
-        button.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            runLabHomeAction(button.dataset.homeAction || "");
-        });
+            handlePopupActionEvent(event);
+        };
+        button.addEventListener("pointerdown", activate, { passive: false });
+        button.addEventListener("pointerup", activate, { passive: false });
+        button.addEventListener("touchstart", activate, { passive: false });
+        button.addEventListener("touchend", activate, { passive: false });
+        button.addEventListener("click", activate);
     });
 }
 
@@ -6020,6 +6057,9 @@ function showPopup(title: string, bodyHtml: string): void {
             <div style="margin-top:24px;text-align:center;"><button id="bottom-close-help-popup-button" style="font-size:20px;padding:12px 28px;border-radius:999px;border:1px solid rgba(70,88,112,.42);cursor:pointer;font-weight:900;background:${getMetallicButtonBackground(false)};box-shadow:inset 0 1px 0 rgba(255,255,255,.92), inset 0 -5px 10px rgba(30,42,58,.16), 0 8px 18px rgba(30,42,58,.14);color:#142033;">閉じる</button></div>
         </div>`;
     helpOverlay.style.display = "flex";
+    forcePopupToFront();
+    window.setTimeout(forcePopupToFront, 0);
+    window.setTimeout(forcePopupToFront, 120);
     document.getElementById("close-help-popup-button")!.onclick = () => closeHelpPopup();
     document.getElementById("bottom-close-help-popup-button")!.onclick = () => closeHelpPopup();
 }

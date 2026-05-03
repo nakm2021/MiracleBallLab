@@ -18,6 +18,6 @@ declare module "gif.js/dist/gif.worker.js?url" {
 }
 
 declare module "roughjs/bundled/rough.esm" {
-  const rough: any;
-  export default rough;
+    const rough: any;
+    export default rough;
 }
