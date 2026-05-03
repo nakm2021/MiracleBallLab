@@ -977,11 +977,15 @@ function getMobileDockHeightPx(): number {
 function forceMobileFullViewportLayout(): void {
     if (!isMobile) return;
     ensureMobileViewportMeta();
-    const dockHeight = getMobileDockHeightPx();
-    document.documentElement.style.width = "100vw";
-    document.documentElement.style.maxWidth = "100vw";
-    document.documentElement.style.height = "100dvh";
-    document.documentElement.style.maxHeight = "100dvh";
+    const viewportHeight = Math.max(360, Math.floor(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 720));
+    const viewportWidth = Math.max(320, Math.floor(window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth || 390));
+    const popupOpen = helpOverlay.style.display !== "none";
+    const settingsOpen = !!mobileSettingsOverlay && mobileSettingsOverlay.style.display !== "none";
+
+    document.documentElement.style.width = "100%";
+    document.documentElement.style.maxWidth = "100%";
+    document.documentElement.style.height = "100%";
+    document.documentElement.style.maxHeight = "100%";
     document.documentElement.style.overflow = "hidden";
     document.body.style.width = "100vw";
     document.body.style.maxWidth = "100vw";
@@ -989,37 +993,146 @@ function forceMobileFullViewportLayout(): void {
     document.body.style.maxHeight = "100dvh";
     document.body.style.margin = "0";
     document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.inset = "0";
+
     appRoot.style.position = "fixed";
     appRoot.style.inset = "0";
     appRoot.style.width = "100vw";
     appRoot.style.height = "100dvh";
     appRoot.style.maxWidth = "100vw";
     appRoot.style.maxHeight = "100dvh";
+    appRoot.style.display = "flex";
+    appRoot.style.flexDirection = "column";
     appRoot.style.overflow = "hidden";
-    gameArea.style.position = "fixed";
-    gameArea.style.left = "0";
-    gameArea.style.top = "0";
-    gameArea.style.right = "0";
-    gameArea.style.bottom = `${dockHeight}px`;
+
+    // 以前の固定配置が残ると、canvas が左上に小さくなったり、下部ボタンが押せなくなるため、通常フローへ戻します。
+    gameArea.style.position = "relative";
+    gameArea.style.left = "";
+    gameArea.style.top = "";
+    gameArea.style.right = "";
+    gameArea.style.bottom = "";
+    gameArea.style.flex = "1 1 auto";
     gameArea.style.width = "100vw";
-    gameArea.style.height = `calc(100dvh - ${dockHeight}px)`;
     gameArea.style.maxWidth = "100vw";
-    gameArea.style.maxHeight = `calc(100dvh - ${dockHeight}px)`;
+    gameArea.style.minWidth = "100vw";
+    gameArea.style.height = "auto";
+    gameArea.style.minHeight = `${Math.max(260, Math.floor(viewportHeight * 0.42))}px`;
+    gameArea.style.maxHeight = "none";
     gameArea.style.zIndex = "1";
-    gameArea.style.pointerEvents = helpOverlay.style.display !== "none" ? "none" : "auto";
-    info.style.position = "fixed";
-    info.style.left = "0";
-    info.style.right = "0";
-    info.style.bottom = "0";
+    gameArea.style.pointerEvents = popupOpen || settingsOpen ? "none" : "auto";
+
+    info.style.position = "relative";
+    info.style.left = "";
+    info.style.right = "";
+    info.style.bottom = "";
+    info.style.flex = "0 0 auto";
     info.style.width = "100vw";
-    info.style.height = `${dockHeight}px`;
-    info.style.minHeight = `${dockHeight}px`;
-    info.style.maxHeight = `${dockHeight}px`;
-    info.style.zIndex = "2147483400";
-    info.style.pointerEvents = helpOverlay.style.display !== "none" ? "none" : "auto";
-    canvas.style.maxWidth = "100vw";
-    canvas.style.maxHeight = `calc(100dvh - ${dockHeight}px)`;
+    info.style.minWidth = "100vw";
+    info.style.height = "auto";
+    info.style.minHeight = "96px";
+    info.style.maxHeight = `${Math.max(180, Math.floor(viewportHeight * 0.52))}px`;
+    info.style.overflowY = "auto";
+    info.style.overflowX = "hidden";
+    info.style.zIndex = popupOpen || settingsOpen ? "1" : "2200";
+    info.style.pointerEvents = popupOpen || settingsOpen ? "none" : "auto";
+    info.style.touchAction = "pan-y";
+
+    canvas.style.display = "block";
+    canvas.style.maxWidth = `${viewportWidth}px`;
+    canvas.style.maxHeight = `${Math.max(260, Math.floor(viewportHeight * 0.72))}px`;
     canvas.style.transformOrigin = "center center";
+}
+
+const RUNTIME_GUARD_LOG_STORAGE_KEY = "miracle_runtime_guard_logs_v1";
+type RuntimeGuardLogEntry = { at: number; reason: string; detail: string };
+
+function readRuntimeGuardLogs(): RuntimeGuardLogEntry[] {
+    try {
+        const raw = localStorage.getItem(RUNTIME_GUARD_LOG_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.slice(-80) : [];
+    } catch {
+        return [];
+    }
+}
+
+function addRuntimeGuardLog(reason: string, detail: string): void {
+    try {
+        const rows = readRuntimeGuardLogs();
+        rows.push({ at: Date.now(), reason, detail: detail.slice(0, 900) });
+        localStorage.setItem(RUNTIME_GUARD_LOG_STORAGE_KEY, JSON.stringify(rows.slice(-80)));
+    } catch {
+        // ログ保存が失敗してもアプリ本体を止めない。
+    }
+    writeRuntimeErrorToAdminLog(`guard:${reason}`, detail);
+}
+
+function recoverMobileLayoutIfBroken(reason: string, forceReset = false): void {
+    if (!isMobile || isAppTerminated) return;
+    try {
+        const vw = Math.max(1, window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth || 1);
+        const vh = Math.max(1, window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 1);
+        const rect = canvas.getBoundingClientRect();
+        const areaRect = gameArea.getBoundingClientRect();
+        const canvasMissing = rect.width < vw * 0.42 || rect.height < Math.min(220, vh * 0.24);
+        const areaMissing = areaRect.width < vw * 0.78 || areaRect.height < Math.min(240, vh * 0.24);
+        forceMobileFullViewportLayout();
+        if (canvasMissing || areaMissing || forceReset) {
+            addRuntimeGuardLog(reason, `layout recovered / canvas=${Math.round(rect.width)}x${Math.round(rect.height)} / area=${Math.round(areaRect.width)}x${Math.round(areaRect.height)} / viewport=${Math.round(vw)}x${Math.round(vh)}`);
+            window.setTimeout(() => {
+                if (!isAppTerminated) {
+                    normalizeAppViewportStyles();
+                    forceMobileFullViewportLayout();
+                    resetExperiment(isStarted && !isFinished);
+                }
+            }, 0);
+        }
+    } catch (error) {
+        addRuntimeGuardLog(`${reason}:failed`, stringifyErrorForAdminLog(error));
+    }
+}
+
+function installMobileRuntimeGuard(): void {
+    if (!isMobile) return;
+    let lastGuardAt = 0;
+    const run = (reason: string, forceReset = false) => {
+        const now = Date.now();
+        if (!forceReset && now - lastGuardAt < 900) return;
+        lastGuardAt = now;
+        recoverMobileLayoutIfBroken(reason, forceReset);
+    };
+    window.addEventListener("resize", () => run("resize"), { passive: true });
+    window.addEventListener("orientationchange", () => window.setTimeout(() => run("orientationchange", true), 160), { passive: true });
+    window.addEventListener("pageshow", () => window.setTimeout(() => run("pageshow", true), 80), { passive: true });
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) window.setTimeout(() => run("visibilitychange", true), 120);
+    });
+    window.visualViewport?.addEventListener("resize", () => run("visualViewport"), { passive: true });
+    window.setInterval(() => run("watchdog"), 1800);
+}
+
+function showRuntimeGuardLogPopup(): void {
+    const rows = readRuntimeGuardLogs().slice().reverse().map((entry, index) => `
+        <div style="padding:10px 0;border-bottom:1px solid rgba(100,116,139,.18);">
+            <div style="font-weight:1000;">${index + 1}. ${escapeHtml(entry.reason)}</div>
+            <div style="opacity:.72;font-size:.86em;">${escapeHtml(new Date(entry.at).toLocaleString())}</div>
+            <div style="margin-top:4px;line-height:1.55;word-break:break-all;">${escapeHtml(entry.detail)}</div>
+        </div>
+    `).join("") || `<p>復旧ログはまだありません。</p>`;
+    showPopup("スマホ復旧ログ", `
+        <p>画面縮小・白画面・操作不能などを検知したときのログです。</p>
+        <div class="miracle-user-card" style="max-height:58dvh;overflow:auto;">${rows}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+            <button id="runtime-guard-recover-button" class="miracle-home-button miracle-home-primary">今すぐ復旧</button>
+            <button id="runtime-guard-clear-button" class="miracle-home-button">ログ削除</button>
+        </div>
+    `);
+    document.getElementById("runtime-guard-recover-button")?.addEventListener("click", () => recoverMobileLayoutIfBroken("admin-manual", true));
+    document.getElementById("runtime-guard-clear-button")?.addEventListener("click", () => {
+        localStorage.removeItem(RUNTIME_GUARD_LOG_STORAGE_KEY);
+        showRuntimeGuardLogPopup();
+    });
 }
 
 const appHeader = document.createElement("div");
@@ -2716,6 +2829,7 @@ function createMiracleImageDataUri(def: SpecialEventDef): string {
 
 function openMobileSettingsPopup(): void {
     if (!mobileSettingsOverlay) return;
+    recoverMobileLayoutIfBroken("open-settings");
     mobileSettingsOverlay.style.zIndex = "2147483300";
     mobileSettingsOverlay.style.pointerEvents = "auto";
     mobileSettingsOverlay.style.display = "flex";
@@ -2731,6 +2845,7 @@ function closeMobileSettingsPopup(): void {
     if (!mobileSettingsOverlay) return;
     mobileSettingsOverlay.style.display = "none";
     playUiSound("close");
+    recoverMobileLayoutIfBroken("close-settings");
 }
 
 function setupMobileLayout(): void {
@@ -2945,6 +3060,7 @@ function installMobileDockGlobalActionGuard(): void {
 }
 
 installMobileDockGlobalActionGuard();
+installMobileRuntimeGuard();
 
 function applySettingsUiZoom(): void {
     const zoomText = String(settingsUiZoom);
@@ -4466,6 +4582,7 @@ function showAdminPanelPopup(): void {
             <button id="admin-all-effects-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#dcfce7 0%,#bbf7d0 100%);color:#14532d;cursor:pointer;">演出系を全部ON</button>
             <button id="admin-r2-video-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">R2動画確認</button>
             <button id="admin-log-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;cursor:pointer;">管理者ログ</button>
+            <button id="admin-runtime-guard-log-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#ecfeff 0%,#a5f3fc 100%);color:#155e75;cursor:pointer;">復旧ログ</button>
             <button id="admin-tempura-secret-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(245,158,11,.32);background:linear-gradient(180deg,#fff7ed 0%,#fdba74 100%);color:#7c2d12;cursor:pointer;">穴子天ぷら</button>
             <button id="admin-magic-answer-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(88,28,135,.25);background:linear-gradient(180deg,#f3e8ff 0%,#ddd6fe 100%);color:#581c87;cursor:pointer;">魔法陣回答</button>
             <button id="admin-skill-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#eef2ff 0%,#c7d2fe 100%);color:#312e81;cursor:pointer;">スキル+99</button>
@@ -4480,6 +4597,7 @@ function showAdminPanelPopup(): void {
     document.getElementById("admin-all-effects-button")!.onclick = () => adminEnableAllEffects();
     document.getElementById("admin-r2-video-button")!.onclick = () => { void showAdminRemoteVideoTestPopup(); };
     document.getElementById("admin-log-button")!.onclick = () => showAdminStatsPopup();
+    document.getElementById("admin-runtime-guard-log-button")!.onclick = () => showRuntimeGuardLogPopup();
     document.getElementById("admin-magic-answer-button")!.onclick = () => showAdminMagicCircleAnswerPopup();
     document.getElementById("admin-tempura-secret-button")!.onclick = () => showAnagoTempuraSecretPopup();
     document.getElementById("admin-skill-button")!.onclick = () => adminAddSkillStock();
@@ -6173,6 +6291,7 @@ function closeHelpPopup(): void {
     gameArea.style.pointerEvents = "auto";
     info.style.pointerEvents = "auto";
     forceMobileFullViewportLayout();
+    recoverMobileLayoutIfBroken("close-popup");
 }
 
 function showPopup(title: string, bodyHtml: string): void {
@@ -7116,6 +7235,7 @@ function updateStopButton(): void {
 }
 
 function startExperiment(): void {
+    recoverMobileLayoutIfBroken("start", true);
     if (!applySettingsFromInputs(true)) return;
     applyAutoTheme("run");
     userProfile.lastPlayedDateKey = getDateKey();
@@ -7924,6 +8044,7 @@ function resumeMiraclePauseTimer(): void {
 }
 
 function togglePause(): void {
+    recoverMobileLayoutIfBroken("pause-toggle");
     if (!isStarted || isFinished) return;
 
     registerPauseSecretTap?.();
