@@ -1135,6 +1135,121 @@ function showRuntimeGuardLogPopup(): void {
     });
 }
 
+
+function getEmergencyRuntimeLogText(): string {
+    const rows = readRuntimeGuardLogs().slice().reverse();
+    const nav = navigator as Navigator & { deviceMemory?: number; connection?: { effectiveType?: string; downlink?: number; rtt?: number } };
+    const canvasRect = canvas.getBoundingClientRect();
+    const gameRect = gameArea.getBoundingClientRect();
+    const infoRect = info.getBoundingClientRect();
+    const lines = [
+        "=== MiracleBallLab Emergency Log ===",
+        `time: ${new Date().toLocaleString()}`,
+        `url: ${location.href}`,
+        `userAgent: ${navigator.userAgent}`,
+        `viewport: ${window.innerWidth}x${window.innerHeight}`,
+        `visualViewport: ${Math.round(window.visualViewport?.width || 0)}x${Math.round(window.visualViewport?.height || 0)} scale=${window.visualViewport?.scale ?? "-"}`,
+        `devicePixelRatio: ${window.devicePixelRatio}`,
+        `deviceMemory: ${nav.deviceMemory ?? "-"}`,
+        `connection: ${nav.connection?.effectiveType ?? "-"} down=${nav.connection?.downlink ?? "-"} rtt=${nav.connection?.rtt ?? "-"}`,
+        `state: isMobile=${isMobile} started=${isStarted} paused=${isPaused} finished=${isFinished} settingsOpen=${settingsOpen} popup=${helpOverlay.style.display}`,
+        `canvasRect: ${Math.round(canvasRect.width)}x${Math.round(canvasRect.height)} @ ${Math.round(canvasRect.left)},${Math.round(canvasRect.top)}`,
+        `gameAreaRect: ${Math.round(gameRect.width)}x${Math.round(gameRect.height)} @ ${Math.round(gameRect.left)},${Math.round(gameRect.top)}`,
+        `infoRect: ${Math.round(infoRect.width)}x${Math.round(infoRect.height)} @ ${Math.round(infoRect.left)},${Math.round(infoRect.top)}`,
+        `canvas attr: ${canvas.width}x${canvas.height}`,
+        `body scroll: ${document.documentElement.scrollWidth}x${document.documentElement.scrollHeight}`,
+        `runtimeLogs: ${rows.length}`,
+        "--- logs ---",
+        ...rows.map((entry, i) => `${i + 1}. [${new Date(entry.at).toLocaleString()}] ${entry.reason}: ${entry.detail}`),
+    ];
+    return lines.join("\n");
+}
+
+function showEmergencyRuntimeLogOverlay(reason = "manual"): void {
+    try {
+        addRuntimeGuardLog(`emergency-log:${reason}`, "emergency log overlay opened");
+    } catch {
+        // ignore
+    }
+    const existing = document.getElementById("miracle-emergency-log-overlay");
+    existing?.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "miracle-emergency-log-overlay";
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "2147483647";
+    overlay.style.background = "rgba(0,0,0,.92)";
+    overlay.style.color = "#f8fafc";
+    overlay.style.padding = "14px";
+    overlay.style.boxSizing = "border-box";
+    overlay.style.overflow = "auto";
+    overlay.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    overlay.style.touchAction = "auto";
+    const text = getEmergencyRuntimeLogText();
+    overlay.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px;position:sticky;top:0;background:rgba(0,0,0,.92);padding-bottom:8px;">
+            <div style="font-weight:1000;font-size:18px;">緊急ログ</div>
+            <button id="emergency-log-close" style="font-size:18px;font-weight:900;padding:8px 12px;border-radius:12px;border:1px solid #94a3b8;background:#e2e8f0;color:#0f172a;">閉じる</button>
+        </div>
+        <p style="line-height:1.6;margin:0 0 10px;">下のテキスト欄を長押ししてコピーできます。ボタンが効く場合は「ログをコピー」を押してください。</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <button id="emergency-log-copy" style="font-size:16px;font-weight:900;padding:10px 14px;border-radius:12px;border:1px solid #67e8f9;background:#22d3ee;color:#082f49;">ログをコピー</button>
+            <button id="emergency-log-recover" style="font-size:16px;font-weight:900;padding:10px 14px;border-radius:12px;border:1px solid #86efac;background:#22c55e;color:#052e16;">今すぐ復旧</button>
+            <button id="emergency-log-clear" style="font-size:16px;font-weight:900;padding:10px 14px;border-radius:12px;border:1px solid #fecaca;background:#ef4444;color:#fff;">ログ削除</button>
+        </div>
+        <textarea id="emergency-log-textarea" readonly style="width:100%;height:68vh;box-sizing:border-box;border-radius:14px;padding:12px;font-size:12px;line-height:1.45;background:#0f172a;color:#d1fae5;border:1px solid #475569;white-space:pre;">${escapeHtml(text)}</textarea>
+    `;
+    document.body.appendChild(overlay);
+    const close = document.getElementById("emergency-log-close") as HTMLButtonElement | null;
+    const copy = document.getElementById("emergency-log-copy") as HTMLButtonElement | null;
+    const recover = document.getElementById("emergency-log-recover") as HTMLButtonElement | null;
+    const clear = document.getElementById("emergency-log-clear") as HTMLButtonElement | null;
+    const textarea = document.getElementById("emergency-log-textarea") as HTMLTextAreaElement | null;
+    close?.addEventListener("click", () => overlay.remove());
+    copy?.addEventListener("click", async () => {
+        const value = textarea?.value || getEmergencyRuntimeLogText();
+        try {
+            await navigator.clipboard?.writeText(value);
+            copy.textContent = "コピーしました";
+        } catch {
+            textarea?.focus();
+            textarea?.select();
+            copy.textContent = "長押しコピーしてください";
+        }
+    });
+    recover?.addEventListener("click", () => {
+        recoverMobileLayoutIfBroken("emergency-manual", true);
+        window.setTimeout(() => {
+            textarea!.value = getEmergencyRuntimeLogText();
+        }, 200);
+    });
+    clear?.addEventListener("click", () => {
+        localStorage.removeItem(RUNTIME_GUARD_LOG_STORAGE_KEY);
+        textarea!.value = getEmergencyRuntimeLogText();
+    });
+}
+
+function installEmergencyRuntimeLogOpener(): void {
+    if (location.search.includes("debug=1") || location.hash.toLowerCase().includes("debug")) {
+        window.setTimeout(() => showEmergencyRuntimeLogOverlay("url"), 300);
+    }
+    let cornerTapCount = 0;
+    let firstTapAt = 0;
+    document.addEventListener("pointerup", (event) => {
+        if (event.clientX > 72 || event.clientY > 72) return;
+        const now = Date.now();
+        if (now - firstTapAt > 2400) {
+            firstTapAt = now;
+            cornerTapCount = 0;
+        }
+        cornerTapCount++;
+        if (cornerTapCount >= 5) {
+            cornerTapCount = 0;
+            showEmergencyRuntimeLogOverlay("corner-5tap");
+        }
+    }, { capture: true, passive: true });
+}
+
 const appHeader = document.createElement("div");
 appHeader.className = "miracle-user-card";
 appHeader.style.display = "flex";
@@ -3061,6 +3176,7 @@ function installMobileDockGlobalActionGuard(): void {
 
 installMobileDockGlobalActionGuard();
 installMobileRuntimeGuard();
+installEmergencyRuntimeLogOpener();
 
 function applySettingsUiZoom(): void {
     const zoomText = String(settingsUiZoom);
