@@ -58,3 +58,37 @@ export function getBossResultHtml(record: BossExperimentRecord | null): string {
     if (!record) return "";
     return `<div style="margin:0 auto 18px;max-width:760px;padding:16px;border-radius:20px;background:${record.cleared ? "rgba(34,197,94,.18)" : "rgba(239,68,68,.16)"};border:1px solid rgba(255,255,255,.24);font-size:clamp(17px,2.6vw,28px);line-height:1.55;text-align:left;"><b>ボス実験: ${escapeHtml(record.bossName)} / ${record.cleared ? "討伐成功" : "討伐失敗"}</b><br>ダメージ ${record.damage.toLocaleString()} / ${record.maxHp.toLocaleString()}<br>結果: ${escapeHtml(record.rewardLabel)}</div>`;
 }
+
+export function getBossExperimentPopupHtml(params: {
+    bosses: BossExperimentDef[];
+    cleared: Partial<Record<string, number>>;
+    records: BossExperimentRecord[];
+}): string {
+    const rows = params.bosses.map((boss) => {
+        const cleared = !!params.cleared[boss.id];
+        const best = params.records.filter((x) => x.bossId === boss.id).sort((a, b) => b.damage - a.damage)[0];
+        return `
+            <div class="miracle-user-card" style="display:grid;gap:10px;border-left:8px solid ${boss.color};">
+                <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
+                    <img src="${escapeHtml(getBossAssetUrl(boss))}" alt="${escapeHtml(boss.name)}" style="width:96px;height:132px;object-fit:contain;filter:drop-shadow(0 14px 22px rgba(0,0,0,.32));">
+                    <div>
+                        <div style="font-size:1.16em;font-weight:1000;">${cleared ? "討伐済み" : "未討伐"} ${escapeHtml(boss.name)}</div>
+                        <div style="opacity:.82;line-height:1.65;">${escapeHtml(boss.title)} / HP ${boss.hp.toLocaleString()} / 制限 ${boss.timeLimitSec}秒 / 弱点 ${getBossWeaknessLabel(boss.weakness)}</div>
+                    </div>
+                    <button data-home-action="boss-start:${boss.id}" class="miracle-home-button miracle-home-primary">挑戦</button>
+                </div>
+                <div style="opacity:.82;line-height:1.65;">${escapeHtml(boss.description)}</div>
+                <div style="opacity:.74;">最高記録: ${best ? `${best.damage.toLocaleString()} damage / ${best.cleared ? "CLEAR" : "FAILED"}` : "-"}</div>
+            </div>
+        `;
+    }).join("");
+    return `
+        <div style="display:grid;gap:14px;">
+            <div class="miracle-home-hero">
+                <div style="font-size:clamp(30px,6vw,56px);font-weight:1000;line-height:1.1;">ULTRA MAX ボス実験</div>
+                <div style="margin-top:10px;line-height:1.8;">制限時間内にレア玉と奇跡玉でHPを削り切る運寄りの討伐実験です。投下数では終了せず、HP0で勝利、時間切れで失敗です。</div>
+            </div>
+            ${rows}
+        </div>
+    `;
+}

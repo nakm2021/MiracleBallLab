@@ -24,16 +24,16 @@ import { awardTicketsForRank, loadMiracleTicketState, saveMiracleTicketState, sp
 import { FAMILIAR_EXPEDITION_PLANS, claimFamiliarExpedition, getFamiliarExpeditionProgress, loadFamiliarExpeditionState, startFamiliarExpedition, type FamiliarExpeditionState } from "./miracle/familiarExpedition";
 import { SECRET_RESEARCH_NOTES, loadSecretResearchNoteState, markSecretResearchNotesRead, unlockSecretResearchNote, type SecretResearchNoteState } from "./miracle/secretResearchNote";
 import { BASE_SPECIAL_EVENT_DEFS, FUSION_DEFS, MIRACLE_CHAIN_DEFS, NORMAL_BALL_TRAITS, PACHINKO_YAKUMONO_DEFS, RARE_PIN_DEFS, SPECIAL_EVENT_DEFS } from "./miracle/eventCatalog";
-import { BOSS_EXPERIMENT_DEFS, getBossAssetUrl, getBossDef, getBossResultHtml, getBossWeaknessLabel, type BossExperimentDef } from "./miracle/bossExperiment";
+import { BOSS_EXPERIMENT_DEFS, getBossAssetUrl, getBossDef, getBossExperimentPopupHtml, getBossResultHtml, type BossExperimentDef } from "./miracle/bossExperiment";
 import { RARE_BOARD_CATASTROPHE_DEFS, type RareBoardCatastropheDef, type RareBoardCatastropheKind } from "./miracle/rareBoardCatastrophe";
 import { EVENT_SEASONS, EXPERIMENT_PRESETS, MIRACLE_CRAFT_RECIPES, RESEARCH_SHOP_ITEMS, type EventSeasonDef, type EventSeasonMissionDef, type EventSeasonMissionMetric, type ExperimentPresetDef, type MiracleCraftRecipeDef, type ShopItemDef } from "./miracle/researchFeatures";
 import { APP_VERSION, BASE_HEIGHT, BASE_WIDTH, BLACK_SUN_RATE, COMMENTARY_DISPLAY_MS, COMMENTARY_MIN_INTERVAL_MS, COSMIC_EGG_RATE, CROWN_RATE, FINAL_SWEEP_DELAY_MS, FIRST_RUN_GUIDE_STORAGE_KEY, GIANT_EVENT_INTERVAL, GOLD_RATE, HEART_RATE, LOCAL_GOD_AUDIO_FILES, LOCAL_RARE_AUDIO_FILES, MAGNET_DURATION_MS, MILESTONE_INTERVAL, MIRACLE_ASSET_BASE_URL, MIRACLE_CHAIN_WINDOW_MS, MIRACLE_MANIFEST_URL, MIRACLE_OMEN_DISPLAY_MS, MIRACLE_OMEN_MIN_INTERVAL_MS, RAINBOW_RATE, RANDOM_BUCKET_COUNT, RECORD_STORAGE_KEY, REMOTE_MIRACLE_BAD_URL_CACHE_MS, REMOTE_MIRACLE_MANIFEST_CACHE_MS, REMOTE_MIRACLE_VIDEO_DISPLAY_MS, SCORE_STORAGE_BONUS_INTERVAL, SECRET_KEY_MAX_LENGTH, SECRET_KEY_SEQUENCES, SHAPE_RATE, SHOOTING_STAR_RATE, SMALL_MIRACLE_MIN_INTERVAL_MS, STUCK_EXPLODE_FRAMES, STUCK_NUDGE_FRAMES, SWORD_IMPACT_RATE, TIME_STOP_DURATION_MS, USER_PREFERENCES_STORAGE_KEY, USER_PROFILE_STORAGE_KEY, type RareSoundFlavor } from "./miracle/constants";
-import { drawSparkle, getSpecialIconColors, hexToRgbTriplet, roundRect } from "./miracle/drawing";
+import { getSpecialIconColors } from "./miracle/drawing";
 import { MAGIC_CIRCLE_DEFS, classifyMagicCircle, getMagicCircleMarkSvg, type MagicCircleDef } from "./miracle/magicCircles";
 import { loadSavedRecords, loadUserPreferences, loadUserProfile, saveSavedRecords, saveUserProfileData } from "./miracle/localData";
 import { clamp, escapeCsv, escapeHtml, formatDateTime, formatDurationMs, formatElapsedTime, formatProbability, getBrowserName, getDateKey, getTodayKey, hashTextToNumber, isMobileDevice, loadExternalScript, parseLabels } from "./miracle/utils";
 import { getDailyMissions, getDailyMissionValue, getResearchRankInfo, getThemeCollection, getThemeForTime, pickRandomTheme } from "./miracle/progression";
-import { createMiracleImageDataUri, escapeSvgText, getMiracleFeatureText } from "./miracle/miraclePresentation";
+import { getMiracleBookRowHtml, getMiracleIconHtml as getMiracleIconHtmlBase } from "./miracle/miraclePresentation";
 import { createRareSequence } from "./miracle/soundSequences";
 import { installMobileDockGlobalActionGuard } from "./miracle/mobileDock";
 import { getRemoteAssetRankScore, getRemoteMiracleAssetLabel, getRemoteMiracleAssetMainUrl, getRemoteMiracleAssetSources, getRemoteMiracleVideoVolume, normalizeRemoteMiracleAssetsFromManifest, selectRemoteMiracleVideoAsset, weightedPickRemoteAsset } from "./miracle/remoteMiracleAssets";
@@ -46,7 +46,20 @@ import { BROKEN_RESEARCH_NOTE_LINES } from "./miracle/flavorText";
 import { getUserGuideHtml } from "./miracle/helpContent";
 import { chooseTimeBallSkin as chooseTimeBallSkinBase, drawTimeBallSkinIcon, getCurrentTimeBallTheme, getTimeBallSkinFillStyle, getTimeBallSkinLabel as getTimeBallSkinLabelBase, getTimeBallThemeLabel as getTimeBallThemeLabelBase, type TimeBallSkinLabels, type TimeBallThemeLabels } from "./miracle/timeBallSkins";
 import { drawBossEnemyFrame, drawBossHudFrame, type BossRenderOptions, type BossRenderState } from "./miracle/bossRendering";
-import { draw3DBallShadingFrame } from "./miracle/ballRendering";
+import { draw3DBallShadingFrame, drawBoardDepthOverlayFrame, drawLuxuryBoardForegroundFrame, drawMobileRuntimeStableFrame as drawMobileRuntimeStableFrameBase, drawNormalTraitMarksFrame, drawRealisticPinsFrame, drawSpecialGlowsFrame } from "./miracle/ballRendering";
+import { drawMagicCircleTraceFrame } from "./miracle/magicCircleRendering";
+import { drawDiscardBinLabelFrame, drawPachinkoMachineFrame, drawSpecialIconFrame } from "./miracle/pachinkoRendering";
+import { drawFamiliarFrame } from "./miracle/familiarRendering";
+import { drawBrokenResearchNoteFrame, drawMagicPhysicsFieldsFrame, type MagicPhysicsField } from "./miracle/magicPhysicsRendering";
+import { drawTapRipplesFrame } from "./miracle/tapRippleRendering";
+import { drawRareBoardCatastropheFrame } from "./miracle/rareBoardCatastropheRendering";
+import { getResearchArchiveHtml, getResearchReportDetailHtml } from "./miracle/researchArchivePresentation";
+import { getGachaResultHtml, getGachaRewardBookHtml, getGachaSpinHtml, getMiracleGachaHtml } from "./miracle/gachaPresentation";
+import { getFamiliarExpeditionHtml, getFamiliarPopupHtml, getMiracleTicketHtml, getSecretResearchNoteHtml } from "./miracle/familiarPresentation";
+import { getMiracleAlbumHtml, getMiracleLogHtml } from "./miracle/miracleAlbumPresentation";
+import { getResearchWorldMapHtml } from "./miracle/researchWorldMapPresentation";
+import { getDailyMissionHtml, getExperimentPresetHtml, getResearchRankHtml, getThemeBookHtml } from "./miracle/labPresentation";
+import { getEventSeasonHtml, getMiracleCraftHtml, getResearchShopHtml } from "./miracle/researchCommercePresentation";
 import type {
     DropKind,
     ProbabilityMode,
@@ -265,7 +278,6 @@ function updateRuntimePanelsDuringRun(): void {
 let roughCanvas: any = null;
 let jsConfetti: InstanceType<typeof JSConfetti> | null = null;
 const howlerCueCache = new Map<string, Howl>();
-interface MagicPhysicsField { x: number; y: number; radius: number; strength: number; kind: "vortex" | "repel" | "blackhole" | "wave"; until: number; spin: number; label: string; }
 const activeMagicPhysicsFields: MagicPhysicsField[] = [];
 let magicBoardShapeToken = 0;
 let brokenResearchNoteUntil = 0;
@@ -2805,66 +2817,23 @@ function showDailyMissionPopup(): void {
     const today = getDateKey();
     const context = getDailyMissionContext();
     const completedMap = savedRecords.dailyMissionCompleted ?? {};
-    const rows = getDailyMissions(today).map((mission) => {
+    const entries = getDailyMissions(today).map((mission) => {
         const value = Math.min(getDailyMissionValue(mission, context), mission.target);
         const percent = mission.target > 0 ? Math.min(100, (value / mission.target) * 100) : 0;
         const done = !!completedMap[mission.id] || value >= mission.target;
-        return `
-            <div class="miracle-user-card" style="margin:12px 0;">
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
-                    <b>${done ? "✅" : "⬜"} ${escapeHtml(mission.title)}</b>
-                    <span class="miracle-status-pill">+${mission.rewardScore.toLocaleString()}</span>
-                </div>
-                <div style="margin-top:6px;opacity:.86;">${escapeHtml(mission.description)}</div>
-                <div style="margin-top:10px;height:12px;border-radius:999px;background:rgba(100,116,139,.22);overflow:hidden;"><div style="height:100%;width:${percent.toFixed(1)}%;background:linear-gradient(90deg,#86efac,#22d3ee);"></div></div>
-                <div style="margin-top:6px;font-size:.92em;opacity:.82;">${value.toLocaleString()} / ${mission.target.toLocaleString()}　報酬テーマ: ${getThemeDisplayName(mission.themeHint)}</div>
-            </div>`;
-    }).join("");
-    showPopup("デイリー研究", `
-        <p>毎日変わる研究ミッションです。達成するとスコアとテーマ解放が進みます。</p>
-        ${rows}
-        <p style="opacity:.75;">日付: ${today} / 実験完了時に自動判定します。</p>
-    `);
+        return { mission, value, percent, done, themeLabel: getThemeDisplayName(mission.themeHint) };
+    });
+    showPopup("デイリー研究", getDailyMissionHtml(today, entries));
 }
 
 function showResearchRankPopup(): void {
     const rank = getCurrentResearchRankInfo();
-    showPopup("研究員ランク", `
-        <div class="miracle-user-card">
-            <p style="font-size:1.3em;margin-top:0;"><b>Lv.${rank.level} ${escapeHtml(rank.label)}</b></p>
-            <div style="height:16px;border-radius:999px;background:rgba(100,116,139,.22);overflow:hidden;"><div style="height:100%;width:${rank.progressPercent.toFixed(1)}%;background:linear-gradient(90deg,#fbbf24,#a78bfa,#22d3ee);"></div></div>
-            <p>研究ポイント: <b>${rank.score.toLocaleString()}</b>${rank.progressPercent >= 100 ? " / 最高ランク到達" : ` / 次 ${rank.nextScore.toLocaleString()}`}</p>
-        </div>
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>ランクに影響するもの</b></p>
-            <ul style="line-height:1.8;margin-bottom:0;">
-                <li>通算スコア、最高スコア</li>
-                <li>実験完了回数</li>
-                <li>発見済み奇跡の種類</li>
-                <li>奇跡合成・秘密解放</li>
-                <li>最高レア度</li>
-            </ul>
-        </div>
-    `);
+    showPopup("研究員ランク", getResearchRankHtml(rank));
 }
 
 function showThemeBookPopup(): void {
     const entries = getThemeCollection(savedRecords, getDiscoveredKindCount(), getFusionCountForRank(), getSecretCountForRank());
-    const rows = entries.map((entry) => `
-        <div class="miracle-user-card" style="margin:10px 0;opacity:${entry.unlocked ? "1" : ".62"};">
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
-                <b>${entry.unlocked ? "🎨" : "🔒"} ${escapeHtml(isEnglish ? entry.en : entry.ja)}</b>
-                <span class="miracle-status-pill">${entry.unlocked ? "解放済み" : "未解放"}</span>
-            </div>
-            <div style="margin-top:6px;opacity:.84;">${escapeHtml(entry.reason)}</div>
-            ${entry.unlocked ? `<button style="margin-top:10px;" data-theme-book-select="${entry.value}">このテーマにする</button>` : ""}
-        </div>`).join("");
-    const unlocked = entries.filter((x) => x.unlocked).length;
-    showPopup("テーマ図鑑", `
-        <p>テーマの解放状況です。テーマは見た目のカスタマイズ・毎日の遊び直し要素として使えます。</p>
-        <p><b>${unlocked} / ${entries.length}</b> 解放済み</p>
-        ${rows}
-    `);
+    showPopup("テーマ図鑑", getThemeBookHtml(entries, isEnglish));
     window.setTimeout(() => {
         document.querySelectorAll<HTMLButtonElement>("[data-theme-book-select]").forEach((button) => {
             button.onclick = () => {
@@ -3000,34 +2969,7 @@ function applyExperimentPreset(preset: ExperimentPresetDef): void {
 }
 
 function showExperimentPresetPopup(): void {
-    const rows = EXPERIMENT_PRESETS.map((preset) => `
-        <div class="miracle-user-card" style="display:grid;gap:10px;">
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
-                <div>
-                    <div style="font-size:1.12em;font-weight:1000;">${escapeHtml(preset.title)}</div>
-                    <div style="opacity:.82;line-height:1.65;">${escapeHtml(preset.description)}</div>
-                </div>
-                <button class="miracle-home-button miracle-home-primary" data-preset-id="${preset.id}">反映</button>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;font-size:.9em;">
-                <div><b>投下</b><br>${preset.targetCount.toLocaleString()}</div>
-                <div><b>同時</b><br>${preset.activeLimit}</div>
-                <div><b>盤面</b><br>${preset.binCount}皿 / ${preset.pinRows}段</div>
-                <div><b>速度</b><br>${escapeHtml(preset.speed)}</div>
-                <div><b>確率</b><br>${preset.probabilityMode}</div>
-                <div><b>演出</b><br>${preset.effectsEnabled ? preset.effectMode : "OFF"}</div>
-            </div>
-        </div>
-    `).join("");
-    showPopup("実験プリセット", `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-user-card">
-                <b>よく使う設定をまとめて反映します。</b><br>
-                <span style="opacity:.78;">投下数、同時玉数、盤面、速度、演出、確率モードを一括で切り替えます。反映すると盤面はリセットされます。</span>
-            </div>
-            ${rows}
-        </div>
-    `);
+    showPopup("実験プリセット", getExperimentPresetHtml(EXPERIMENT_PRESETS));
     document.querySelectorAll<HTMLButtonElement>("[data-preset-id]").forEach((button) => {
         button.onclick = () => {
             const preset = EXPERIMENT_PRESETS.find((x) => x.id === button.dataset.presetId);
@@ -3696,50 +3638,18 @@ function maybeFamiliarAssist(): void {
 }
 
 function drawFamiliar(context: CanvasRenderingContext2D): void {
-    if (!settings.familiarEnabled) return;
-    const def = getCurrentFamiliarDef();
-    const now = Date.now();
-    const scale = geometry.scale;
-    const baseX = isMobile ? geometry.width - 52 * scale : geometry.width - 72 * scale;
-    const baseY = isMobile ? 70 * scale : 82 * scale;
-    const bob = Math.sin(now / 420) * 5 * scale;
-    const pulse = now < familiarPulseUntil ? 1 + Math.sin(now / 80) * 0.09 : 1;
-    const r = Math.max(24 * scale, isMobile ? 30 : 28) * pulse;
-    context.save();
-    context.globalAlpha = settings.lowSpecMode ? 0.88 : 0.96;
-    context.shadowColor = def.accent;
-    context.shadowBlur = settings.lowSpecMode ? 0 : 18 * scale;
-    context.fillStyle = def.color;
-    context.beginPath();
-    context.arc(baseX, baseY + bob, r, 0, Math.PI * 2);
-    context.fill();
-    context.lineWidth = Math.max(2, 3 * scale);
-    context.strokeStyle = def.accent;
-    context.stroke();
-    context.shadowBlur = 0;
-    context.font = `900 ${Math.round(r * 1.05)}px "Segoe UI Emoji", "Noto Sans JP", sans-serif`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillStyle = "#ffffff";
-    context.fillText(def.emoji, baseX, baseY + bob + 1 * scale);
-    context.font = `900 ${Math.round(clamp(12 * scale, 11, 18))}px "Noto Sans JP", sans-serif`;
-    context.fillStyle = settings.blackModeEnabled ? "#f8fafc" : "#111827";
-    context.fillText(`Lv.${familiarState.level}`, baseX, baseY + bob + r + 13 * scale);
-    if (familiarMessage && now < familiarMessageUntil) {
-        const w = Math.min(geometry.width * 0.72, 360 * scale);
-        const h = 34 * scale;
-        const x = Math.max(12 * scale, baseX - w + 22 * scale);
-        const y = baseY + bob + r + 28 * scale;
-        context.globalAlpha = 0.92;
-        context.fillStyle = settings.blackModeEnabled ? "rgba(15,23,42,.92)" : "rgba(255,255,255,.92)";
-        roundRect(context, x, y, w, h, 14 * scale);
-        context.fill();
-        context.globalAlpha = 1;
-        context.fillStyle = def.accent;
-        context.font = `900 ${Math.round(clamp(13 * scale, 12, 19))}px "Noto Sans JP", sans-serif`;
-        context.fillText(familiarMessage, x + w / 2, y + h / 2);
-    }
-    context.restore();
+    drawFamiliarFrame(context, {
+        enabled: settings.familiarEnabled,
+        def: getCurrentFamiliarDef(),
+        level: familiarState.level,
+        message: familiarMessage,
+        messageUntil: familiarMessageUntil,
+        pulseUntil: familiarPulseUntil,
+        geometry,
+        isMobile,
+        lowSpecMode: settings.lowSpecMode,
+        blackModeEnabled: settings.blackModeEnabled,
+    });
 }
 
 function updateFamiliarButton(): void {
@@ -3764,27 +3674,7 @@ function unlockNote(id: string, toast = true): void {
 }
 
 function showMiracleTicketPopup(): void {
-    const rows = miracleTicketState.history.slice(0, 12).map((entry) => `
-        <div style="padding:10px 0;border-bottom:1px solid rgba(80,90,120,.14);">
-            <b>${escapeHtml(entry.label)}</b> <span style="font-weight:900;">+${entry.amount}</span> <span style="opacity:.72;">${entry.kind}</span><br>
-            <span style="opacity:.7;">${escapeHtml(entry.reason)} / ${new Date(entry.at).toLocaleString()}</span>
-        </div>
-    `).join("") || `<p style="opacity:.75;">まだチケット履歴はありません。SR以上の奇跡を観測すると集まりやすいです。</p>`;
-    showPopup("奇跡チケット", `
-        <p>奇跡を観測するとチケットを入手できます。使用すると今回の研究スコアにブーストを入れられます。</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:12px 0;">
-            <div style="border-radius:16px;background:rgba(255,255,255,.72);padding:12px;"><b>通常</b><br><span style="font-size:1.5em;font-weight:900;">${miracleTicketState.normal.toLocaleString()}</span></div>
-            <div style="border-radius:16px;background:rgba(255,255,255,.72);padding:12px;"><b>レア</b><br><span style="font-size:1.5em;font-weight:900;">${miracleTicketState.rare.toLocaleString()}</span></div>
-            <div style="border-radius:16px;background:rgba(255,255,255,.72);padding:12px;"><b>神域</b><br><span style="font-size:1.5em;font-weight:900;">${miracleTicketState.divine.toLocaleString()}</span></div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
-            <button id="ticket-small-boost">通常3枚で小ブースト</button>
-            <button id="ticket-rare-boost">通常8枚+レア1枚で大ブースト</button>
-            <button id="ticket-divine-boost">神域1枚で超ブースト</button>
-        </div>
-        <h3>履歴</h3>
-        <div style="border-radius:18px;background:rgba(255,255,255,.64);padding:4px 14px;">${rows}</div>
-    `);
+    showPopup("奇跡チケット", getMiracleTicketHtml(miracleTicketState));
     const use = (cost: { normal?: number; rare?: number; divine?: number }, score: number, label: string) => {
         const result = spendMiracleTickets(miracleTicketState, cost);
         miracleTicketState = result.state;
@@ -3802,21 +3692,7 @@ function showMiracleTicketPopup(): void {
 
 function showSecretResearchNotePopup(): void {
     secretResearchNoteState = markSecretResearchNotesRead(secretResearchNoteState);
-    const rows = SECRET_RESEARCH_NOTES.map((note) => {
-        const ts = secretResearchNoteState.unlocked[note.id];
-        const unlocked = !!ts;
-        return `<div style="border-radius:16px;margin:10px 0;padding:12px;background:${unlocked ? "rgba(255,255,255,.74)" : "rgba(15,23,42,.08)"};border:1px solid rgba(15,23,42,.12);">
-            <div style="font-weight:900;font-size:1.05em;">${unlocked ? "📖" : "🔒"} ${unlocked ? escapeHtml(note.title) : "未解放の研究ノート"}</div>
-            <div style="margin-top:6px;opacity:.78;">ヒント: ${escapeHtml(note.hint)}</div>
-            <div style="margin-top:8px;line-height:1.75;">${unlocked ? escapeHtml(note.body) : "条件を満たすと内容が表示されます。"}</div>
-            <div style="margin-top:6px;opacity:.62;">${unlocked ? new Date(ts).toLocaleString() : note.source}</div>
-        </div>`;
-    }).join("");
-    showPopup("秘密研究ノート", `
-        <p>条件達成で解放される読み物です。ゲームの裏側にある小さな物語として記録されます。</p>
-        <p><b>解放:</b> ${Object.keys(secretResearchNoteState.unlocked).length} / ${SECRET_RESEARCH_NOTES.length}</p>
-        ${rows}
-    `);
+    showPopup("秘密研究ノート", getSecretResearchNoteHtml(SECRET_RESEARCH_NOTES, secretResearchNoteState));
     refreshMiracleExpansionButtons();
 }
 
@@ -3836,30 +3712,7 @@ function applyExpeditionReward(reward: { xp: number; affection: number; ticketNo
 
 function showFamiliarExpeditionPopup(): void {
     const progress = getFamiliarExpeditionProgress(familiarExpeditionState);
-    const activeHtml = progress.active && familiarExpeditionState.active ? `
-        <div style="border-radius:18px;background:rgba(255,255,255,.76);padding:14px;margin:10px 0;">
-            <b>遠征中:</b> ${escapeHtml(progress.plan?.title ?? familiarExpeditionState.active.planId)}<br>
-            <span style="opacity:.78;">残り ${formatDurationMs(progress.remainingMs)}</span>
-            <div style="height:14px;border-radius:999px;background:rgba(15,23,42,.12);overflow:hidden;margin-top:10px;"><div style="width:${progress.percent.toFixed(1)}%;height:100%;background:linear-gradient(90deg,#facc15,#fb7185);"></div></div>
-            <button id="expedition-claim" style="margin-top:10px;font-weight:900;" ${progress.complete ? "" : "disabled"}>報酬を受け取る</button>
-        </div>
-    ` : `<p>現在、遠征中の使い魔はいません。</p>`;
-    const planRows = FAMILIAR_EXPEDITION_PLANS.map((plan) => `
-        <div style="border-radius:16px;background:rgba(255,255,255,.68);padding:12px;margin:8px 0;border:1px solid rgba(15,23,42,.12);">
-            <b>${escapeHtml(plan.title)}</b><br>
-            <span style="opacity:.78;">${escapeHtml(plan.description)}</span><br>
-            <span style="opacity:.72;">報酬: XP ${plan.xp} / なつき ${plan.affection} / 通常券 ${plan.ticketNormal} / レア券 ${plan.ticketRare}</span><br>
-            <button data-expedition-plan="${plan.id}" style="margin-top:8px;font-weight:900;" ${progress.active ? "disabled" : ""}>出発</button>
-        </div>`).join("");
-    const historyRows = familiarExpeditionState.history.slice(0, 8).map((x) => `<div style="padding:8px 0;border-bottom:1px solid rgba(80,90,120,.12);"><b>${escapeHtml(x.title)}</b> / ${new Date(x.at).toLocaleString()}</div>`).join("") || `<p style="opacity:.7;">遠征履歴はまだありません。</p>`;
-    showPopup("使い魔遠征", `
-        <p>アプリを閉じている間も、開始時刻からの経過時間で報酬を受け取れます。</p>
-        ${activeHtml}
-        <h3>遠征先</h3>
-        ${planRows}
-        <h3>履歴</h3>
-        <div style="border-radius:18px;background:rgba(255,255,255,.58);padding:4px 14px;">${historyRows}</div>
-    `);
+    showPopup("使い魔遠征", getFamiliarExpeditionHtml(familiarExpeditionState, progress, FAMILIAR_EXPEDITION_PLANS, formatDurationMs));
     document.querySelectorAll<HTMLButtonElement>("[data-expedition-plan]").forEach((button) => {
         button.onclick = () => {
             const result = startFamiliarExpedition(familiarExpeditionState, button.dataset.expeditionPlan ?? "mini", familiarState.kind);
@@ -3880,44 +3733,7 @@ function showFamiliarExpeditionPopup(): void {
 function showFamiliarPopup(): void {
     const def = getCurrentFamiliarDef();
     const level = getFamiliarLevelInfo(familiarState.xp);
-    const unlockedRows = FAMILIAR_DEFS.map((item) => {
-        const unlocked = Boolean(familiarState.unlocked[item.kind]);
-        return `<div style="border-radius:16px;padding:12px;margin:8px 0;background:${unlocked ? "rgba(255,255,255,.72)" : "rgba(15,23,42,.08)"};border:1px solid rgba(15,23,42,.12);">
-            <div style="font-weight:900;font-size:1.05em;">${item.emoji} ${item.name} ${unlocked ? "" : "🔒"}</div>
-            <div style="opacity:.86;">${escapeHtml(item.description)}</div>
-            <div style="margin-top:6px;font-size:.9em;opacity:.8;">秘密契約ヒント: ${item.secretCode ? "専用コードあり" : "最初から同行"}</div>
-            ${unlocked ? `<button data-familiar-call="${item.kind}" style="margin-top:8px;font-weight:900;padding:8px 14px;border-radius:999px;">呼び出す</button>` : ""}
-        </div>`;
-    }).join("");
-    showPopup("使い魔研究室", `
-        <p><b>${def.emoji} ${escapeHtml(familiarState.name)}</b> が同行中です。</p>
-        <div style="display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
-            <div><b>Lv</b>: ${familiarState.level}</div>
-            <div><b>経験値</b>: ${familiarState.xp.toLocaleString()} / 次 ${level.nextXp.toLocaleString()}</div>
-            <div><b>なつき度</b>: ${familiarState.affection.toLocaleString()} / ${getFamiliarMood(familiarState)}</div>
-            <div><b>補助回数</b>: ${familiarState.assistCount.toLocaleString()}</div>
-        </div>
-        <div style="margin:12px 0;height:14px;border-radius:999px;background:rgba(15,23,42,.12);overflow:hidden;"><div style="width:${level.progressPercent.toFixed(1)}%;height:100%;background:linear-gradient(90deg,${def.color},${def.accent});"></div></div>
-        <p><b>超機能:</b> 実験中に使い魔が自動補助します。幸運は予兆、見張りは捨て区画、暴走は盤面干渉が強めです。</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
-            <button data-familiar-mode="assist">補助</button>
-            <button data-familiar-mode="lucky">幸運</button>
-            <button data-familiar-mode="guard">見張り</button>
-            <button data-familiar-mode="chaos">暴走</button>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;">
-            <button id="familiar-expedition-button" style="font-weight:900;">使い魔遠征</button>
-            <button id="familiar-ticket-button" style="font-weight:900;">奇跡チケット</button>
-            <button id="familiar-note-button" style="font-weight:900;">秘密ノート</button>
-        </div>
-        <p><b>スマホ用秘密契約:</b> PCのキーボードがなくても下の入力で秘密コードを試せます。</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <input id="familiar-secret-input" placeholder="秘密コード" style="flex:1;min-width:160px;padding:12px;border-radius:14px;border:1px solid #b8c1d1;font-size:16px;">
-            <button id="familiar-secret-button">契約</button>
-        </div>
-        <h3 style="margin-top:16px;">使い魔図鑑</h3>
-        ${unlockedRows}
-    `);
+    showPopup("使い魔研究室", getFamiliarPopupHtml(def, familiarState, level, getFamiliarMood(familiarState), FAMILIAR_DEFS));
     document.querySelectorAll<HTMLButtonElement>("[data-familiar-mode]").forEach((button) => {
         button.onclick = () => setFamiliarMode((button.dataset.familiarMode as FamiliarMode) || "assist");
     });
@@ -4090,7 +3906,7 @@ function updateTutorialMissions(forceExpand = false): void {
     const rows = defs.map((mission) => {
         const done = tutorialMissionProgress[mission.id];
         return `<div style="display:flex;gap:8px;align-items:flex-start;margin-top:4px;opacity:${done ? ".72" : "1"};"><span>${done ? "✅" : "□"}</span><span><b>${mission.label}</b><br><span style="opacity:.72;font-size:.92em;">${mission.description}</span></span></div>`;
-    }).join("");
+    });
     if (changed && isMobile) {
         tutorialMissionExpanded = true;
         scheduleTutorialMissionCollapse();
@@ -4230,22 +4046,11 @@ function handleTapIntervention(event: PointerEvent): void {
 }
 
 function drawTapRipples(context: CanvasRenderingContext2D): void {
-    if (settings.simpleMode || tapRipples.length === 0) return;
-    context.save();
-    for (let i = tapRipples.length - 1; i >= 0; i--) {
-        const ripple = tapRipples[i];
-        const p = 1 - ripple.life / ripple.maxLife;
-        const radius = (24 + p * 130) * geometry.scale;
-        context.globalAlpha = Math.max(0, ripple.life / ripple.maxLife) * 0.72;
-        context.strokeStyle = "#93c5fd";
-        context.lineWidth = Math.max(2, 5 * geometry.scale * (1 - p));
-        context.beginPath();
-        context.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
-        context.stroke();
-        if (!isPaused) ripple.life--;
-        if (ripple.life <= 0) tapRipples.splice(i, 1);
-    }
-    context.restore();
+    drawTapRipplesFrame(context, tapRipples, {
+        simpleMode: settings.simpleMode,
+        isPaused,
+        geometry,
+    });
 }
 
 function getResearchEvaluation(): { grade: string; type: string; density: number; note: string } {
@@ -4451,7 +4256,7 @@ function showMissionPopup(): void {
             <div style="margin-top:6px;opacity:.82;line-height:1.55;">${mission.description}</div>
             <div style="margin-top:6px;font-size:${isMobile ? 16 : 14}px;opacity:.72;">通算達成 ${totalClear}回</div>
         </div>`;
-    }).join("");
+    });
     showPopup("ミッション", `<div style="margin-top:8px;border-radius:18px;background:rgba(255,255,255,.72);padding:${isMobile ? "8px 14px" : "8px 16px"};">${rows}</div>`);
 }
 
@@ -4671,12 +4476,12 @@ function showFusionPopup(): void {
             <div style="margin-top:6px;opacity:.80;line-height:1.55;">${unlocked ? fusion.description : "素材奇跡を集めると解放されます。"}</div>
             <div style="margin-top:6px;opacity:.72;">素材: ${sources}</div>
         </div>`;
-    }).join("");
+    });
     const chainRows = MIRACLE_CHAIN_DEFS.map((chain) => {
         const names = chain.sequence.map((kind) => findSpecialDef(kind)?.label ?? kind).join(" → ");
         const unlocked = !!unlockedChainRunIds[chain.id];
         return `<div style="padding:10px 0;border-bottom:1px dashed rgba(80,90,120,.18);"><b>${unlocked ? "✅" : "🔁"} ${chain.label} [${chain.rank}]</b><div style="margin-top:4px;opacity:.74;">順番: ${names}</div><div style="margin-top:4px;opacity:.74;">${chain.description}</div></div>`;
-    }).join("");
+    });
     showPopup("奇跡合成・派生", `<p>特定の奇跡を観測すると、合成・派生の研究記録が解放されます。</p>${rows}<h3 style="margin-top:18px;">実験中の奇跡連鎖</h3><p>下記の順番で奇跡が続くと、その実験中だけの連鎖演出が発生します。</p>${chainRows}`);
 }
 
@@ -5587,29 +5392,7 @@ function updateMagicPhysicsFields(): void {
 }
 
 function drawMagicPhysicsFields(context: CanvasRenderingContext2D): void {
-    if (activeMagicPhysicsFields.length === 0) return;
-    const now = performance.now();
-    context.save();
-    context.globalCompositeOperation = "lighter";
-    for (const field of activeMagicPhysicsFields) {
-        const life = clamp((field.until - now) / 5000, 0, 1);
-        const pulse = 0.82 + Math.sin(now / 120) * 0.12;
-        const grad = context.createRadialGradient(field.x, field.y, field.radius * 0.05, field.x, field.y, field.radius * pulse);
-        const color = field.kind === "blackhole" ? "124,58,237" : field.kind === "repel" ? "250,204,21" : field.kind === "wave" ? "56,189,248" : "34,211,238";
-        grad.addColorStop(0, `rgba(${color},${0.20 * life})`);
-        grad.addColorStop(0.58, `rgba(${color},${0.08 * life})`);
-        grad.addColorStop(1, `rgba(${color},0)`);
-        context.fillStyle = grad;
-        context.beginPath();
-        context.arc(field.x, field.y, field.radius * pulse, 0, Math.PI * 2);
-        context.fill();
-        context.strokeStyle = `rgba(${color},${0.28 * life})`;
-        context.lineWidth = Math.max(1.5, 3 * geometry.scale);
-        context.beginPath();
-        context.arc(field.x, field.y, field.radius * (0.45 + 0.08 * Math.sin(now / 160)), 0, Math.PI * 2);
-        context.stroke();
-    }
-    context.restore();
+    drawMagicPhysicsFieldsFrame(context, activeMagicPhysicsFields, geometry);
 }
 
 function showBrokenResearchNote(reason: string): void {
@@ -5618,30 +5401,14 @@ function showBrokenResearchNote(reason: string): void {
 }
 
 function drawBrokenResearchNote(context: CanvasRenderingContext2D): void {
-    if (!brokenResearchNoteText || performance.now() > brokenResearchNoteUntil || settings.simpleMode) return;
-    const alpha = clamp((brokenResearchNoteUntil - performance.now()) / 900, 0, 1);
-    const w = Math.min(geometry.width * 0.70, 620 * geometry.scale);
-    const h = 92 * geometry.scale;
-    const x = geometry.width / 2 - w / 2;
-    const y = geometry.height * 0.12;
-    context.save();
-    context.globalAlpha = alpha * 0.92;
-    context.fillStyle = "rgba(255,251,235,.88)";
-    roundRect(context, x, y, w, h, 20 * geometry.scale);
-    context.fill();
-    const rc = getRoughCanvas();
-    if (rc) {
-        rc.rectangle(x + 6, y + 6, w - 12, h - 12, { stroke: "rgba(120,53,15,.70)", strokeWidth: 2.2, roughness: 2.8, bowing: 2.2 });
-        rc.line(x + 24, y + h * 0.44, x + w - 24, y + h * 0.38, { stroke: "rgba(180,83,9,.34)", strokeWidth: 1.6, roughness: 3.5 });
-    }
-    context.fillStyle = "rgba(67,20,7,.92)";
-    context.font = `900 ${Math.round(clamp(19 * geometry.scale, 14, 28))}px ${ROUNDED_UI_FONT}`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText("壊れた研究ノート", x + w / 2, y + 28 * geometry.scale);
-    context.font = `800 ${Math.round(clamp(15 * geometry.scale, 11, 20))}px ${ROUNDED_UI_FONT}`;
-    context.fillText(brokenResearchNoteText.slice(0, 46), x + w / 2, y + 62 * geometry.scale);
-    context.restore();
+    drawBrokenResearchNoteFrame(context, {
+        text: brokenResearchNoteText,
+        until: brokenResearchNoteUntil,
+        simpleMode: settings.simpleMode,
+        geometry,
+        uiFont: ROUNDED_UI_FONT,
+        roughCanvas: getRoughCanvas(),
+    });
 }
 
 function createTemporaryPinAt(x: number, y: number, label = "観測ピン", lifetimeMs = 14000): void {
@@ -6051,55 +5818,12 @@ async function toggleTiltExperimentMode(): Promise<void> {
 
 function showMiracleGachaPopup(): void {
     const point = getGachaPoint();
-    const canOnce = point >= MIRACLE_GACHA_ONCE_COST;
-    const canTen = point >= MIRACLE_GACHA_TEN_COST;
-    const recentRewards = getGachaRewardHistory().slice(0, 6).map((entry) => `
-        <div style="padding:10px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <b>${escapeHtml(entry.label)} [${escapeHtml(entry.rank)}]</b>
-            <div style="opacity:.78;line-height:1.55;">${escapeHtml(entry.rewardLabel)} / ${new Date(entry.createdAt).toLocaleString()}</div>
-        </div>
-    `).join("") || `<div style="opacity:.72;">まだガチャ報酬はありません。</div>`;
-    showPopup("奇跡ガチャ", `
-        <div style="display:grid;gap:18px;text-align:center;">
-            <div class="miracle-user-card" style="background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.95),rgba(255,230,160,.86),rgba(160,80,255,.34));">
-                <div style="font-size:clamp(46px,12vw,120px);font-weight:1000;line-height:1;text-shadow:0 8px 28px rgba(0,0,0,.22);">奇跡ガチャ</div>
-                <div style="margin-top:12px;font-size:clamp(18px,4vw,34px);font-weight:1000;">貯めた奇跡ガチャPで研究装置を回します</div>
-                <div style="margin-top:10px;font-size:clamp(20px,4vw,34px);font-weight:1000;color:#713f12;">所持P：${point.toLocaleString()}P</div>
-                <div style="margin-top:8px;opacity:.78;font-weight:900;line-height:1.7;">1回 ${MIRACLE_GACHA_ONCE_COST}P / 10連 ${MIRACLE_GACHA_TEN_COST}P</div>
-            </div>
-            <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
-                <button id="miracle-gacha-once-button" class="miracle-home-button miracle-home-primary" style="width:168px;height:48px;font-size:13px;padding:5px 10px;white-space:normal;line-height:1.08;" ${canOnce ? "" : "disabled"}>1回まわす</button>
-                <button id="miracle-gacha-ten-button" class="miracle-home-button miracle-home-primary" style="width:168px;height:48px;font-size:13px;padding:5px 10px;white-space:normal;line-height:1.08;" ${canTen ? "" : "disabled"}>10連まわす</button>
-            </div>
-            <div class="miracle-user-card" style="text-align:left;">
-                <b>排出されるもの</b>
-                <ul style="line-height:1.85;margin:10px 0 0;padding-left:1.3em;">
-                    <li>奇跡演出カード: ガチャ履歴に保存されます。</li>
-                    <li>テーマ解放: SR以上でランダムなテーマを1つ研究済みにします。</li>
-                    <li>奇跡チケット: レア度に応じて通常・レア・神域チケットを付与します。</li>
-                    <li>SSR以上では盤面崩壊イベント、EX/GOD級では動画演出を強めに狙います。</li>
-                </ul>
-            </div>
-            <div class="miracle-user-card" style="text-align:left;">
-                <b>最近のガチャ履歴</b>
-                <div style="margin-top:8px;">${recentRewards}</div>
-                <button id="miracle-gacha-history-button" class="miracle-home-button" style="margin-top:12px;">履歴を詳しく見る</button>
-            </div>
-            <div class="miracle-user-card" style="text-align:left;">
-                <b>奇跡ガチャPの貯め方</b>
-                <ul style="line-height:1.85;margin:10px 0 0;padding-left:1.3em;">
-                    <li>実験完了：+1P</li>
-                    <li>1000玉以上投下：追加 +1P</li>
-                    <li>SR以上発見：+1P</li>
-                    <li>SSR以上発見：+3P</li>
-                    <li>GOD/EX発見：+10P</li>
-                    <li>デイリー研究達成：+2P</li>
-                    <li>超レア確率はかなり低めです。10連でも確定ではありません。</li>
-                </ul>
-            </div>
-            <p style="opacity:.72;line-height:1.8;margin:0;">ガチャ回転演出のあと、最高レアの演出を盤面で再生します。結果はガチャ履歴に保存されます。</p>
-        </div>
-    `);
+    showPopup("奇跡ガチャ", getMiracleGachaHtml({
+        point,
+        onceCost: MIRACLE_GACHA_ONCE_COST,
+        tenCost: MIRACLE_GACHA_TEN_COST,
+        recentRewards: getGachaRewardHistory(),
+    }));
 
     document.getElementById("miracle-gacha-history-button")?.addEventListener("click", () => showGachaRewardBookPopup());
 
@@ -6111,33 +5835,7 @@ function showMiracleGachaPopup(): void {
             return;
         }
 
-        showPopup("奇跡ガチャ抽選中", `
-            <style>
-                @keyframes miracleGachaSpin {
-                    0% { transform:rotate(0deg) scale(1); filter:hue-rotate(0deg) brightness(1); }
-                    35% { transform:rotate(520deg) scale(1.08); filter:hue-rotate(120deg) brightness(1.25); }
-                    70% { transform:rotate(980deg) scale(1.16); filter:hue-rotate(260deg) brightness(1.45); }
-                    100% { transform:rotate(1440deg) scale(1); filter:hue-rotate(360deg) brightness(1.08); }
-                }
-                @keyframes miracleGachaPulse {
-                    0%,100% { transform:scale(.94); opacity:.58; }
-                    50% { transform:scale(1.18); opacity:1; }
-                }
-                @keyframes miracleGachaBeam {
-                    0% { transform:rotate(0deg); opacity:.20; }
-                    100% { transform:rotate(360deg); opacity:.62; }
-                }
-            </style>
-            <div class="miracle-user-card" style="text-align:center;overflow:hidden;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.98),rgba(255,220,80,.82),rgba(88,28,135,.42));">
-                <div style="position:relative;width:min(72vw,360px);height:min(72vw,360px);margin:0 auto;display:grid;place-items:center;">
-                    <div style="position:absolute;inset:0;border-radius:999px;background:conic-gradient(from 0deg,rgba(255,255,255,0),rgba(255,255,255,.85),rgba(250,204,21,.95),rgba(168,85,247,.75),rgba(255,255,255,0));animation:miracleGachaBeam .75s linear infinite;"></div>
-                    <div style="position:absolute;inset:10%;border-radius:999px;background:radial-gradient(circle,rgba(255,255,255,.95),rgba(250,204,21,.72),rgba(126,34,206,.65));box-shadow:0 0 50px rgba(250,204,21,.7);animation:miracleGachaPulse .48s ease-in-out infinite;"></div>
-                    <div style="position:relative;font-size:min(26vw,132px);line-height:1;animation:miracleGachaSpin 1.85s cubic-bezier(.2,.9,.2,1) forwards;text-shadow:0 0 30px rgba(255,255,255,.95);">🎰</div>
-                </div>
-                <div style="font-size:clamp(24px,5vw,44px);font-weight:1000;margin-top:10px;">${count === 10 ? "10連" : "奇跡"}抽選中...</div>
-                <div style="opacity:.78;font-weight:900;margin-top:8px;">${cost.toLocaleString()}Pを消費して研究装置が高エネルギー反応を解析しています</div>
-            </div>
-        `);
+        showPopup("奇跡ガチャ抽選中", getGachaSpinHtml(count, cost));
 
         window.setTimeout(() => {
             const defs = Array.from({ length: count }, () => pickMiracleGachaDef());
@@ -6204,67 +5902,14 @@ function grantGachaReward(def: SpecialEventDef, count: number): GachaRewardEntry
 }
 
 function showGachaResultPopup(rewards: GachaRewardEntry[], best: SpecialEventDef): void {
-    const rows = rewards.map((entry) => `
-        <div class="miracle-user-card" style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center;">
-            <img src="${createMiracleImageDataUri(best.kind === entry.kind ? best : (SPECIAL_EVENT_DEFS.find((x) => x.kind === entry.kind) ?? best))}" alt="${escapeHtml(entry.label)}" style="width:${isMobile ? 70 : 82}px;height:${isMobile ? 70 : 82}px;border-radius:18px;object-fit:cover;background:#0f172a;box-shadow:0 10px 24px rgba(0,0,0,.18);" />
-            <div>
-                <div style="font-weight:1000;">${entry.count}. ${escapeHtml(entry.label)} [${escapeHtml(entry.rank)}]</div>
-                <div style="opacity:.82;line-height:1.65;">${escapeHtml(entry.rewardLabel)}</div>
-            </div>
-        </div>
-    `).join("");
-    showPopup("ガチャ結果", `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-user-card" style="text-align:center;background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.96),rgba(250,204,21,.34),rgba(59,130,246,.16));">
-                <div style="font-size:clamp(28px,6vw,52px);font-weight:1000;">最高反応: ${escapeHtml(best.label)} [${escapeHtml(best.rank)}]</div>
-                <div style="margin-top:8px;opacity:.82;">報酬はガチャ履歴に保存しました。</div>
-            </div>
-            ${rows}
-            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-                <button id="gacha-result-history-button" class="miracle-home-button miracle-home-primary">履歴を見る</button>
-                <button id="gacha-result-again-button" class="miracle-home-button">もう一度</button>
-            </div>
-        </div>
-    `);
+    showPopup("ガチャ結果", getGachaResultHtml(rewards, best, (kind) => SPECIAL_EVENT_DEFS.find((x) => x.kind === kind), isMobile));
     document.getElementById("gacha-result-history-button")?.addEventListener("click", () => showGachaRewardBookPopup());
     document.getElementById("gacha-result-again-button")?.addEventListener("click", () => showMiracleGachaPopup());
 }
 
 function showGachaRewardBookPopup(): void {
     const rewards = getGachaRewardHistory();
-    const totalTickets = rewards.reduce((acc, entry) => ({
-        normal: acc.normal + entry.ticketNormal,
-        rare: acc.rare + entry.ticketRare,
-        divine: acc.divine + entry.ticketDivine,
-    }), { normal: 0, rare: 0, divine: 0 });
-    const rankCounts = rewards.reduce<Record<string, number>>((acc, entry) => {
-        acc[entry.rank] = (acc[entry.rank] ?? 0) + 1;
-        return acc;
-    }, {});
-    const rows = rewards.map((entry) => `
-        <div class="miracle-user-card" style="display:grid;gap:6px;">
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
-                <b>${escapeHtml(entry.label)} [${escapeHtml(entry.rank)}]</b>
-                <span style="opacity:.72;">${new Date(entry.createdAt).toLocaleString()}</span>
-            </div>
-            <div style="opacity:.84;line-height:1.65;">${escapeHtml(entry.rewardLabel)}</div>
-        </div>
-    `).join("") || `<div class="miracle-user-card">まだガチャ履歴はありません。奇跡ガチャを回すとここに保存されます。</div>`;
-    showPopup("ガチャ履歴", `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-user-card">
-                <b>奇跡ガチャ報酬図鑑</b><br>
-                <span style="opacity:.78;">排出された演出カード、テーマ解放、チケット報酬を保存しています。</span>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
-                <div class="miracle-user-card"><b>総排出</b><br><span style="font-size:1.5em;font-weight:1000;">${rewards.length.toLocaleString()}</span></div>
-                <div class="miracle-user-card"><b>最高レア</b><br><span style="font-size:1.1em;font-weight:1000;">${rewards.slice().sort((a, b) => getRankScore(b.rank) - getRankScore(a.rank))[0]?.rank ?? "-"}</span></div>
-                <div class="miracle-user-card"><b>獲得チケット</b><br>通常 ${totalTickets.normal} / レア ${totalTickets.rare} / 神域 ${totalTickets.divine}</div>
-                <div class="miracle-user-card"><b>ランク内訳</b><br>${Object.entries(rankCounts).map(([rank, count]) => `${escapeHtml(rank)} ${count}`).join(" / ") || "-"}</div>
-            </div>
-            ${rows}
-        </div>
-    `);
+    showPopup("ガチャ履歴", getGachaRewardBookHtml(rewards));
 }
 
 function getShopCategoryLabel(category: ShopItemDef["category"]): string {
@@ -6276,55 +5921,28 @@ function getShopCategoryLabel(category: ShopItemDef["category"]): string {
 
 function showResearchShopPopup(): void {
     const purchasedCount = Object.keys(savedRecords.shopPurchased ?? {}).length;
-    const purchaseRows = (savedRecords.shopPurchases ?? []).slice(0, 8).map((entry) => `
-        <div style="padding:10px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <b>${escapeHtml(entry.label)}</b>
-            <div style="opacity:.78;line-height:1.55;">${escapeHtml(entry.effectLabel)} / ${escapeHtml(entry.costLabel)} / ${new Date(entry.purchasedAt).toLocaleString()}</div>
-        </div>
-    `).join("") || `<div style="opacity:.72;">まだ購入履歴はありません。</div>`;
-    const itemRows = RESEARCH_SHOP_ITEMS.map((item) => {
+    const items = RESEARCH_SHOP_ITEMS.map((item) => {
         const availability = canBuyShopItem(item);
         const purchased = isShopItemPurchased(item.id);
         const status = purchased && !item.repeatable ? "購入済み" : availability.reason;
-        return `
-            <div class="miracle-user-card" style="display:grid;gap:10px;opacity:${purchased && !item.repeatable ? ".72" : "1"};">
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
-                    <div>
-                        <div style="font-size:1.12em;font-weight:1000;">${escapeHtml(item.label)}</div>
-                        <div style="margin-top:4px;opacity:.82;line-height:1.65;">${escapeHtml(item.description)}</div>
-                    </div>
-                    <span class="miracle-status-pill">${getShopCategoryLabel(item.category)}</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
-                    <div style="font-weight:900;">費用: ${escapeHtml(getShopCostLabel(item))}</div>
-                    <button class="miracle-home-button ${availability.ok ? "miracle-home-primary" : ""}" data-home-action="shop-buy:${item.id}" ${availability.ok ? "" : "disabled"}>${status}</button>
-                </div>
-            </div>
-        `;
-    }).join("");
-    showPopup("研究所ショップ", `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-user-card">
-                <b>研究設備と報酬を購入します。</b><br>
-                <span style="opacity:.78;">所持: 奇跡ガチャP <b>${getGachaPoint().toLocaleString()}P</b> / 通常券 <b>${miracleTicketState.normal}</b> / レア券 <b>${miracleTicketState.rare}</b> / 神域券 <b>${miracleTicketState.divine}</b></span>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
-                <div class="miracle-user-card"><b>設備購入</b><br><span style="font-size:1.45em;font-weight:1000;">${purchasedCount}</span></div>
-                <div class="miracle-user-card"><b>レポート上限</b><br><span style="font-size:1.45em;font-weight:1000;">${getResearchReportLimit()}</span></div>
-                <div class="miracle-user-card"><b>完了P増幅</b><br>${isShopItemPurchased("gacha-point-booster") ? "ON" : "OFF"}</div>
-            </div>
-            ${itemRows}
-            <div class="miracle-user-card">
-                <b>購入履歴</b>
-                <div style="margin-top:8px;">${purchaseRows}</div>
-            </div>
-        </div>
-    `);
+        return { item, purchased, available: availability.ok, status, categoryLabel: getShopCategoryLabel(item.category), costLabel: getShopCostLabel(item) };
+    });
+    showPopup("研究所ショップ", getResearchShopHtml({
+        purchasedCount,
+        gachaPoint: getGachaPoint(),
+        ticketNormal: miracleTicketState.normal,
+        ticketRare: miracleTicketState.rare,
+        ticketDivine: miracleTicketState.divine,
+        reportLimit: getResearchReportLimit(),
+        pointBoosterOn: isShopItemPurchased("gacha-point-booster"),
+        items,
+        purchaseHistory: savedRecords.shopPurchases ?? [],
+    }));
 }
 
 function showEventSeasonPopup(): void {
     const season = getCurrentEventSeason();
-    const rows = season.missions.map((mission) => {
+    const missions = season.missions.map((mission) => {
         const value = Math.min(getSeasonMissionValue(mission.metric), mission.target);
         const percent = mission.target > 0 ? Math.min(100, (value / mission.target) * 100) : 0;
         const key = getSeasonClaimKey(season, mission);
@@ -6337,41 +5955,18 @@ function showEventSeasonPopup(): void {
             mission.rewardTickets?.rare ? `レア券+${mission.rewardTickets.rare}` : "",
             mission.rewardTickets?.divine ? `神域券+${mission.rewardTickets.divine}` : "",
         ].filter(Boolean).join(" / ");
-        return `
-            <div class="miracle-user-card" style="display:grid;gap:10px;border-left:8px solid ${season.accent};opacity:${claimed ? ".72" : "1"};">
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
-                    <div>
-                        <div style="font-weight:1000;font-size:1.08em;">${claimed ? "受取済み" : ready ? "達成" : "進行中"} ${escapeHtml(mission.label)}</div>
-                        <div style="margin-top:5px;opacity:.82;line-height:1.65;">${escapeHtml(mission.description)}</div>
-                    </div>
-                    <button class="miracle-home-button ${ready && !claimed ? "miracle-home-primary" : ""}" data-home-action="season-claim:${season.id}:${mission.id}" ${ready && !claimed ? "" : "disabled"}>${claimed ? "受取済み" : ready ? "受け取る" : `${value}/${mission.target}`}</button>
-                </div>
-                <div style="height:12px;border-radius:999px;background:rgba(100,116,139,.22);overflow:hidden;"><div style="height:100%;width:${percent.toFixed(1)}%;background:linear-gradient(90deg,${season.accent},#ffffff);"></div></div>
-                <div style="opacity:.78;font-size:.92em;">報酬: ${escapeHtml(rewardParts || "-")}</div>
-            </div>
-        `;
-    }).join("");
-    const history = (savedRecords.seasonRewards ?? []).slice(0, 6).map((entry) => `
-        <div style="padding:9px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <b>${escapeHtml(entry.label)}</b>
-            <div style="opacity:.76;">${escapeHtml(entry.rewardLabel)} / ${new Date(entry.claimedAt).toLocaleString()}</div>
-        </div>
-    `).join("") || `<div style="opacity:.72;">まだシーズン報酬はありません。</div>`;
-    showPopup("イベントシーズン", `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-home-hero" style="border-left:10px solid ${season.accent};">
-                <div style="font-size:clamp(30px,6vw,56px);font-weight:1000;line-height:1.1;">${escapeHtml(season.title)}</div>
-                <div style="margin-top:10px;line-height:1.8;">${escapeHtml(season.subtitle)}<br>奇跡率ブースト <b>x${season.rateBoost.toFixed(2)}</b> / 推奨テーマ <b>${getThemeDisplayName(season.theme)}</b></div>
-                <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;"><button data-home-action="season-theme:${season.theme}" class="miracle-home-button miracle-home-primary">テーマを使う</button><button data-home-action="craft" class="miracle-home-button">クラフトへ</button></div>
-            </div>
-            ${rows}
-            <div class="miracle-user-card"><b>受取履歴</b><div style="margin-top:8px;">${history}</div></div>
-        </div>
-    `);
+        return { mission, value, percent, claimed, ready, rewardLabel: rewardParts };
+    });
+    showPopup("イベントシーズン", getEventSeasonHtml({
+        season,
+        themeLabel: getThemeDisplayName(season.theme),
+        missions,
+        history: savedRecords.seasonRewards ?? [],
+    }));
 }
 
 function showMiracleCraftPopup(): void {
-    const rows = MIRACLE_CRAFT_RECIPES.map((recipe) => {
+    const recipes = MIRACLE_CRAFT_RECIPES.map((recipe) => {
         const material = getCraftMaterialStatus(recipe);
         const availability = canCraftRecipe(recipe);
         const unlocked = isCraftUnlocked(recipe.id);
@@ -6382,35 +5977,13 @@ function showMiracleCraftPopup(): void {
             recipe.rewardTickets?.rare ? `レア券+${recipe.rewardTickets.rare}` : "",
             recipe.rewardTickets?.divine ? `神域券+${recipe.rewardTickets.divine}` : "",
         ].filter(Boolean).join(" / ");
-        return `
-            <div class="miracle-user-card" style="display:grid;gap:10px;opacity:${unlocked ? ".72" : "1"};">
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
-                    <div>
-                        <div style="font-size:1.12em;font-weight:1000;">${unlocked ? "完成済み" : material.ready ? "錬成可能" : "素材待ち"} ${escapeHtml(recipe.label)}</div>
-                        <div style="margin-top:5px;opacity:.82;line-height:1.65;">${escapeHtml(recipe.description)}</div>
-                    </div>
-                    <button class="miracle-home-button ${availability.ok ? "miracle-home-primary" : ""}" data-home-action="craft-do:${recipe.id}" ${availability.ok ? "" : "disabled"}>${availability.reason}</button>
-                </div>
-                <div style="opacity:.82;line-height:1.65;"><b>素材:</b> ${escapeHtml(material.label)}<br><b>費用:</b> ${recipe.costPoint.toLocaleString()}P<br><b>報酬:</b> ${escapeHtml(rewardParts)}</div>
-            </div>
-        `;
-    }).join("");
-    const history = (savedRecords.craftHistory ?? []).slice(0, 8).map((entry) => `
-        <div style="padding:9px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <b>${escapeHtml(entry.label)}</b>
-            <div style="opacity:.76;">${escapeHtml(entry.rewardLabel)} / ${new Date(entry.craftedAt).toLocaleString()}</div>
-        </div>
-    `).join("") || `<div style="opacity:.72;">まだクラフト履歴はありません。</div>`;
-    showPopup("奇跡クラフト", `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-user-card">
-                <b>発見済み奇跡の記録を素材条件にして、研究報酬を錬成します。</b><br>
-                <span style="opacity:.78;">素材は図鑑の発見回数を参照します。図鑑記録は消費しません。所持P: <b>${getGachaPoint().toLocaleString()}P</b></span>
-            </div>
-            ${rows}
-            <div class="miracle-user-card"><b>クラフト履歴</b><div style="margin-top:8px;">${history}</div></div>
-        </div>
-    `);
+        return { recipe, materialLabel: material.label, materialReady: material.ready, available: availability.ok, status: availability.reason, unlocked, rewardLabel: rewardParts };
+    });
+    showPopup("奇跡クラフト", getMiracleCraftHtml({
+        gachaPoint: getGachaPoint(),
+        recipes,
+        history: savedRecords.craftHistory ?? [],
+    }));
 }
 
 function getBossImage(boss: BossExperimentDef): HTMLImageElement | null {
@@ -6425,33 +5998,11 @@ function getBossImage(boss: BossExperimentDef): HTMLImageElement | null {
 }
 
 function showBossExperimentPopup(): void {
-    const rows = BOSS_EXPERIMENT_DEFS.map((boss) => {
-        const cleared = !!(savedRecords.bossCleared ?? {})[boss.id];
-        const best = (savedRecords.bossRecords ?? []).filter((x) => x.bossId === boss.id).sort((a, b) => b.damage - a.damage)[0];
-        return `
-            <div class="miracle-user-card" style="display:grid;gap:10px;border-left:8px solid ${boss.color};">
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
-                    <img src="${escapeHtml(getBossAssetUrl(boss))}" alt="${escapeHtml(boss.name)}" style="width:96px;height:132px;object-fit:contain;filter:drop-shadow(0 14px 22px rgba(0,0,0,.32));">
-                    <div>
-                        <div style="font-size:1.16em;font-weight:1000;">${cleared ? "討伐済み" : "未討伐"} ${escapeHtml(boss.name)}</div>
-                        <div style="opacity:.82;line-height:1.65;">${escapeHtml(boss.title)} / HP ${boss.hp.toLocaleString()} / 制限 ${boss.timeLimitSec}秒 / 弱点 ${getBossWeaknessLabel(boss.weakness)}</div>
-                    </div>
-                    <button data-home-action="boss-start:${boss.id}" class="miracle-home-button miracle-home-primary">挑戦</button>
-                </div>
-                <div style="opacity:.82;line-height:1.65;">${escapeHtml(boss.description)}</div>
-                <div style="opacity:.74;">最高記録: ${best ? `${best.damage.toLocaleString()} damage / ${best.cleared ? "CLEAR" : "FAILED"}` : "-"}</div>
-            </div>
-        `;
-    }).join("");
-    showPopup("ボス実験モード", `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-home-hero">
-                <div style="font-size:clamp(30px,6vw,56px);font-weight:1000;line-height:1.1;">ULTRA MAX ボス実験</div>
-                <div style="margin-top:10px;line-height:1.8;">制限時間内にレア玉と奇跡玉でHPを削り切る運寄りの討伐実験です。投下数では終了せず、HP0で勝利、時間切れで失敗です。</div>
-            </div>
-            ${rows}
-        </div>
-    `);
+    showPopup("ボス実験モード", getBossExperimentPopupHtml({
+        bosses: BOSS_EXPERIMENT_DEFS,
+        cleared: savedRecords.bossCleared ?? {},
+        records: savedRecords.bossRecords ?? [],
+    }));
 }
 
 function startBossExperiment(bossId: string): void {
@@ -6652,76 +6203,15 @@ function getBossRenderOptions(): BossRenderOptions {
     };
 }
 
-function getWorldRoomCardHtml(title: string, subtitle: string, accent: string, actions: Array<{ label: string; action: string; primary?: boolean }>): string {
-    const buttons = actions.map((item) => `<button data-home-action="${escapeHtml(item.action)}" class="miracle-home-button ${item.primary ? "miracle-home-primary" : ""}">${escapeHtml(item.label)}</button>`).join("");
-    return `
-        <div class="miracle-user-card" style="min-height:190px;display:flex;flex-direction:column;justify-content:space-between;border-left:8px solid ${accent};">
-            <div>
-                <div style="font-size:1.2em;font-weight:1000;line-height:1.25;">${escapeHtml(title)}</div>
-                <div style="margin-top:8px;opacity:.80;line-height:1.7;">${escapeHtml(subtitle)}</div>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">${buttons}</div>
-        </div>
-    `;
-}
-
 function showResearchWorldMapPopup(): void {
     const rank = getCurrentResearchRankInfo();
-    const rooms = [
-        getWorldRoomCardHtml("落下実験ホール", "実験開始、プリセット、魔法陣で盤面へ入ります。", "#f59e0b", [
-            { label: "実験開始", action: "start", primary: true },
-            { label: "プリセット", action: "presets" },
-            { label: "魔法陣", action: "magic" },
-        ]),
-        getWorldRoomCardHtml("記録保管庫", "研究アーカイブ、アルバム、ログで過去の結果を整理します。", "#38bdf8", [
-            { label: "アーカイブ", action: "archive", primary: true },
-            { label: "アルバム", action: "album" },
-            { label: "奇跡ログ", action: "log" },
-        ]),
-        getWorldRoomCardHtml("収集展示室", "奇跡図鑑、テーマ図鑑、研究員ランクを確認します。", "#22c55e", [
-            { label: "奇跡図鑑", action: "book", primary: true },
-            { label: "テーマ", action: "themes" },
-            { label: "ランク", action: "rank" },
-        ]),
-        getWorldRoomCardHtml("ガチャ炉・購買部", "奇跡ガチャ、ガチャ履歴、研究所ショップへ移動します。", "#a855f7", [
-            { label: "奇跡ガチャ", action: "gacha", primary: true },
-            { label: "ショップ", action: "shop" },
-            { label: "ガチャ履歴", action: "gacha-log" },
-        ]),
-        getWorldRoomCardHtml("季節観測塔", "イベントシーズン、限定ミッション、奇跡率ブーストを確認します。", "#f97316", [
-            { label: "シーズン", action: "season", primary: true },
-            { label: "クラフト", action: "craft" },
-            { label: "テーマ", action: "themes" },
-        ]),
-        getWorldRoomCardHtml("奇跡工房", "発見済み奇跡の記録を素材条件にして研究報酬を錬成します。", "#14b8a6", [
-            { label: "クラフト", action: "craft", primary: true },
-            { label: "奇跡合成", action: "fusion" },
-            { label: "図鑑", action: "book" },
-        ]),
-        getWorldRoomCardHtml("ボス実験場", "特殊ルール付きの高難度討伐実験に挑戦します。", "#ef4444", [
-            { label: "ボス実験", action: "boss", primary: true },
-            { label: "討伐記録", action: "boss-log" },
-            { label: "プリセット", action: "presets" },
-        ]),
-        getWorldRoomCardHtml("使い魔研究室", "使い魔の育成、遠征、チケット確認を行います。", "#ec4899", [
-            { label: "使い魔", action: "familiar", primary: true },
-            { label: "チケット", action: "tickets" },
-            { label: "秘密ノート", action: "notes" },
-        ]),
-        getWorldRoomCardHtml("オフライン棟", "保存済み演出の図鑑と専用研究所をまとめます。動画保存は主任モード専用です。", "#64748b", [
-            { label: "研究所", action: "offline", primary: true },
-            { label: "図鑑", action: "offline-book" },
-        ]),
-    ].join("");
-    showPopup("研究所マップ", `
-        <div style="display:grid;gap:16px;">
-            <div class="miracle-home-hero">
-                <div style="font-size:clamp(30px,6vw,56px);font-weight:1000;line-height:1.1;">MiracleBallLab 研究所</div>
-                <div style="margin-top:12px;line-height:1.8;">研究員ランク <b>Lv.${rank.level} ${escapeHtml(rank.label)}</b> / 図鑑 <b>${getDiscoveredKindCount()}</b>種類 / 奇跡ガチャP <b>${getGachaPoint().toLocaleString()}P</b> / ショップ設備 <b>${Object.keys(savedRecords.shopPurchased ?? {}).length}</b></div>
-            </div>
-            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:14px;">${rooms}</div>
-        </div>
-    `);
+    showPopup("研究所マップ", getResearchWorldMapHtml({
+        rank,
+        discoveredKindCount: getDiscoveredKindCount(),
+        gachaPoint: getGachaPoint(),
+        shopPurchasedCount: Object.keys(savedRecords.shopPurchased ?? {}).length,
+        isMobile,
+    }));
 }
 
 function runLabHomeAction(action: string): void {
@@ -6883,83 +6373,12 @@ function saveCurrentResearchReport(): ResearchReportEntry {
 
 function showMiracleAlbumPopup(): void {
     const reports = savedRecords.researchReports ?? [];
-    const miracleRows = miracleLogs.slice(0, 20).map((log, index) => `
-        <div class="miracle-user-card" style="display:grid;gap:6px;">
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><b>${index + 1}. ${escapeHtml(log.label)} [${escapeHtml(log.rank)}]</b><span style="opacity:.72;">${new Date(log.finishedAt).toLocaleString()}</span></div>
-            <div style="opacity:.84;line-height:1.65;">${log.denominator > 0 ? formatProbability(log.denominator) : "派生解放"} / ${log.finishedCount.toLocaleString()}投目 / combo x${log.combo}${log.note ? ` / ${escapeHtml(log.note)}` : ""}</div>
-        </div>
-    `).join("") || `<p>まだ奇跡はありません。まずは実験を開始してください。</p>`;
-    const reportRows = reports.slice(0, 12).map((report) => `
-        <div class="miracle-user-card" style="display:grid;gap:6px;">
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;"><b>第${report.runNo}回 実験レポート / ${escapeHtml(report.grade)}</b><span style="opacity:.72;">${new Date(report.createdAt).toLocaleString()}</span></div>
-            <div style="opacity:.86;line-height:1.65;">${report.finishedCount.toLocaleString()}投下 / スコア ${report.score.toLocaleString()} / 最頻 ${escapeHtml(report.topLabel)} ${report.topCount.toLocaleString()}回 / 最高 ${escapeHtml(report.bestMiracleLabel)} [${escapeHtml(report.bestMiracleRank)}]</div>
-            <div style="opacity:.76;line-height:1.65;">${escapeHtml(report.memo)}</div>
-        </div>
-    `).join("") || `<p>実験完了後に研究レポートが保存されます。</p>`;
-    showPopup("奇跡アルバム", `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-user-card"><b>神引きコレクション</b><br><span style="opacity:.78;">奇跡ログと研究レポートを保存し、あとから振り返れるようにしました。</span></div>
-            <h3 style="margin:0;">奇跡カード</h3>
-            ${miracleRows}
-            <h3 style="margin:10px 0 0;">研究レポート履歴</h3>
-            ${reportRows}
-        </div>
-    `);
+    showPopup("奇跡アルバム", getMiracleAlbumHtml(miracleLogs, reports, formatProbability));
 }
 
 function showResearchArchivePopup(): void {
     const reports = savedRecords.researchReports ?? [];
-    const bestScore = reports.slice().sort((a, b) => b.score - a.score)[0];
-    const bestMiracle = reports.find((x) => x.bestMiracleRank !== "-");
-    const averageScore = reports.length > 0 ? Math.round(reports.reduce((sum, report) => sum + report.score, 0) / reports.length) : 0;
-    const totalFinished = reports.reduce((sum, report) => sum + report.finishedCount, 0);
-    const gradeCounts = reports.reduce<Record<string, number>>((acc, report) => {
-        acc[report.grade] = (acc[report.grade] ?? 0) + 1;
-        return acc;
-    }, {});
-    const typeCounts = reports.reduce<Record<string, number>>((acc, report) => {
-        acc[report.type] = (acc[report.type] ?? 0) + 1;
-        return acc;
-    }, {});
-    const typeSummary = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([type, count]) => `${escapeHtml(type)} ${count}`).join(" / ") || "-";
-    const rows = reports.map((report) => `
-        <div class="miracle-user-card" style="display:grid;gap:8px;">
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
-                <b>第${report.runNo}回 / ${escapeHtml(report.grade)} / ${escapeHtml(report.type)}</b>
-                <span style="opacity:.72;">${new Date(report.createdAt).toLocaleString()}</span>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;opacity:.86;">
-                <div>処理 ${report.finishedCount.toLocaleString()}</div>
-                <div>スコア ${report.score.toLocaleString()}</div>
-                <div>最頻 ${escapeHtml(report.topLabel)} ${report.topCount.toLocaleString()}</div>
-                <div>最高 ${escapeHtml(report.bestMiracleLabel)} [${escapeHtml(report.bestMiracleRank)}]</div>
-            </div>
-            <div style="opacity:.76;line-height:1.65;">${escapeHtml(report.memo)}</div>
-            <div><button class="miracle-home-button" data-report-id="${escapeHtml(report.id)}">詳細</button></div>
-        </div>
-    `).join("") || `<div class="miracle-user-card">まだ研究レポートはありません。実験を完了するとここに保存されます。</div>`;
-    showPopup("研究アーカイブ", `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-user-card">
-                <b>過去の研究レポートを集計します。</b><br>
-                <span style="opacity:.78;">実験完了時に保存された直近30件のレポートから、傾向とベスト記録を見返せます。</span>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
-                <div class="miracle-user-card"><b>保存数</b><br><span style="font-size:1.45em;font-weight:1000;">${reports.length}</span></div>
-                <div class="miracle-user-card"><b>平均スコア</b><br><span style="font-size:1.45em;font-weight:1000;">${averageScore.toLocaleString()}</span></div>
-                <div class="miracle-user-card"><b>総処理</b><br><span style="font-size:1.45em;font-weight:1000;">${totalFinished.toLocaleString()}</span></div>
-                <div class="miracle-user-card"><b>最高スコア</b><br>${bestScore ? `${bestScore.score.toLocaleString()} / 第${bestScore.runNo}回` : "-"}</div>
-                <div class="miracle-user-card"><b>最高奇跡</b><br>${bestMiracle ? `${escapeHtml(bestMiracle.bestMiracleLabel)} [${escapeHtml(bestMiracle.bestMiracleRank)}]` : "-"}</div>
-                <div class="miracle-user-card"><b>グレード</b><br>${Object.entries(gradeCounts).sort().map(([grade, count]) => `${escapeHtml(grade)} ${count}`).join(" / ") || "-"}</div>
-            </div>
-            <div class="miracle-user-card"><b>観測タイプ傾向</b><br><span style="opacity:.82;">${typeSummary}</span></div>
-            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-                <button id="archive-export-button" class="miracle-home-button miracle-home-primary">JSON書き出し</button>
-                <button id="archive-album-button" class="miracle-home-button">アルバムへ</button>
-            </div>
-            ${rows}
-        </div>
-    `);
+    showPopup("研究アーカイブ", getResearchArchiveHtml(reports));
     document.getElementById("archive-export-button")?.addEventListener("click", () => exportLocalUserData());
     document.getElementById("archive-album-button")?.addEventListener("click", () => showMiracleAlbumPopup());
     document.querySelectorAll<HTMLButtonElement>("[data-report-id]").forEach((button) => {
@@ -6971,27 +6390,7 @@ function showResearchArchivePopup(): void {
 }
 
 function showResearchReportDetailPopup(report: ResearchReportEntry): void {
-    showPopup(`第${report.runNo}回 研究レポート`, `
-        <div style="display:grid;gap:14px;">
-            <div class="miracle-user-card">
-                <b>${escapeHtml(report.grade)} / ${escapeHtml(report.type)}</b><br>
-                <span style="opacity:.78;">${new Date(report.createdAt).toLocaleString()}</span>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
-                <div class="miracle-user-card"><b>指定投下</b><br>${report.targetCount.toLocaleString()}</div>
-                <div class="miracle-user-card"><b>実処理</b><br>${report.finishedCount.toLocaleString()}</div>
-                <div class="miracle-user-card"><b>捨て区画</b><br>${report.discardedCount.toLocaleString()}</div>
-                <div class="miracle-user-card"><b>スコア</b><br>${report.score.toLocaleString()}</div>
-                <div class="miracle-user-card"><b>最頻受け皿</b><br>${escapeHtml(report.topLabel)} ${report.topCount.toLocaleString()}</div>
-                <div class="miracle-user-card"><b>最高奇跡</b><br>${escapeHtml(report.bestMiracleLabel)} [${escapeHtml(report.bestMiracleRank)}]</div>
-            </div>
-            <div class="miracle-user-card"><b>研究メモ</b><br><span style="opacity:.82;line-height:1.75;">${escapeHtml(report.memo)}</span></div>
-            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-                <button id="archive-detail-back-button" class="miracle-home-button miracle-home-primary">一覧へ戻る</button>
-                <button id="archive-detail-copy-button" class="miracle-home-button">内容コピー</button>
-            </div>
-        </div>
-    `);
+    showPopup(`第${report.runNo}回 研究レポート`, getResearchReportDetailHtml(report));
     document.getElementById("archive-detail-back-button")?.addEventListener("click", () => showResearchArchivePopup());
     document.getElementById("archive-detail-copy-button")?.addEventListener("click", async () => {
         const text = `第${report.runNo}回 研究レポート / ${report.grade} / ${report.type} / ${report.finishedCount}投下 / score ${report.score} / ${report.memo}`;
@@ -7009,12 +6408,11 @@ function showMiracleLogPopup(): void {
         showPopup(t("奇跡発生ログ", "Miracle log"), `<p>${t("まだ奇跡は発生していません。", "No miracles yet.")}</p>`);
         return;
     }
-    const rows = miracleLogs.map((log, i) => `
-        <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <div style="font-weight:900;">${i + 1}. ${log.label} [${log.rank}] ${log.denominator > 0 ? formatProbability(log.denominator) : "派生解放"}</div>
-            <div style="opacity:.78;">${t("投下位置", "Count")}: ${log.finishedCount.toLocaleString()} / ${t("モード", "Mode")}: ${log.mode} / ${t("速度", "Speed")}: ${isEnglish ? log.speedLabel : log.speedLabel} / combo x${log.combo}${log.note ? ` / ${log.note}` : ""}</div>
-            <div style="opacity:.62;">${new Date(log.finishedAt).toLocaleString()}</div>
-        </div>`).join("");
+    const rows = getMiracleLogHtml(miracleLogs, formatProbability, {
+        count: t("投下位置", "Count"),
+        mode: t("モード", "Mode"),
+        speed: t("速度", "Speed"),
+    });
     showPopup(t("奇跡発生ログ", "Miracle log"), rows);
 }
 
@@ -7138,61 +6536,14 @@ function triggerRareBoardCatastrophe(def?: SpecialEventDef, forcedKind?: RareBoa
 }
 
 function drawRareBoardCatastrophe(context: CanvasRenderingContext2D): void {
-    if (!rareBoardCatastrophe || Date.now() > rareBoardCatastropheUntil) return;
-    const def = rareBoardCatastrophe;
-    const elapsed = performance.now() - rareBoardCatastropheStartedAt;
-    const progress = clamp(elapsed / Math.max(1, def.duration), 0, 1);
-    const fade = Math.sin(progress * Math.PI);
-    context.save();
-    context.globalCompositeOperation = "source-over";
-    context.fillStyle = def.bg;
-    context.fillRect(0, 0, geometry.width, geometry.height);
-
-    context.globalCompositeOperation = "lighter";
-    context.strokeStyle = def.color;
-    context.fillStyle = def.color;
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.globalAlpha = 0.28 + fade * 0.42;
-
-    const waveCount = Math.min(8, def.waves + 2);
-    for (let i = 0; i < waveCount; i++) {
-        const r = (progress * 480 + i * 70) * geometry.scale;
-        context.lineWidth = Math.max(2, 5 * geometry.scale);
-        context.beginPath();
-        context.arc(geometry.width / 2, geometry.height * 0.42, r % (Math.max(geometry.width, geometry.height) * 0.7), 0, Math.PI * 2);
-        context.stroke();
-    }
-
-    for (let i = 0; i < def.lightning; i++) {
-        const seed = i * 37 + Math.floor(elapsed / 120);
-        const x = ((seed * 97) % Math.max(1, Math.floor(geometry.width)));
-        const top = 10 * geometry.scale;
-        const bottom = geometry.height * (0.25 + ((seed * 13) % 55) / 100);
-        context.lineWidth = Math.max(2, 3.5 * geometry.scale);
-        context.beginPath();
-        context.moveTo(x, top);
-        const segments = 5;
-        for (let s = 1; s <= segments; s++) {
-            const yy = top + (bottom - top) * (s / segments);
-            const xx = x + Math.sin(seed + s * 2.1) * 34 * geometry.scale;
-            context.lineTo(xx, yy);
-        }
-        context.stroke();
-    }
-
-    context.globalCompositeOperation = "source-over";
-    context.globalAlpha = 0.95;
-    context.font = `900 ${Math.round(clamp(24 * geometry.scale, 18, 44))}px ${ROUNDED_UI_FONT}`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillStyle = "rgba(255,255,255,.94)";
-    context.strokeStyle = "rgba(0,0,0,.55)";
-    context.lineWidth = Math.max(3, 5 * geometry.scale);
-    const label = `${def.emoji} ${def.label}`;
-    context.strokeText(label, geometry.width / 2, geometry.height * 0.13);
-    context.fillText(label, geometry.width / 2, geometry.height * 0.13);
-    context.restore();
+    drawRareBoardCatastropheFrame(context, {
+        catastrophe: rareBoardCatastrophe,
+        until: rareBoardCatastropheUntil,
+        startedAt: rareBoardCatastropheStartedAt,
+    }, {
+        geometry,
+        uiFont: ROUNDED_UI_FONT,
+    });
 }
 
 function applyRareBackground(kind: DropKind): void {
@@ -7430,27 +6781,17 @@ function showMiracleBookPopup(): void {
     const rows = SPECIAL_EVENT_DEFS.slice().reverse().map((def) => {
         const savedCount = savedRecords.discovered[def.kind] ?? 0;
         const nowCount = specialCreated[def.kind] ?? 0;
-        const totalCount = savedCount + nowCount;
-        const found = totalCount > 0;
-        const firstFoundAt = savedRecords.discoveredFirstAt[def.kind];
-        const displayName = found ? `${def.symbol} ${def.label}` : `??? シークレット枠`;
-        const imageHtml = `<div style="position:relative;width:${isMobile ? 98 : 112}px;height:${isMobile ? 98 : 112}px;">
-            <img src="${createMiracleImageDataUri(def)}" alt="${escapeSvgText(def.label)}" style="width:100%;height:100%;border-radius:22px;object-fit:cover;box-shadow:0 10px 24px rgba(0,0,0,.18);background:#0f172a;${found ? "" : "filter:saturate(.32) brightness(.72);opacity:.82;"}" />
-            ${found ? "" : `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:22px;background:rgba(15,23,42,.36);color:#fff;font-size:${isMobile ? 22 : 24}px;font-weight:1000;">?</div>`}
-        </div>`;
-        const firstFoundText = found && firstFoundAt ? new Date(firstFoundAt).toLocaleString() : "----";
-        return `<div style="display:grid;grid-template-columns:${isMobile ? "98px minmax(0,1fr)" : "112px minmax(0,1fr)"};gap:14px;align-items:start;padding:14px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <div>${imageHtml}</div>
-            <div style="min-width:0;">
-                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-                    <span style="display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:999px;background:${found ? "rgba(53,98,59,.14)" : "rgba(120,130,140,.14)"};font-weight:900;color:${found ? "#214329" : "#727a86"};">${def.rank}</span>
-                    <span style="font-size:${isMobile ? 21 : 22}px;font-weight:900;line-height:1.35;word-break:break-word;color:${found ? "#1d2738" : "#999"};">${displayName}</span>
-                </div>
-                <div style="margin-top:8px;font-size:${isMobile ? 15 : 16}px;line-height:1.7;opacity:.82;">${found ? getMiracleFeatureText(def) : "未発見のため詳細は伏せられています。観測すると画像・名前・説明が解放されます。"}</div>
-                <div style="margin-top:8px;font-size:${isMobile ? 15 : 16}px;line-height:1.6;opacity:.72;">${t("確率", "Odds")} ${found ? formatProbability(def.denominator) : "????"} / ${t("累計発見", "Total found")} ${totalCount}${t("回", "x")}</div>
-                <div style="margin-top:2px;font-size:${isMobile ? 14 : 15}px;line-height:1.6;opacity:.62;">${t("初回発見", "First found")} ${firstFoundText}</div>
-            </div>
-        </div>`;
+        return getMiracleBookRowHtml(def, {
+            savedCount,
+            currentCount: nowCount,
+            firstFoundAt: savedRecords.discoveredFirstAt[def.kind],
+            isMobile,
+            oddsLabel: t("確率", "Odds"),
+            oddsText: formatProbability(def.denominator),
+            totalFoundLabel: t("累計発見", "Total found"),
+            countSuffix: t("回", "x"),
+            firstFoundLabel: t("初回発見", "First found"),
+        });
     }).join("");
     showPopup("奇跡図鑑", `
         <p style="margin-top:0;">全ての奇跡を画像つきで表示します。未発見のものは<b>シークレット枠</b>として、名前・確率・説明を伏せたまま表示します。</p>
@@ -9696,17 +9037,7 @@ function showFullScreenCelebration(count: number): void {
 
 
 function getMiracleIconHtml(kind: DropKind, fallbackSymbol: string): string {
-    const def = findSpecialDef(kind);
-    if (def) {
-        const imageSize = "clamp(210px,62vw,430px)";
-        return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
-            <img src="${createMiracleImageDataUri(def)}" alt="${escapeSvgText(def.label)}" style="width:${imageSize};height:${imageSize};border-radius:clamp(28px,8vw,64px);object-fit:contain;background:rgba(15,23,42,.84);box-shadow:0 26px 80px rgba(0,0,0,.58),0 0 0 clamp(6px,1.2vw,12px) rgba(255,255,255,.18);filter:drop-shadow(0 18px 28px rgba(0,0,0,.42));" />
-        </div>`;
-    }
-    const label = fallbackSymbol || "奇";
-    const colors = getSpecialIconColors(kind);
-    const common = `display:inline-flex;align-items:center;justify-content:center;width:clamp(120px,34vw,230px);height:clamp(120px,34vw,230px);border-radius:999px;border:clamp(5px,1.2vw,10px) solid ${colors.stroke};background:radial-gradient(circle at 30% 25%, #fff 0%, ${colors.main} 36%, ${colors.sub} 100%);box-shadow:0 0 0 clamp(5px,1vw,14px) rgba(255,255,255,.18),0 0 60px ${colors.main};color:${colors.text};font-weight:1000;font-size:clamp(50px,14vw,118px);text-shadow:0 3px 0 rgba(0,0,0,.25);line-height:1;`;
-    return `<div style="${common}">${label}</div>`;
+    return getMiracleIconHtmlBase(kind, fallbackSymbol, findSpecialDef(kind));
 }
 
 async function playAnimeMiracleEffect(def?: SpecialEventDef): Promise<void> {
@@ -10373,182 +9704,12 @@ function showFinalResult(): void {
 // ======================================================
 
 function drawDiscardBinLabel(context: CanvasRenderingContext2D, physicalIndex: number): void {
-    const x = geometry.binLeft + physicalIndex * geometry.binWidth + geometry.binWidth / 2;
-    const labelFont = Math.round(clamp(geometry.labelFont * 0.78, isMobile ? 18 : 13, isMobile ? 36 : 30));
-    const countFont = Math.round(clamp(geometry.countFont * 0.88, isMobile ? 13 : 10, isMobile ? 28 : 26));
-    context.save();
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillStyle = "rgba(80, 86, 100, 0.18)";
-    context.fillRect(x - geometry.binWidth / 2, geometry.groundTop - 118 * geometry.scale, geometry.binWidth, 118 * geometry.scale);
-    context.font = `900 ${labelFont}px "Segoe UI", "Noto Sans JP", sans-serif`;
-    context.fillStyle = "#5b3b3b";
-    context.fillText("捨て", x, geometry.labelY - labelFont * 0.55);
-    context.fillText("区間", x, geometry.labelY + labelFont * 0.55);
-    context.font = `800 ${countFont}px "Segoe UI", "Noto Sans JP", sans-serif`;
-    context.fillStyle = "#6b4a4a";
-    context.fillText("対象外", x, geometry.countY);
-    context.restore();
+    drawDiscardBinLabelFrame(context, physicalIndex, geometry, isMobile);
 }
 
 
 function drawSpecialIcon(context: CanvasRenderingContext2D, kind: DropKind, x: number, y: number, radius: number, symbol: string): void {
-    const colors = getSpecialIconColors(kind);
-    const r = Math.max(radius * (isMobile ? 1.45 : 1.2), isMobile ? 22 : 18 * geometry.scale);
-    const time = Date.now() / 1000;
-    context.save();
-    context.translate(x, y);
-    context.rotate(kind === "timeRift" ? time * 1.8 : 0);
-
-    // 外側の太い縁。スマホでも「ただの光」に見えないよう、必ず実体を描く。
-    context.beginPath();
-    context.arc(0, 0, r * 1.08, 0, Math.PI * 2);
-    context.fillStyle = "rgba(255,255,255,.95)";
-    context.fill();
-
-    const grad = context.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
-    grad.addColorStop(0, "#ffffff");
-    grad.addColorStop(0.35, colors.main);
-    grad.addColorStop(1, colors.sub);
-    context.beginPath();
-    context.arc(0, 0, r, 0, Math.PI * 2);
-    context.fillStyle = grad;
-    context.fill();
-    context.lineWidth = Math.max(3, r * 0.14);
-    context.strokeStyle = colors.stroke;
-    context.stroke();
-
-    // 種類ごとの大きいシルエット
-    context.save();
-    context.globalAlpha = 0.95;
-    context.fillStyle = colors.text;
-    context.strokeStyle = "rgba(0,0,0,.35)";
-    context.lineWidth = Math.max(2, r * 0.07);
-
-    if (kind === "crown" || kind === "meteorCrown") {
-        context.beginPath();
-        context.moveTo(-r * 0.65, r * 0.25);
-        context.lineTo(-r * 0.45, -r * 0.38);
-        context.lineTo(-r * 0.15, r * 0.03);
-        context.lineTo(0, -r * 0.55);
-        context.lineTo(r * 0.15, r * 0.03);
-        context.lineTo(r * 0.45, -r * 0.38);
-        context.lineTo(r * 0.65, r * 0.25);
-        context.closePath();
-        context.fillStyle = "#ffd54a";
-        context.fill();
-        context.stroke();
-        context.fillStyle = "#3a2600";
-        context.font = `900 ${Math.round(r * 0.62)}px "Noto Sans JP", "Segoe UI", sans-serif`;
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.fillText(kind === "meteorCrown" ? "冠" : "王", 0, r * 0.15);
-    } else if (kind === "silverUfo") {
-        context.beginPath();
-        context.ellipse(0, r * 0.05, r * 0.82, r * 0.28, 0, 0, Math.PI * 2);
-        context.fillStyle = "#dce3e7";
-        context.fill(); context.stroke();
-        context.beginPath();
-        context.arc(0, -r * 0.08, r * 0.36, Math.PI, 0);
-        context.fillStyle = "#9bdcff";
-        context.fill(); context.stroke();
-    } else if (kind === "blueFlame") {
-        context.beginPath();
-        context.moveTo(0, -r * 0.78);
-        context.bezierCurveTo(r * 0.72, -r * 0.1, r * 0.36, r * 0.72, 0, r * 0.78);
-        context.bezierCurveTo(-r * 0.62, r * 0.3, -r * 0.55, -r * 0.15, 0, -r * 0.78);
-        context.closePath();
-        context.fillStyle = "#00c8ff";
-        context.fill(); context.stroke();
-        context.beginPath();
-        context.moveTo(0, -r * 0.32);
-        context.bezierCurveTo(r * 0.28, r * 0.12, r * 0.10, r * 0.42, 0, r * 0.5);
-        context.bezierCurveTo(-r * 0.22, r * 0.28, -r * 0.18, 0, 0, -r * 0.32);
-        context.fillStyle = "#ffffff";
-        context.fill();
-    } else if (kind === "timeRift" || kind === "pocketGalaxy") {
-        context.lineWidth = Math.max(4, r * 0.13);
-        for (let i = 0; i < 3; i++) {
-            context.beginPath();
-            context.arc(0, 0, r * (0.28 + i * 0.18), i * 0.9, Math.PI * 1.6 + i * 0.9);
-            context.strokeStyle = i % 2 ? "#ffffff" : "#00e5ff";
-            context.stroke();
-        }
-        context.fillStyle = "#ffffff";
-        context.font = `900 ${Math.round(r * 0.44)}px "Noto Sans JP", "Segoe UI", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
-        context.fillText(kind === "timeRift" ? "裂" : "銀", 0, 0);
-    } else if (kind === "heart") {
-        context.beginPath();
-        context.moveTo(0, r * 0.58);
-        context.bezierCurveTo(-r * 0.9, -r * 0.02, -r * 0.62, -r * 0.72, 0, -r * 0.36);
-        context.bezierCurveTo(r * 0.62, -r * 0.72, r * 0.9, -r * 0.02, 0, r * 0.58);
-        context.fillStyle = "#ff4da6";
-        context.fill(); context.stroke();
-    } else if (kind === "blackSun") {
-        for (let i = 0; i < 10; i++) {
-            const a = i * Math.PI * 2 / 10;
-            context.beginPath();
-            context.moveTo(Math.cos(a) * r * 0.75, Math.sin(a) * r * 0.75);
-            context.lineTo(Math.cos(a) * r * 1.18, Math.sin(a) * r * 1.18);
-            context.strokeStyle = "#ff0044";
-            context.lineWidth = Math.max(3, r * 0.1);
-            context.stroke();
-        }
-        context.beginPath(); context.arc(0,0,r*.62,0,Math.PI*2); context.fillStyle="#050505"; context.fill(); context.strokeStyle="#ff0044"; context.stroke();
-    } else if (kind === "poseidonMode") {
-        context.font = `900 ${Math.round(r * 0.88)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
-        context.fillText("🌊", 0, 0);
-    } else if (kind === "zeusuMode") {
-        context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
-        context.fillText("⚡", 0, 0);
-    } else if (kind === "hadesuMode") {
-        context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
-        context.fillText("☠️", 0, 0);
-    } else if (kind === "heartMode") {
-        context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
-        context.fillText("💗", 0, 0);
-    } else if (kind === "nekochanMode") {
-        context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
-        context.fillText("🐈", 0, 0);
-    } else if (kind === "lifeQuoteMode") {
-        context.fillStyle = "#ffffff";
-        context.font = `900 ${Math.round(r * 0.46)}px "Noto Sans JP", "Segoe UI", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
-        context.fillText("声", 0, 0);
-    } else if (kind === "labExplosion") {
-        context.beginPath();
-        for (let i = 0; i < 12; i++) {
-            const a = i * Math.PI * 2 / 12;
-            const rr = i % 2 ? r * 0.45 : r * 0.95;
-            const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
-            if (i === 0) context.moveTo(px, py); else context.lineTo(px, py);
-        }
-        context.closePath();
-        context.fillStyle = "#ff3b30";
-        context.fill(); context.stroke();
-        context.fillStyle = "#fff3b0";
-        context.font = `900 ${Math.round(r * 0.48)}px "Noto Sans JP", "Segoe UI", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
-        context.fillText("爆", 0, 0);
-    } else {
-        context.font = `900 ${Math.round(symbol.length >= 2 ? r * 0.58 : r * 0.78)}px "Noto Sans JP", "Yu Gothic", "Segoe UI", sans-serif`;
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.strokeStyle = "rgba(255,255,255,.85)";
-        context.lineWidth = Math.max(3, r * 0.09);
-        context.strokeText(symbol, 0, r * 0.03);
-        context.fillStyle = colors.text;
-        context.fillText(symbol, 0, r * 0.03);
-    }
-    context.restore();
-
-    context.restore();
+    drawSpecialIconFrame(context, kind, x, y, radius, symbol, { isMobile, geometry });
 }
 
 function drawTimeBallSkins(context: CanvasRenderingContext2D): void {
@@ -10575,512 +9736,54 @@ function draw3DBallShading(context: CanvasRenderingContext2D): void {
 }
 
 function drawNormalTraitMarks(context: CanvasRenderingContext2D): void {
-    if (settings.simpleMode) return;
-    context.save();
-    for (const body of engine.world.bodies) {
-        const plugin = (body as any).plugin;
-        if (!plugin?.isDrop || plugin.kind !== "normal" || !plugin.traitMark) continue;
-        const x = body.position.x;
-        const y = body.position.y;
-        const radius = body.circleRadius ?? plugin.originalRadius ?? geometry.ballRadius;
-        context.globalAlpha = plugin.traitKind === "ghost" ? 0.55 : 0.88;
-        context.beginPath();
-        context.arc(x, y, radius * 0.66, 0, Math.PI * 2);
-        context.fillStyle = "rgba(255,255,255,.42)";
-        context.fill();
-        context.font = `900 ${Math.round(clamp(radius * 0.66, 9, 20))}px "Noto Sans JP", "Yu Gothic", sans-serif`;
-        context.fillStyle = "rgba(15,23,42,.86)";
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.fillText(String(plugin.traitMark), x, y + radius * 0.03);
-    }
-    context.restore();
+    drawNormalTraitMarksFrame(context, engine.world.bodies, geometry.ballRadius, settings.simpleMode);
 }
 
 function drawRealisticPins(context: CanvasRenderingContext2D): void {
-    context.save();
-    for (const body of engine.world.bodies) {
-        const plugin = (body as any).plugin;
-        if (!plugin?.isPin) continue;
-        try { (body.render as any).visible = false; } catch {}
-        const rawRadius = body.circleRadius ?? geometry.pinRadius;
-        const radius = clamp(Math.max(rawRadius * 1.28, geometry.pinRadius * 1.42, 4 * geometry.scale), 3, 92 * geometry.scale);
-        const baseX = Number(plugin.baseX ?? body.position.x);
-        const baseY = Number(plugin.baseY ?? body.position.y);
-        const magicColor = plugin.isMagicBoardPin ? String(plugin.magicColor || (body.render as any)?.fillStyle || "#fde68a") : "";
-        const bend = clamp(Number(plugin.bendAmount ?? 0), -3.2, 3.2);
-        const headX = body.position.x + bend * radius * 0.18;
-        const headY = body.position.y + Math.abs(bend) * radius * 0.05;
-        const stretch = 1 + Math.min(0.55, Math.abs(bend) * 0.09);
-        const squash = Math.max(0.62, 1 - Math.abs(bend) * 0.05);
-        const rx = Math.max(2, radius * stretch);
-        const ry = Math.max(2, radius * squash);
-
-        context.save();
-        context.lineCap = "round";
-        context.lineJoin = "round";
-
-        // 盤面に刺さる金属ピンの軸。しなった時にゴムのように曲がって見えるよう、
-        // 土台位置から頭まで曲線でつなぎます。
-        const anchorX = baseX;
-        const anchorY = baseY + radius * 0.58;
-        const controlX = (anchorX + headX) / 2 + bend * radius * 0.78;
-        const controlY = (anchorY + headY) / 2 - radius * 0.35;
-        context.strokeStyle = "rgba(20,24,34,.32)";
-        context.lineWidth = Math.max(2, radius * 0.28);
-        context.beginPath();
-        context.moveTo(anchorX + radius * 0.10, anchorY + radius * 0.18);
-        context.quadraticCurveTo(controlX + radius * 0.10, controlY + radius * 0.18, headX + radius * 0.10, headY + radius * 0.08);
-        context.stroke();
-
-        const stemGrad = context.createLinearGradient(anchorX - radius, anchorY, headX + radius, headY);
-        stemGrad.addColorStop(0, "rgba(255,255,245,.95)");
-        stemGrad.addColorStop(0.34, "rgba(244,202,92,.95)");
-        stemGrad.addColorStop(0.68, "rgba(122,78,22,.92)");
-        stemGrad.addColorStop(1, "rgba(255,247,190,.88)");
-        context.strokeStyle = stemGrad;
-        context.lineWidth = Math.max(2, radius * 0.18);
-        context.beginPath();
-        context.moveTo(anchorX, anchorY);
-        context.quadraticCurveTo(controlX, controlY, headX, headY + radius * 0.06);
-        context.stroke();
-
-        // 土台の影。
-        context.fillStyle = "rgba(0,0,0,.20)";
-        context.beginPath();
-        context.ellipse(baseX + radius * 0.16, baseY + radius * 0.62, Math.max(2, radius * 0.90), Math.max(2, radius * 0.30), 0, 0, Math.PI * 2);
-        context.fill();
-
-        context.translate(headX, headY);
-        context.rotate(bend * 0.10);
-
-        const base = context.createRadialGradient(-rx * 0.30, -ry * 0.36, Math.max(1, radius * 0.12), 0, 0, Math.max(2, radius * 1.18));
-        if (magicColor) {
-            base.addColorStop(0, "rgba(255,255,255,.98)");
-            base.addColorStop(0.22, magicColor);
-            base.addColorStop(0.56, magicColor);
-            base.addColorStop(0.82, "rgba(15,23,42,.86)");
-            base.addColorStop(1, magicColor);
-        } else {
-            base.addColorStop(0, "rgba(255,255,248,.98)");
-            base.addColorStop(0.20, "rgba(255,236,148,.98)");
-            base.addColorStop(0.48, "rgba(214,149,35,.98)");
-            base.addColorStop(0.76, "rgba(129,81,18,.98)");
-            base.addColorStop(1, "rgba(255,239,145,.92)");
-        }
-        context.fillStyle = base;
-        context.beginPath();
-        context.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-        context.fill();
-
-        const shine = context.createLinearGradient(-rx, -ry, rx, ry);
-        shine.addColorStop(0, "rgba(255,255,255,.92)");
-        shine.addColorStop(0.30, "rgba(255,255,255,.16)");
-        shine.addColorStop(0.52, "rgba(255,255,255,0)");
-        shine.addColorStop(0.68, "rgba(255,245,180,.34)");
-        shine.addColorStop(1, "rgba(0,0,0,.20)");
-        context.fillStyle = shine;
-        context.beginPath();
-        context.ellipse(0, 0, rx * 0.96, ry * 0.96, 0, 0, Math.PI * 2);
-        context.fill();
-
-        context.fillStyle = "rgba(255,255,255,.72)";
-        context.beginPath();
-        context.ellipse(-rx * 0.28, -ry * 0.34, Math.max(1, rx * 0.25), Math.max(1, ry * 0.16), -0.55, 0, Math.PI * 2);
-        context.fill();
-
-        context.strokeStyle = "rgba(255,246,190,.96)";
-        context.lineWidth = Math.max(1, radius * 0.12);
-        context.beginPath();
-        context.ellipse(0, 0, rx * 0.88, ry * 0.88, 0, Math.PI * 0.82, Math.PI * 1.82);
-        context.stroke();
-        context.strokeStyle = "rgba(52,32,7,.34)";
-        context.lineWidth = Math.max(1, radius * 0.08);
-        context.beginPath();
-        context.ellipse(0, 0, rx * 0.95, ry * 0.95, 0, Math.PI * 0.02, Math.PI * 0.92);
-        context.stroke();
-        context.restore();
-    }
-    context.restore();
+    drawRealisticPinsFrame(context, engine.world.bodies, geometry);
 }
 
 function drawMagicCircleTrace(context: CanvasRenderingContext2D): void {
-    if (!magicCircleModeEnabled && magicCirclePoints.length === 0) return;
-    const points = magicCirclePoints;
-    context.save();
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.globalCompositeOperation = "lighter";
-    if (points.length >= 2) {
-        const pulse = 0.55 + Math.sin(performance.now() / 120) * 0.25;
-        context.strokeStyle = `rgba(180,235,255,${0.58 + pulse * 0.28})`;
-        context.lineWidth = Math.max(5 * geometry.scale, 4);
-        context.beginPath();
-        context.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) context.lineTo(points[i].x, points[i].y);
-        context.stroke();
-        context.strokeStyle = "rgba(255,255,255,.92)";
-        context.lineWidth = Math.max(1.5 * geometry.scale, 1.2);
-        context.stroke();
-        const rc = getRoughCanvas();
-        if (rc && points.length > 4 && !settings.simpleMode) {
-            const xs = points.map((p) => p.x);
-            const ys = points.map((p) => p.y);
-            const minX = Math.min(...xs);
-            const maxX = Math.max(...xs);
-            const minY = Math.min(...ys);
-            const maxY = Math.max(...ys);
-            const w = Math.max(24 * geometry.scale, maxX - minX);
-            const h = Math.max(24 * geometry.scale, maxY - minY);
-            rc.ellipse(minX + w / 2, minY + h / 2, w * 1.16, h * 1.16, {
-                stroke: "rgba(255,255,255,.56)",
-                strokeWidth: Math.max(1.2, 2 * geometry.scale),
-                roughness: 2.4,
-                bowing: 1.6,
-            });
-        }
-    }
-    if (magicCircleModeEnabled) {
-        const last = points[points.length - 1];
-        const cx = last?.x ?? geometry.width / 2;
-        const cy = last?.y ?? geometry.height * 0.32;
-        const r = Math.max(28 * geometry.scale, 20);
-        context.strokeStyle = "rgba(255,255,255,.70)";
-        context.lineWidth = Math.max(2 * geometry.scale, 1.5);
-        context.beginPath();
-        context.arc(cx, cy, r, 0, Math.PI * 2);
-        context.stroke();
-        context.fillStyle = "rgba(255,255,255,.90)";
-        context.font = `900 ${Math.round(clamp(18 * geometry.scale, 13, 28))}px ${ROUNDED_UI_FONT}`;
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.fillText("描画中", cx, cy - r - 14 * geometry.scale);
-    }
-    context.restore();
+    drawMagicCircleTraceFrame(context, magicCirclePoints, {
+        enabled: magicCircleModeEnabled,
+        simpleMode: settings.simpleMode,
+        geometry,
+        uiFont: ROUNDED_UI_FONT,
+        roughCanvas: getRoughCanvas(),
+    });
 }
 
 function drawBoardDepthOverlay(context: CanvasRenderingContext2D): void {
-    context.save();
-    context.globalCompositeOperation = "source-over";
-    const scale = geometry.scale || 1;
-    const left = Math.max(geometry.wallWidth * 0.58, 10 * scale);
-    const top = Math.max(10 * scale, 8);
-    const right = geometry.width - left;
-    const bottom = Math.max(geometry.groundTop - 12 * scale, top + 40 * scale);
-    const w = Math.max(20 * scale, right - left);
-    const h = Math.max(20 * scale, bottom - top);
-    const radius = Math.max(18 * scale, 14);
-    const richAlpha = settings.simpleMode ? 0.55 : 1;
-
-    // 外側の高級メタルフレーム。simpleModeでも消さず、軽めに描画します。
-    const frame = context.createLinearGradient(left, top, right, bottom);
-    frame.addColorStop(0, `rgba(255,255,255,${0.58 * richAlpha})`);
-    frame.addColorStop(0.18, `rgba(210,223,238,${0.30 * richAlpha})`);
-    frame.addColorStop(0.45, `rgba(94,111,132,${0.32 * richAlpha})`);
-    frame.addColorStop(0.70, `rgba(255,230,145,${0.30 * richAlpha})`);
-    frame.addColorStop(1, `rgba(255,255,255,${0.42 * richAlpha})`);
-    context.strokeStyle = frame;
-    context.lineWidth = Math.max(5 * scale, 3);
-    roundRect(context, left, top, w, h, radius);
-    context.stroke();
-
-    context.strokeStyle = `rgba(255,255,255,${0.34 * richAlpha})`;
-    context.lineWidth = Math.max(2 * scale, 1.5);
-    roundRect(context, left + 7 * scale, top + 7 * scale, Math.max(8, w - 14 * scale), Math.max(8, h - 14 * scale), Math.max(8, radius - 7 * scale));
-    context.stroke();
-
-    context.strokeStyle = `rgba(0,0,0,${0.26 * richAlpha})`;
-    context.lineWidth = Math.max(2 * scale, 1);
-    roundRect(context, left + 3 * scale, top + 3 * scale, Math.max(8, w - 6 * scale), Math.max(8, h - 6 * scale), Math.max(8, radius - 3 * scale));
-    context.stroke();
-
-    // 盤面ガラスの斜め反射。常時表示して、奥行きと高級感を出します。
-    const glass = context.createLinearGradient(0, 0, geometry.width, geometry.height);
-    glass.addColorStop(0, `rgba(255,255,255,${0.24 * richAlpha})`);
-    glass.addColorStop(0.22, `rgba(255,255,255,${0.07 * richAlpha})`);
-    glass.addColorStop(0.38, "rgba(255,255,255,0)");
-    glass.addColorStop(0.68, "rgba(0,0,0,0)");
-    glass.addColorStop(1, `rgba(0,0,0,${0.16 * richAlpha})`);
-    context.fillStyle = glass;
-    context.fillRect(0, 0, geometry.width, geometry.height);
-
-    if (!settings.simpleMode && !isMobileStableRuntime()) {
-        context.save();
-        context.globalCompositeOperation = "screen";
-        const sweepX = (performance.now() / 42) % (geometry.width + geometry.height) - geometry.height;
-        const sweep = context.createLinearGradient(sweepX, 0, sweepX + geometry.height * 0.55, geometry.height);
-        sweep.addColorStop(0, "rgba(255,255,255,0)");
-        sweep.addColorStop(0.42, "rgba(255,255,255,0)");
-        sweep.addColorStop(0.50, "rgba(255,255,255,.18)");
-        sweep.addColorStop(0.58, "rgba(255,255,255,0)");
-        sweep.addColorStop(1, "rgba(255,255,255,0)");
-        context.fillStyle = sweep;
-        context.fillRect(0, 0, geometry.width, geometry.height);
-        context.restore();
-
-        // 左右の透明アクリル柱。
-        const railW = Math.max(16 * scale, 8);
-        const rail = context.createLinearGradient(0, top, railW, top);
-        rail.addColorStop(0, "rgba(255,255,255,.28)");
-        rail.addColorStop(0.45, "rgba(255,255,255,.06)");
-        rail.addColorStop(1, "rgba(0,0,0,.20)");
-        context.fillStyle = rail;
-        roundRect(context, left - railW * 0.45, top + 10 * scale, railW, Math.max(10, h - 20 * scale), railW / 2);
-        context.fill();
-        context.save();
-        context.translate(geometry.width, 0);
-        context.scale(-1, 1);
-        context.fillStyle = rail;
-        roundRect(context, left - railW * 0.45, top + 10 * scale, railW, Math.max(10, h - 20 * scale), railW / 2);
-        context.fill();
-        context.restore();
-
-        // 四隅の宝石っぽい輝き。
-        const corners: Array<[number, number, number]> = [
-            [left + radius * 0.7, top + radius * 0.7, 0],
-            [right - radius * 0.7, top + radius * 0.7, Math.PI * 0.5],
-            [left + radius * 0.7, bottom - radius * 0.7, Math.PI * 1.5],
-            [right - radius * 0.7, bottom - radius * 0.7, Math.PI],
-        ];
-        for (const [cx, cy, angle] of corners) {
-            context.save();
-            context.translate(cx, cy);
-            context.rotate(angle);
-            const glow = context.createRadialGradient(0, 0, 0, 0, 0, radius * 1.6);
-            glow.addColorStop(0, "rgba(255,240,170,.26)");
-            glow.addColorStop(0.45, "rgba(255,255,255,.10)");
-            glow.addColorStop(1, "rgba(255,255,255,0)");
-            context.fillStyle = glow;
-            context.beginPath();
-            context.arc(0, 0, radius * 1.6, 0, Math.PI * 2);
-            context.fill();
-            context.strokeStyle = "rgba(255,240,170,.35)";
-            context.lineWidth = Math.max(1, 1.3 * scale);
-            context.beginPath();
-            context.moveTo(-radius * 0.8, 0);
-            context.lineTo(radius * 0.8, 0);
-            context.moveTo(0, -radius * 0.8);
-            context.lineTo(0, radius * 0.8);
-            context.stroke();
-            context.restore();
-        }
-    }
-
-    // 下側は少し暗くして、盤面の奥行きを固定で見せる。
-    const bottomDepth = context.createLinearGradient(0, geometry.groundTop - 150 * scale, 0, geometry.height);
-    bottomDepth.addColorStop(0, "rgba(0,0,0,0)");
-    bottomDepth.addColorStop(0.65, `rgba(0,0,0,${0.08 * richAlpha})`);
-    bottomDepth.addColorStop(1, `rgba(0,0,0,${0.22 * richAlpha})`);
-    context.fillStyle = bottomDepth;
-    context.fillRect(0, Math.max(0, geometry.groundTop - 150 * scale), geometry.width, Math.max(0, geometry.height - (geometry.groundTop - 150 * scale)));
-
-    context.restore();
+    drawBoardDepthOverlayFrame(context, geometry, settings.simpleMode, isMobileStableRuntime());
 }
 
 function drawLuxuryBoardForeground(context: CanvasRenderingContext2D): void {
-    const scale = geometry.scale || 1;
-    const left = Math.max(geometry.wallWidth * 0.44, 8 * scale);
-    const top = Math.max(8 * scale, 6);
-    const right = geometry.width - left;
-    const bottom = Math.max(geometry.groundTop - 8 * scale, top + 50 * scale);
-    const w = Math.max(40 * scale, right - left);
-    const h = Math.max(40 * scale, bottom - top);
-    const radius = Math.max(22 * scale, 16);
-    const time = performance.now() / 1000;
-
-    context.save();
-    context.globalCompositeOperation = "source-over";
-
-    // 前面の厚いクロームフレーム。背景側ではなく最後に重ねるので必ず見えます。
-    const chrome = context.createLinearGradient(left, top, right, bottom);
-    chrome.addColorStop(0, "rgba(255,255,255,.82)");
-    chrome.addColorStop(0.16, "rgba(195,210,228,.42)");
-    chrome.addColorStop(0.36, "rgba(66,82,105,.36)");
-    chrome.addColorStop(0.58, "rgba(255,238,150,.46)");
-    chrome.addColorStop(0.78, "rgba(86,102,126,.30)");
-    chrome.addColorStop(1, "rgba(255,255,255,.70)");
-    context.strokeStyle = chrome;
-    context.lineWidth = Math.max(7 * scale, 4);
-    roundRect(context, left, top, w, h, radius);
-    context.stroke();
-
-    context.strokeStyle = "rgba(255,255,255,.38)";
-    context.lineWidth = Math.max(2.5 * scale, 1.5);
-    roundRect(context, left + 8 * scale, top + 8 * scale, Math.max(10, w - 16 * scale), Math.max(10, h - 16 * scale), Math.max(8, radius - 8 * scale));
-    context.stroke();
-
-    if (!isMobileStableRuntime()) {
-        // ガラス反射を前面に薄く重ねる。スマホ実行中は白スイープがフラッシュに見えるため止める。
-        context.save();
-        context.globalCompositeOperation = "screen";
-        const glass = context.createLinearGradient(0, 0, geometry.width, geometry.height);
-        glass.addColorStop(0, "rgba(255,255,255,.25)");
-        glass.addColorStop(0.28, "rgba(255,255,255,.05)");
-        glass.addColorStop(0.46, "rgba(255,255,255,0)");
-        glass.addColorStop(0.78, "rgba(255,255,255,.08)");
-        glass.addColorStop(1, "rgba(255,255,255,.18)");
-        context.fillStyle = glass;
-        context.fillRect(0, 0, geometry.width, bottom);
-
-        const sweepX = ((time * 95) % (geometry.width + geometry.height)) - geometry.height;
-        const sweep = context.createLinearGradient(sweepX, 0, sweepX + geometry.height * 0.62, geometry.height);
-        sweep.addColorStop(0, "rgba(255,255,255,0)");
-        sweep.addColorStop(0.45, "rgba(255,255,255,0)");
-        sweep.addColorStop(0.51, "rgba(255,255,255,.22)");
-        sweep.addColorStop(0.58, "rgba(255,255,255,0)");
-        sweep.addColorStop(1, "rgba(255,255,255,0)");
-        context.fillStyle = sweep;
-        context.fillRect(0, 0, geometry.width, bottom);
-        context.restore();
-    }
-
-    // 奥行きをわかりやすくする下側の影。
-    const depth = context.createLinearGradient(0, bottom - 80 * scale, 0, geometry.height);
-    depth.addColorStop(0, "rgba(0,0,0,0)");
-    depth.addColorStop(1, "rgba(0,0,0,.26)");
-    context.fillStyle = depth;
-    context.fillRect(0, Math.max(0, bottom - 80 * scale), geometry.width, geometry.height - Math.max(0, bottom - 80 * scale));
-
-    // 両サイドに宝石感のある縦光。
-    for (const side of [-1, 1]) {
-        const cx = side < 0 ? left + 18 * scale : right - 18 * scale;
-        const glow = context.createLinearGradient(cx - side * 10 * scale, top, cx + side * 10 * scale, bottom);
-        glow.addColorStop(0, "rgba(255,255,255,.28)");
-        glow.addColorStop(0.45, "rgba(135,205,255,.10)");
-        glow.addColorStop(1, "rgba(255,236,160,.20)");
-        context.fillStyle = glow;
-        roundRect(context, cx - 5 * scale, top + 18 * scale, 10 * scale, Math.max(10, h - 36 * scale), 999);
-        context.fill();
-    }
-
-    context.restore();
+    drawLuxuryBoardForegroundFrame(context, geometry, isMobileStableRuntime());
 }
 
 function drawMobileRuntimeStableFrame(context: CanvasRenderingContext2D): void {
-    const scale = geometry.scale || 1;
-    const left = Math.max(geometry.wallWidth * 0.50, 8 * scale);
-    const top = Math.max(8 * scale, 6);
-    const right = geometry.width - left;
-    const bottom = Math.max(geometry.groundTop - 8 * scale, top + 50 * scale);
-    const w = Math.max(40 * scale, right - left);
-    const h = Math.max(40 * scale, bottom - top);
-    const radius = Math.max(22 * scale, 16);
-
-    context.save();
-    context.globalCompositeOperation = "source-over";
-    context.strokeStyle = "rgba(190,202,216,.72)";
-    context.lineWidth = Math.max(5 * scale, 3);
-    roundRect(context, left, top, w, h, radius);
-    context.stroke();
-    context.strokeStyle = "rgba(30,38,52,.72)";
-    context.lineWidth = Math.max(2 * scale, 1.5);
-    roundRect(context, left + 5 * scale, top + 5 * scale, Math.max(8, w - 10 * scale), Math.max(8, h - 10 * scale), Math.max(8, radius - 5 * scale));
-    context.stroke();
-    context.restore();
+    drawMobileRuntimeStableFrameBase(context, geometry);
 }
 
 function drawSpecialGlows(context: CanvasRenderingContext2D): void {
-    if (settings.simpleMode) return;
-    const time = Date.now() / 1000;
-    context.save();
-    for (const body of engine.world.bodies) {
-        const plugin = (body as any).plugin;
-        if (!plugin?.isDrop) continue;
-        const kind = plugin.kind as DropKind;
-        const def = findSpecialDef(kind);
-        if (!def && !["gold", "rainbow"].includes(kind)) continue;
-        const x = body.position.x;
-        const y = body.position.y;
-        const radius = body.circleRadius ?? plugin.originalRadius ?? geometry.ballRadius;
-        const pulse = 0.75 + Math.sin(time * 9) * 0.25;
-        let colors = ["255,215,0", "255,170,0"];
-        if (kind === "rainbow") colors = ["190,100,255", "80,180,255"];
-        if (def) {
-            const c = getSpecialIconColors(kind);
-            colors = hexToRgbTriplet(c.main, "255,215,0") ? [hexToRgbTriplet(c.main, "255,215,0"), hexToRgbTriplet(c.sub, "255,170,0")] : colors;
-        }
-
-        // 光は控えめ。アイコン本体を見せるため、スマホでは特に薄くする。
-        context.save();
-        context.globalCompositeOperation = "lighter";
-        const glow = context.createRadialGradient(x, y, radius * 0.25, x, y, radius * (isMobile ? 3.0 : 4.5));
-        glow.addColorStop(0, `rgba(${colors[0]}, ${0.42 * pulse})`);
-        glow.addColorStop(0.72, `rgba(${colors[1]}, ${0.18 * pulse})`);
-        glow.addColorStop(1, `rgba(${colors[1]}, 0)`);
-        context.fillStyle = glow;
-        context.beginPath();
-        context.arc(x, y, radius * (isMobile ? 3.0 : 4.5), 0, Math.PI * 2);
-        context.fill();
-        context.restore();
-
-        if (def) {
-            drawSpecialIcon(context, kind, x, y, Math.max(radius, isMobile ? 20 : 14 * geometry.scale), plugin.symbol || def.symbol);
-        }
-
-        if (kind === "gold" || kind === "rainbow") {
-            for (let i = 0; i < 6; i++) {
-                const angle = time * 2.5 + i * Math.PI * 2 / 6;
-                drawSparkle(context, x + Math.cos(angle) * radius * 2.6, y + Math.sin(angle) * radius * 2.6, 5 * geometry.scale, "rgba(255,255,220,.95)", angle);
-            }
-        }
-    }
-    context.restore();
+    drawSpecialGlowsFrame(context, engine.world.bodies, {
+        simpleMode: settings.simpleMode,
+        isMobile,
+        geometry,
+        findSpecialDef,
+        drawSpecialIcon,
+    });
 }
 
 function drawPachinkoMachine(context: CanvasRenderingContext2D): void {
-    const time = performance.now() / 1000;
-    context.save();
-    context.globalCompositeOperation = "destination-over";
-    const framePad = Math.max(geometry.wallWidth * 0.38, 8 * geometry.scale);
-    const panelGradient = context.createLinearGradient(0, 0, 0, geometry.height);
-    panelGradient.addColorStop(0, settings.blackModeEnabled ? "rgba(0,0,0,.94)" : "rgba(68,10,20,.86)");
-    panelGradient.addColorStop(0.55, settings.blackModeEnabled ? "rgba(10,10,10,.76)" : "rgba(22,18,24,.46)");
-    panelGradient.addColorStop(1, settings.blackModeEnabled ? "rgba(0,0,0,.98)" : "rgba(102,19,32,.82)");
-    context.fillStyle = panelGradient;
-    context.fillRect(0, 0, geometry.width, geometry.height);
-
-    context.strokeStyle = settings.blackModeEnabled ? "rgba(255,255,255,.22)" : "rgba(255,214,96,.75)";
-    context.lineWidth = Math.max(8 * geometry.scale, 4);
-    context.strokeRect(framePad, framePad, geometry.width - framePad * 2, geometry.height - geometry.groundHeight - framePad * 1.4);
-
-    const cx = geometry.width / 2;
-    const cy = geometry.height * 0.43;
-    const ringRadius = Math.min(geometry.width, geometry.height) * 0.18;
-    context.beginPath();
-    context.arc(cx, cy, ringRadius, 0, Math.PI * 2);
-    context.strokeStyle = settings.blackModeEnabled ? "rgba(255,255,255,.30)" : "rgba(255,230,130,.82)";
-    context.lineWidth = Math.max(10 * geometry.scale, 5);
-    context.stroke();
-    context.beginPath();
-    context.arc(cx, cy, ringRadius * 0.62 + Math.sin(time * 2) * 3 * geometry.scale, 0, Math.PI * 2);
-    context.strokeStyle = "rgba(255,255,255,.18)";
-    context.lineWidth = Math.max(4 * geometry.scale, 2);
-    context.stroke();
-
-    for (const def of PACHINKO_YAKUMONO_DEFS) {
-        const x = geometry.width * def.xRatio;
-        const y = geometry.height * def.yRatio;
-        const w = clamp(geometry.width * def.widthRatio, 82 * geometry.scale, 260 * geometry.scale);
-        const h = clamp(def.height * geometry.scale, 12, 32);
-        const glow = kindYakumonoAlpha(def.kind);
-        context.fillStyle = `rgba(${hexToRgbTriplet(def.color, "250,204,21")},${0.24 + glow * 0.32})`;
-        roundRect(context, x - w / 2, y - h / 2, w, h, h / 2);
-        context.fill();
-        context.strokeStyle = `rgba(${hexToRgbTriplet(def.color, "250,204,21")},.92)`;
-        context.lineWidth = Math.max(2 * geometry.scale, 1);
-        context.stroke();
-        context.font = `900 ${Math.round(clamp(15 * geometry.scale, 11, 24))}px ${ROUNDED_UI_FONT}`;
-        context.fillStyle = settings.blackModeEnabled ? "#f8fafc" : "#fff7cc";
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.fillText(def.label, x, y);
-    }
-
-    context.font = `900 ${Math.round(clamp(18 * geometry.scale, 12, 28))}px ${ROUNDED_UI_FONT}`;
-    context.fillStyle = settings.blackModeEnabled ? "rgba(255,255,255,.72)" : "rgba(255,239,200,.86)";
-    context.textAlign = "center";
-    context.fillText(`MIRACLE BALL LAB / ${currentPachinkoNailPattern.toUpperCase()}`, geometry.width / 2, Math.max(26 * geometry.scale, 20));
-    context.restore();
+    drawPachinkoMachineFrame(context, {
+        geometry,
+        yakumonoDefs: PACHINKO_YAKUMONO_DEFS,
+        blackModeEnabled: settings.blackModeEnabled,
+        uiFont: ROUNDED_UI_FONT,
+        currentPattern: currentPachinkoNailPattern,
+        getYakumonoAlpha: kindYakumonoAlpha,
+    });
 }
 
 function kindYakumonoAlpha(kind: PachinkoYakumonoKind): number {

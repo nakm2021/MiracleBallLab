@@ -1,4 +1,6 @@
-import type { SpecialEventDef } from "./types";
+import type { DropKind, SpecialEventDef } from "./types";
+import { getSpecialIconColors } from "./drawing";
+import { escapeHtml } from "./utils";
 
 export function getMiracleFeatureText(def: SpecialEventDef): string {
     const prefix = def.label.replace(/mode$/i, "モード").replace(/\s+/g, "");
@@ -102,4 +104,60 @@ export function createMiracleImageDataUri(def: SpecialEventDef): string {
         <text x="160" y="280" text-anchor="middle" font-size="44" font-family="M PLUS Rounded 1c, Zen Maru Gothic, Segoe UI Emoji, Noto Sans JP, sans-serif" font-weight="900" fill="#f8fafc">${emoji}</text>
     </svg>`;
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+export function getMiracleIconHtml(kind: DropKind, fallbackSymbol: string, def?: SpecialEventDef | null): string {
+    if (def) {
+        const imageSize = "clamp(210px,62vw,430px)";
+        return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <img src="${createMiracleImageDataUri(def)}" alt="${escapeSvgText(def.label)}" style="width:${imageSize};height:${imageSize};border-radius:clamp(28px,8vw,64px);object-fit:contain;background:rgba(15,23,42,.84);box-shadow:0 26px 80px rgba(0,0,0,.58),0 0 0 clamp(6px,1.2vw,12px) rgba(255,255,255,.18);filter:drop-shadow(0 18px 28px rgba(0,0,0,.42));" />
+        </div>`;
+    }
+    const label = fallbackSymbol || "奇";
+    const colors = getSpecialIconColors(kind);
+    const common = `display:inline-flex;align-items:center;justify-content:center;width:clamp(120px,34vw,230px);height:clamp(120px,34vw,230px);border-radius:999px;border:clamp(5px,1.2vw,10px) solid ${colors.stroke};background:radial-gradient(circle at 30% 25%, #fff 0%, ${colors.main} 36%, ${colors.sub} 100%);box-shadow:0 0 0 clamp(5px,1vw,14px) rgba(255,255,255,.18),0 0 60px ${colors.main};color:${colors.text};font-weight:1000;font-size:clamp(50px,14vw,118px);text-shadow:0 3px 0 rgba(0,0,0,.25);line-height:1;`;
+    return `<div style="${common}">${label}</div>`;
+}
+
+export function getGachaRewardImageHtml(def: SpecialEventDef, label: string, isMobile: boolean): string {
+    return `<img src="${createMiracleImageDataUri(def)}" alt="${escapeHtml(label)}" style="width:${isMobile ? 70 : 82}px;height:${isMobile ? 70 : 82}px;border-radius:18px;object-fit:cover;background:#0f172a;box-shadow:0 10px 24px rgba(0,0,0,.18);" />`;
+}
+
+export function getMiracleBookImageHtml(def: SpecialEventDef, found: boolean, isMobile: boolean): string {
+    return `<div style="position:relative;width:${isMobile ? 98 : 112}px;height:${isMobile ? 98 : 112}px;">
+        <img src="${createMiracleImageDataUri(def)}" alt="${escapeSvgText(def.label)}" style="width:100%;height:100%;border-radius:22px;object-fit:cover;box-shadow:0 10px 24px rgba(0,0,0,.18);background:#0f172a;${found ? "" : "filter:saturate(.32) brightness(.72);opacity:.82;"}" />
+        ${found ? "" : `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:22px;background:rgba(15,23,42,.36);color:#fff;font-size:${isMobile ? 22 : 24}px;font-weight:1000;">?</div>`}
+    </div>`;
+}
+
+export function getMiracleBookRowHtml(def: SpecialEventDef, options: {
+    savedCount: number;
+    currentCount: number;
+    firstFoundAt?: number;
+    isMobile: boolean;
+    oddsLabel: string;
+    oddsText: string;
+    totalFoundLabel: string;
+    countSuffix: string;
+    firstFoundLabel: string;
+}): string {
+    const totalCount = options.savedCount + options.currentCount;
+    const found = totalCount > 0;
+    const displayName = found ? `${def.symbol} ${def.label}` : "??? シークレット枠";
+    const imageHtml = getMiracleBookImageHtml(def, found, options.isMobile);
+    const firstFoundText = found && options.firstFoundAt ? new Date(options.firstFoundAt).toLocaleString() : "----";
+    const featureText = found ? getMiracleFeatureText(def) : "未発見のため詳細は伏せられています。観測すると画像・名前・説明が解放されます。";
+    const odds = found ? options.oddsText : "????";
+    return `<div style="display:grid;grid-template-columns:${options.isMobile ? "98px minmax(0,1fr)" : "112px minmax(0,1fr)"};gap:14px;align-items:start;padding:14px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+        <div>${imageHtml}</div>
+        <div style="min-width:0;">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                <span style="display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:999px;background:${found ? "rgba(53,98,59,.14)" : "rgba(120,130,140,.14)"};font-weight:900;color:${found ? "#214329" : "#727a86"};">${escapeHtml(def.rank)}</span>
+                <span style="font-size:${options.isMobile ? 21 : 22}px;font-weight:900;line-height:1.35;word-break:break-word;color:${found ? "#1d2738" : "#999"};">${escapeHtml(displayName)}</span>
+            </div>
+            <div style="margin-top:8px;font-size:${options.isMobile ? 15 : 16}px;line-height:1.7;opacity:.82;">${escapeHtml(featureText)}</div>
+            <div style="margin-top:8px;font-size:${options.isMobile ? 15 : 16}px;line-height:1.6;opacity:.72;">${options.oddsLabel} ${odds} / ${options.totalFoundLabel} ${totalCount}${options.countSuffix}</div>
+            <div style="margin-top:2px;font-size:${options.isMobile ? 14 : 15}px;line-height:1.6;opacity:.62;">${options.firstFoundLabel} ${firstFoundText}</div>
+        </div>
+    </div>`;
 }
