@@ -92,6 +92,71 @@ export function createTinyFragment(params: {
     return body;
 }
 
+export function createIntruderDrop(params: {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    radiusScale: number;
+    geometry: Geometry;
+    random: () => number;
+}): Matter.Body {
+    const { x, y, vx, vy, radiusScale, geometry, random } = params;
+    const radius = geometry.ballRadius * radiusScale;
+    const body = Bodies.circle(x, y, radius, {
+        restitution: 0.92,
+        friction: 0.01,
+        frictionAir: 0.0018,
+        density: 0.0011,
+        render: { fillStyle: "#d9e2ee", strokeStyle: "rgba(255,255,255,.95)", lineWidth: Math.max(1, 2.4 * geometry.scale) } as any,
+    });
+    (body as any).plugin = createDropPlugin("normal", x, y, radius, { intruder: true, timeBallSkin: "gloss", timeBallSkinLabel: "外部侵入玉" });
+    Body.setVelocity(body, { x: vx, y: vy });
+    Body.setAngularVelocity(body, (random() - 0.5) * 0.55);
+    return body;
+}
+
+export function createExternalIntruderDrops(params: {
+    count: number;
+    geometry: Geometry;
+    random: () => number;
+}): Matter.Body[] {
+    const bodies: Matter.Body[] = [];
+    const { count, geometry, random } = params;
+    for (let i = 0; i < count; i++) {
+        const side = Math.floor(random() * 4);
+        const speed = (5 + random() * 7) * geometry.scale;
+        let x = -geometry.ballRadius * 3;
+        let y = geometry.height * (0.12 + random() * 0.62);
+        let vx = speed;
+        let vy = (random() - 0.35) * speed;
+        if (side === 1) {
+            x = geometry.width + geometry.ballRadius * 3;
+            vx = -speed;
+        } else if (side === 2) {
+            x = geometry.width * random();
+            y = -geometry.ballRadius * 4;
+            vx = (random() - 0.5) * speed;
+            vy = speed;
+        } else if (side === 3) {
+            x = geometry.width * random();
+            y = geometry.height + geometry.ballRadius * 4;
+            vx = (random() - 0.5) * speed;
+            vy = -speed * 0.7;
+        }
+        bodies.push(createIntruderDrop({
+            x,
+            y,
+            vx,
+            vy,
+            radiusScale: clamp(0.85 + random() * 0.55, 0.85, 1.4),
+            geometry,
+            random,
+        }));
+    }
+    return bodies;
+}
+
 export function createWallsAndFloor(geometry: Geometry): Matter.Body[] {
     const leftWall = Bodies.rectangle(geometry.wallWidth / 2, geometry.height / 2, geometry.wallWidth, geometry.height, { isStatic: true, render: { fillStyle: "rgba(36, 41, 54, 0.92)" } });
     const rightWall = Bodies.rectangle(geometry.width - geometry.wallWidth / 2, geometry.height / 2, geometry.wallWidth, geometry.height, { isStatic: true, render: { fillStyle: "rgba(36, 41, 54, 0.92)" } });

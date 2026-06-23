@@ -25,13 +25,16 @@ import { FAMILIAR_EXPEDITION_PLANS, claimFamiliarExpedition, getFamiliarExpediti
 import { SECRET_RESEARCH_NOTES, loadSecretResearchNoteState, markSecretResearchNotesRead, unlockSecretResearchNote, type SecretResearchNoteState } from "./miracle/secretResearchNote";
 import { BASE_SPECIAL_EVENT_DEFS, FUSION_DEFS, MIRACLE_CHAIN_DEFS, NORMAL_BALL_TRAITS, PACHINKO_YAKUMONO_DEFS, RARE_PIN_DEFS, SPECIAL_EVENT_DEFS } from "./miracle/eventCatalog";
 import { BOSS_EXPERIMENT_DEFS, getBossAssetUrl, getBossDef, getBossExperimentPopupHtml, getBossResultHtml, type BossExperimentDef } from "./miracle/bossExperiment";
+import { calculateBossDamage, createBossExperimentRecord, getBossAttackInterval, getBossDropDamage, getBossElapsedMs as getBossElapsedMsBase, getBossPhase, getBossRemainingMs as getBossRemainingMsBase, getBossRewardParts, getBossYakumonoDamage, prependBossRecord } from "./miracle/bossService";
 import { RARE_BOARD_CATASTROPHE_DEFS, type RareBoardCatastropheDef, type RareBoardCatastropheKind } from "./miracle/rareBoardCatastrophe";
 import { EVENT_SEASONS, EXPERIMENT_PRESETS, MIRACLE_CRAFT_RECIPES, RESEARCH_SHOP_ITEMS, type EventSeasonDef, type EventSeasonMissionDef, type EventSeasonMissionMetric, type ExperimentPresetDef, type MiracleCraftRecipeDef, type ShopItemDef } from "./miracle/researchFeatures";
+import { canBuyShopItem as canBuyShopItemBase, canCraftRecipe as canCraftRecipeBase, getCraftMaterialStatus as getCraftMaterialStatusBase, getRewardParts, getShopCostLabel as getShopCostLabelBase } from "./miracle/commerceService";
 import { APP_VERSION, BASE_HEIGHT, BASE_WIDTH, BLACK_SUN_RATE, COMMENTARY_DISPLAY_MS, COMMENTARY_MIN_INTERVAL_MS, COSMIC_EGG_RATE, CROWN_RATE, FINAL_SWEEP_DELAY_MS, FIRST_RUN_GUIDE_STORAGE_KEY, GIANT_EVENT_INTERVAL, GOLD_RATE, HEART_RATE, LOCAL_GOD_AUDIO_FILES, LOCAL_RARE_AUDIO_FILES, MAGNET_DURATION_MS, MILESTONE_INTERVAL, MIRACLE_ASSET_BASE_URL, MIRACLE_CHAIN_WINDOW_MS, MIRACLE_MANIFEST_URL, MIRACLE_OMEN_DISPLAY_MS, MIRACLE_OMEN_MIN_INTERVAL_MS, RAINBOW_RATE, RANDOM_BUCKET_COUNT, RECORD_STORAGE_KEY, REMOTE_MIRACLE_BAD_URL_CACHE_MS, REMOTE_MIRACLE_MANIFEST_CACHE_MS, REMOTE_MIRACLE_VIDEO_DISPLAY_MS, SCORE_STORAGE_BONUS_INTERVAL, SECRET_KEY_MAX_LENGTH, SECRET_KEY_SEQUENCES, SHAPE_RATE, SHOOTING_STAR_RATE, SMALL_MIRACLE_MIN_INTERVAL_MS, STUCK_EXPLODE_FRAMES, STUCK_NUDGE_FRAMES, SWORD_IMPACT_RATE, TIME_STOP_DURATION_MS, USER_PREFERENCES_STORAGE_KEY, USER_PROFILE_STORAGE_KEY, type RareSoundFlavor } from "./miracle/constants";
 import { getSpecialIconColors } from "./miracle/drawing";
 import { MAGIC_CIRCLE_DEFS, classifyMagicCircle, type MagicCircleDef } from "./miracle/magicCircles";
+import { buildMagicBoardPlan, buildMagicCircleActivationPlan, createActiveMagicPhysicsField, updateActiveMagicPhysicsFields } from "./miracle/magicBoardService";
 import { loadSavedRecords, loadUserPreferences, loadUserProfile, saveSavedRecords, saveUserProfileData } from "./miracle/localData";
-import { clamp, escapeCsv, escapeHtml, formatDateTime, formatDurationMs, formatElapsedTime, formatProbability, getBrowserName, getDateKey, getTodayKey, hashTextToNumber, isMobileDevice, loadExternalScript, parseLabels } from "./miracle/utils";
+import { clamp, escapeHtml, formatDateTime, formatDurationMs, formatElapsedTime, formatProbability, getBrowserName, getDateKey, getTodayKey, hashTextToNumber, isMobileDevice, loadExternalScript, parseLabels } from "./miracle/utils";
 import { getDailyMissions, getDailyMissionValue, getResearchRankInfo, getThemeCollection, getThemeForTime, pickRandomTheme } from "./miracle/progression";
 import { getMiracleBookRowHtml, getMiracleIconHtml as getMiracleIconHtmlBase } from "./miracle/miraclePresentation";
 import { createRareSequence } from "./miracle/soundSequences";
@@ -54,7 +57,9 @@ import { drawBrokenResearchNoteFrame, drawMagicPhysicsFieldsFrame, type MagicPhy
 import { drawTapRipplesFrame } from "./miracle/tapRippleRendering";
 import { drawRareBoardCatastropheFrame } from "./miracle/rareBoardCatastropheRendering";
 import { getResearchArchiveHtml, getResearchReportDetailHtml } from "./miracle/researchArchivePresentation";
+import { createResearchReportEntry as createResearchReportEntryBase, prependResearchReport } from "./miracle/researchReportService";
 import { getGachaResultHtml, getGachaRewardBookHtml, getGachaSpinHtml, getMiracleGachaHtml } from "./miracle/gachaPresentation";
+import { pickGachaRewardTheme as pickGachaRewardThemeBase, pickMiracleGachaDef as pickMiracleGachaDefBase } from "./miracle/gachaService";
 import { getFamiliarExpeditionHtml, getFamiliarPopupHtml, getMiracleTicketHtml, getSecretResearchNoteHtml } from "./miracle/familiarPresentation";
 import { getMiracleAlbumHtml, getMiracleLogHtml } from "./miracle/miracleAlbumPresentation";
 import { getResearchWorldMapHtml } from "./miracle/researchWorldMapPresentation";
@@ -66,10 +71,12 @@ import { getDailyFortuneHtml, getFusionHtml, getMissionHtml, getReplayHtml, getS
 import { getSecretHtml, getSecretUnlockHtml, SECRET_DEFS } from "./miracle/secretPresentation";
 import { getAdminGateHtml, getAdminMiracleButtonHtml, getAdminPanelHtml, getAdminRemoteVideoEmptyHtml, getAdminRemoteVideoListHtml, getAdminRemoteVideoLoadingHtml, getAdminRemoteVideoRowHtml, getAnagoTempuraSecretHtml, getEmergencyRuntimeLogOverlayHtml, getRuntimeGuardLogHtml } from "./miracle/adminPresentation";
 import { getEndingResultHtml, getFinalResultHtml, getSafeStopResultHtml } from "./miracle/resultPresentation";
+import { buildResultCsv as buildResultCsvBase } from "./miracle/resultExportService";
 import { getAdminMagicCircleAnswerHtml, getMagicCircleSummonOverlayHtml } from "./miracle/magicCirclePresentation";
-import { createDividers as createDividersBase, createDropPlugin as createDropPluginBase, createHeartBody as createHeartBodyBase, createPachinkoNailGate as createPachinkoNailGateBase, createPachinkoYakumonoSensors as createPachinkoYakumonoSensorsBase, createPins as createPinsBase, createRandomShapeBody as createRandomShapeBodyBase, createSymbolBody as createSymbolBodyBase, createTinyFragment as createTinyFragmentBase, createWallsAndFloor as createWallsAndFloorBase, getPachinkoYakumonoDef as getPachinkoYakumonoDefBase, getRarePinDef as getRarePinDefBase, rollRarePin as rollRarePinBase } from "./miracle/physicsService";
-import { createRemoteMiracleAssetLoader, createRemoteMiracleBadUrlCache, getFreshRemoteVideoSourceUrl as getFreshRemoteVideoSourceUrlBase, isIOSLikeDevice as isIOSLikeDeviceBase, prepareRemoteVideoForSound as prepareRemoteVideoForSoundBase } from "./miracle/videoAudioService";
-import { createRuntimeErrorLogWriter, installGlobalErrorLogger as installGlobalErrorLoggerBase, stringifyErrorForAdminLog } from "./miracle/adminService";
+import { getCommentaryLineHtml, getFullScreenCelebrationHtml, getLifeQuoteHtml, getMiracleOverlayHtml, getNormalTraitSummaryHtml as getNormalTraitSummaryHtmlBase, pickCelebrationEffect as pickCelebrationEffectBase } from "./miracle/effectPresentation";
+import { createDividers as createDividersBase, createDropPlugin as createDropPluginBase, createExternalIntruderDrops, createHeartBody as createHeartBodyBase, createPachinkoNailGate as createPachinkoNailGateBase, createPachinkoYakumonoSensors as createPachinkoYakumonoSensorsBase, createPins as createPinsBase, createRandomShapeBody as createRandomShapeBodyBase, createSymbolBody as createSymbolBodyBase, createTinyFragment as createTinyFragmentBase, createWallsAndFloor as createWallsAndFloorBase, getPachinkoYakumonoDef as getPachinkoYakumonoDefBase, getRarePinDef as getRarePinDefBase, rollRarePin as rollRarePinBase } from "./miracle/physicsService";
+import { createRemoteMiracleAssetLoader, createRemoteMiracleBadUrlCache, getAdjustedSoundVolume, getFreshRemoteVideoSourceUrl as getFreshRemoteVideoSourceUrlBase, isIOSLikeDevice as isIOSLikeDeviceBase, playSecretToneCue, playUiToneCue, prepareRemoteVideoForSound as prepareRemoteVideoForSoundBase } from "./miracle/videoAudioService";
+import { addRuntimeGuardLog as addRuntimeGuardLogBase, createRuntimeErrorLogWriter, installGlobalErrorLogger as installGlobalErrorLoggerBase, readRuntimeGuardLogs as readRuntimeGuardLogsBase, stringifyErrorForAdminLog } from "./miracle/adminService";
 import { applyUserPreferences, buildUserPreferences, getAppOnlineStatusHtml as getAppOnlineStatusHtmlBase, getUserPlayStyleLabel as getUserPlayStyleLabelBase, registerAppOpenInProfile } from "./miracle/stateService";
 import type {
     DropKind,
@@ -994,27 +1001,25 @@ function forceMobileFullViewportLayout(): void {
 }
 
 const RUNTIME_GUARD_LOG_STORAGE_KEY = "miracle_runtime_guard_logs_v1";
-type RuntimeGuardLogEntry = { at: number; reason: string; detail: string };
+const RUNTIME_GUARD_LOG_LIMIT = 80;
 
-function readRuntimeGuardLogs(): RuntimeGuardLogEntry[] {
-    try {
-        const raw = localStorage.getItem(RUNTIME_GUARD_LOG_STORAGE_KEY);
-        const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed.slice(-80) : [];
-    } catch {
-        return [];
-    }
+function readRuntimeGuardLogs() {
+    return readRuntimeGuardLogsBase({
+        storage: localStorage,
+        storageKey: RUNTIME_GUARD_LOG_STORAGE_KEY,
+        limit: RUNTIME_GUARD_LOG_LIMIT,
+    });
 }
 
 function addRuntimeGuardLog(reason: string, detail: string): void {
-    try {
-        const rows = readRuntimeGuardLogs();
-        rows.push({ at: Date.now(), reason, detail: detail.slice(0, 900) });
-        localStorage.setItem(RUNTIME_GUARD_LOG_STORAGE_KEY, JSON.stringify(rows.slice(-80)));
-    } catch {
-        // ログ保存が失敗してもアプリ本体を止めない。
-    }
-    writeRuntimeErrorToAdminLog(`guard:${reason}`, detail);
+    addRuntimeGuardLogBase({
+        storage: localStorage,
+        storageKey: RUNTIME_GUARD_LOG_STORAGE_KEY,
+        limit: RUNTIME_GUARD_LOG_LIMIT,
+        reason,
+        detail,
+        writeRuntimeErrorToAdminLog,
+    });
 }
 
 function recoverMobileLayoutIfBroken(reason: string, forceReset = false): void {
@@ -2317,22 +2322,16 @@ function getResearchReportLimit(): number {
 }
 
 function getShopCostLabel(item: ShopItemDef): string {
-    const parts = [`${item.costPoint.toLocaleString()}P`];
-    const tickets = item.costTickets ?? {};
-    if (tickets.normal) parts.push(`通常券${tickets.normal}`);
-    if (tickets.rare) parts.push(`レア券${tickets.rare}`);
-    if (tickets.divine) parts.push(`神域券${tickets.divine}`);
-    return parts.join(" / ");
+    return getShopCostLabelBase(item);
 }
 
 function canBuyShopItem(item: ShopItemDef): { ok: boolean; reason: string } {
-    if (!item.repeatable && isShopItemPurchased(item.id)) return { ok: false, reason: "購入済み" };
-    if (getGachaPoint() < item.costPoint) return { ok: false, reason: "P不足" };
-    const tickets = item.costTickets ?? {};
-    if ((miracleTicketState.normal ?? 0) < (tickets.normal ?? 0)) return { ok: false, reason: "通常券不足" };
-    if ((miracleTicketState.rare ?? 0) < (tickets.rare ?? 0)) return { ok: false, reason: "レア券不足" };
-    if ((miracleTicketState.divine ?? 0) < (tickets.divine ?? 0)) return { ok: false, reason: "神域券不足" };
-    return { ok: true, reason: "購入可能" };
+    return canBuyShopItemBase({
+        item,
+        purchased: isShopItemPurchased(item.id),
+        gachaPoint: getGachaPoint(),
+        tickets: miracleTicketState,
+    });
 }
 
 function recordShopPurchase(item: ShopItemDef, effectLabel: string): void {
@@ -2452,13 +2451,11 @@ function claimSeasonMissionReward(seasonId: string, missionId: string): void {
     if (mission.rewardTickets) {
         grantShopTicketBundle(mission.rewardTickets.normal ?? 0, mission.rewardTickets.rare ?? 0, mission.rewardTickets.divine ?? 0, `シーズン:${mission.label}`);
     }
-    const rewardParts = [
-        mission.rewardPoint ? `奇跡ガチャP+${mission.rewardPoint}` : "",
-        mission.rewardTheme ? `テーマ:${getThemeDisplayName(mission.rewardTheme)}` : "",
-        mission.rewardTickets?.normal ? `通常券+${mission.rewardTickets.normal}` : "",
-        mission.rewardTickets?.rare ? `レア券+${mission.rewardTickets.rare}` : "",
-        mission.rewardTickets?.divine ? `神域券+${mission.rewardTickets.divine}` : "",
-    ].filter(Boolean);
+    const rewardParts = getRewardParts({
+        point: mission.rewardPoint,
+        themeLabel: mission.rewardTheme ? getThemeDisplayName(mission.rewardTheme) : undefined,
+        tickets: mission.rewardTickets,
+    });
     const entry: SeasonRewardEntry = {
         id: createId("season"),
         seasonId: season.id,
@@ -2479,23 +2476,21 @@ function isCraftUnlocked(recipeId: string): boolean {
 }
 
 function getCraftMaterialStatus(recipe: MiracleCraftRecipeDef): { ready: boolean; label: string } {
-    const parts = recipe.materialKinds.map((kind) => {
-        const def = SPECIAL_EVENT_DEFS.find((x) => x.kind === kind);
-        const count = savedRecords.discovered[kind] ?? 0;
-        return `${def?.label ?? kind} ${count}/${recipe.requiredCount}`;
+    return getCraftMaterialStatusBase({
+        recipe,
+        specialDefs: SPECIAL_EVENT_DEFS,
+        discovered: savedRecords.discovered,
     });
-    return {
-        ready: recipe.materialKinds.every((kind) => (savedRecords.discovered[kind] ?? 0) >= recipe.requiredCount),
-        label: parts.join(" / "),
-    };
 }
 
 function canCraftRecipe(recipe: MiracleCraftRecipeDef): { ok: boolean; reason: string } {
-    if (isCraftUnlocked(recipe.id)) return { ok: false, reason: "解放済み" };
     const material = getCraftMaterialStatus(recipe);
-    if (!material.ready) return { ok: false, reason: "素材不足" };
-    if (getGachaPoint() < recipe.costPoint) return { ok: false, reason: "P不足" };
-    return { ok: true, reason: "クラフト" };
+    return canCraftRecipeBase({
+        recipe,
+        unlocked: isCraftUnlocked(recipe.id),
+        materialReady: material.ready,
+        gachaPoint: getGachaPoint(),
+    });
 }
 
 function craftMiracleRecipe(recipeId: string): void {
@@ -2515,13 +2510,11 @@ function craftMiracleRecipe(recipeId: string): void {
     if (recipe.rewardTickets) {
         grantShopTicketBundle(recipe.rewardTickets.normal ?? 0, recipe.rewardTickets.rare ?? 0, recipe.rewardTickets.divine ?? 0, `クラフト:${recipe.label}`);
     }
-    const rewardParts = [
-        recipe.rewardPoint ? `奇跡ガチャP+${recipe.rewardPoint}` : "",
-        recipe.rewardTheme ? `テーマ:${getThemeDisplayName(recipe.rewardTheme)}` : "",
-        recipe.rewardTickets?.normal ? `通常券+${recipe.rewardTickets.normal}` : "",
-        recipe.rewardTickets?.rare ? `レア券+${recipe.rewardTickets.rare}` : "",
-        recipe.rewardTickets?.divine ? `神域券+${recipe.rewardTickets.divine}` : "",
-    ].filter(Boolean);
+    const rewardParts = getRewardParts({
+        point: recipe.rewardPoint,
+        themeLabel: recipe.rewardTheme ? getThemeDisplayName(recipe.rewardTheme) : undefined,
+        tickets: recipe.rewardTickets,
+    });
     const entry: CraftEntry = {
         id: createId("craft"),
         recipeId: recipe.id,
@@ -4957,19 +4950,12 @@ function showUserGuidePopup(): void {
 }
 
 function pickMiracleGachaDef(): SpecialEventDef {
-    // ガチャは簡単に引けないポイント制にしたうえで、超レア排出もかなり低めにします。
-    const pool = SPECIAL_EVENT_DEFS.length > 0 ? SPECIAL_EVENT_DEFS : BASE_SPECIAL_EVENT_DEFS;
-    const weighted: SpecialEventDef[] = [];
-    for (const def of pool) {
-        const score = getRankScore(def.rank);
-        const weight = score >= getRankScore("GOD") ? 1
-            : score >= getRankScore("EX") ? 1
-            : score >= getRankScore("SSR") ? 4
-            : score >= getRankScore("SR") ? 28
-            : 220;
-        for (let i = 0; i < weight; i++) weighted.push(def);
-    }
-    return weighted[Math.floor(appRandom() * weighted.length)] ?? pool[0];
+    return pickMiracleGachaDefBase({
+        specialDefs: SPECIAL_EVENT_DEFS,
+        fallbackDefs: BASE_SPECIAL_EVENT_DEFS,
+        getRankScore,
+        random: appRandom,
+    });
 }
 
 async function playGachaRemoteMiracleVideo(def: SpecialEventDef): Promise<void> {
@@ -5074,57 +5060,22 @@ function fireLibraryParticleBurst(mode: "magic" | "gacha" | "title" | "tempura",
 }
 
 function addMagicPhysicsField(kind: MagicPhysicsField["kind"], x: number, y: number, radius: number, strength: number, durationMs: number, label: string): void {
-    activeMagicPhysicsFields.push({
+    activeMagicPhysicsFields.push(createActiveMagicPhysicsField({
         x,
         y,
-        radius,
-        strength: strength * 7.5,
         kind,
-        until: performance.now() + durationMs,
-        spin: appRandom() > 0.5 ? 1 : -1,
+        radius,
+        strength,
+        durationMs,
         label,
-    });
+        now: performance.now(),
+        random: appRandom,
+    }));
     addFloatingText(`物理変態化: ${label}`, x, y - radius * 0.35, "#e0f2fe");
 }
 
 function updateMagicPhysicsFields(): void {
-    if (activeMagicPhysicsFields.length === 0) return;
-    const now = performance.now();
-    for (let i = activeMagicPhysicsFields.length - 1; i >= 0; i--) {
-        const field = activeMagicPhysicsFields[i];
-        if (!field || now > field.until) {
-            activeMagicPhysicsFields.splice(i, 1);
-            continue;
-        }
-        const ageRatio = clamp((field.until - now) / 5000, 0.15, 1);
-        for (const body of engine.world.bodies) {
-            const plugin = (body as any).plugin;
-            if (!plugin?.isDrop) continue;
-            const dx = field.x - body.position.x;
-            const dy = field.y - body.position.y;
-            const distSq = dx * dx + dy * dy;
-            const maxDist = field.radius;
-            if (distSq > maxDist * maxDist || distSq < 1) continue;
-            const dist = Math.sqrt(distSq);
-            const power = (1 - dist / maxDist) * field.strength * ageRatio;
-            let fx = 0;
-            let fy = 0;
-            if (field.kind === "vortex") {
-                fx = (-dy / dist) * power * field.spin;
-                fy = (dx / dist) * power * field.spin;
-            } else if (field.kind === "repel") {
-                fx = (-dx / dist) * power;
-                fy = (-dy / dist) * power;
-            } else if (field.kind === "blackhole") {
-                fx = (dx / dist) * power * 1.25;
-                fy = (dy / dist) * power * 1.25;
-            } else {
-                fx = Math.sin(now / 140 + body.id) * power * 0.9;
-                fy = Math.cos(now / 170 + body.id) * power * 0.45;
-            }
-            Body.applyForce(body, body.position, { x: fx, y: fy });
-        }
-    }
+    updateActiveMagicPhysicsFields(activeMagicPhysicsFields, engine.world.bodies, performance.now());
 }
 
 function drawMagicPhysicsFields(context: CanvasRenderingContext2D): void {
@@ -5210,10 +5161,6 @@ function createMagicBoardPinAt(x: number, y: number, label: string, color: strin
     return pin;
 }
 
-function createMagicPinLine(points: Array<{ x: number; y: number }>, label: string, color: string, radiusScale = 1.2): void {
-    for (const point of points) createMagicBoardPinAt(point.x, point.y, label, color, radiusScale);
-}
-
 function restorePinsAfterMagic(token: number, delayMs = 18000): void {
     window.setTimeout(() => {
         if (token !== magicBoardShapeToken || isAppTerminated) return;
@@ -5233,142 +5180,16 @@ function reshapeBoardWithMagicCircle(def: MagicCircleDef, center: { x: number; y
     const token = magicBoardShapeToken;
     activeMagicPhysicsFields.length = 0;
     clearMagicAndBoardPins();
-    const color = def.color || "#fde68a";
-    const top = clamp(74 * geometry.scale, 44, 116);
-    const bottom = geometry.groundTop - geometry.dividerHeight - clamp(44 * geometry.scale, 26, 74);
-    const midX = geometry.width / 2;
-    const midY = (top + bottom) / 2;
-    const spanX = Math.max(geometry.binWidth * 2.4, geometry.width * 0.36);
-    const spanY = Math.max(geometry.binWidth * 2.1, (bottom - top) * 0.34);
-    const points: Array<{ x: number; y: number }> = [];
-
-    switch (def.effect) {
-        case "star":
-            createMagicBoardPinAt(midX, midY, "星核ピン", color, 2.8);
-            addMagicPhysicsField("repel", midX, midY, Math.max(180 * geometry.scale, spanX * 0.82), 0.00015, 9000, "星核だけの盤面");
-            break;
-        case "sun":
-            createMagicBoardPinAt(midX, midY, "太陽核ピン", color, 2.2);
-            for (let i = 0; i < 12; i++) {
-                const a = i * Math.PI * 2 / 12;
-                createMagicBoardPinAt(midX + Math.cos(a) * spanX * 0.42, midY + Math.sin(a) * spanY * 0.42, "太陽環ピン", color, 1.15);
-            }
-            addMagicPhysicsField("repel", midX, midY, spanX * 0.9, 0.00013, 9000, "太陽放射");
-            break;
-        case "moon":
-            for (let i = 0; i < 12; i++) {
-                const a = -Math.PI * 0.72 + i * Math.PI * 1.44 / 11;
-                createMagicBoardPinAt(midX + Math.cos(a) * spanX * 0.38, midY + Math.sin(a) * spanY * 0.72, "月弧ピン", color, 1.35);
-            }
-            engine.gravity.y = 3.6;
-            window.setTimeout(() => { if (!tiltExperimentEnabled && token === magicBoardShapeToken) engine.gravity.y = 8; }, 9000);
-            addMagicPhysicsField("blackhole", midX, midY, spanX, 0.00008, 9000, "月重力");
-            break;
-        case "thunder":
-            for (let i = 0; i < 9; i++) points.push({ x: midX + (i % 2 === 0 ? -1 : 1) * spanX * 0.28, y: top + (bottom - top) * (i / 8) });
-            createMagicPinLine(points, "稲妻ピン", color, 1.35);
-            addMagicPhysicsField("wave", midX, midY, spanX, 0.00016, 9000, "雷路");
-            break;
-        case "wave":
-            for (let i = 0; i < 16; i++) {
-                const x = geometry.wallWidth + geometry.binWidth + (geometry.width - geometry.wallWidth * 2 - geometry.binWidth * 2) * (i / 15);
-                points.push({ x, y: midY + Math.sin(i * 0.95) * spanY * 0.34 });
-            }
-            createMagicPinLine(points, "波頭ピン", color, 1.15);
-            addMagicPhysicsField("vortex", midX, midY, spanX * 1.2, 0.00012, 9000, "潮流レーン");
-            break;
-        case "earth":
-            for (let row = 0; row < 3; row++) {
-                for (let i = 0; i < 7 - row; i++) {
-                    createMagicBoardPinAt(midX + (i - (6 - row) / 2) * geometry.binWidth * 0.86, bottom - row * geometry.binWidth * 0.72, "地層ピン", color, 1.55);
-                }
-            }
-            addMagicPhysicsField("repel", midX, bottom, spanX, 0.00010, 9000, "地層隆起");
-            break;
-        case "wind":
-            for (let i = 0; i < 18; i++) {
-                const a = i * 0.78;
-                const r = geometry.binWidth * (0.36 + i * 0.105);
-                points.push({ x: midX + Math.cos(a) * r, y: midY + Math.sin(a) * r * 0.72 });
-            }
-            createMagicPinLine(points, "旋風ピン", color, 1.05);
-            addMagicPhysicsField("vortex", midX, midY, spanX * 1.1, 0.00015, 10000, "旋風迷路");
-            break;
-        case "gate":
-            for (let i = 0; i < 9; i++) {
-                const y = top + (bottom - top) * (i / 8);
-                createMagicBoardPinAt(midX - spanX * 0.36, y, "門柱ピン", color, 1.25);
-                createMagicBoardPinAt(midX + spanX * 0.36, y, "門柱ピン", color, 1.25);
-            }
-            addMagicPhysicsField("vortex", midX, midY, spanX * 0.72, 0.00013, 9000, "門の通路");
-            break;
-        case "mirror":
-            for (let i = 0; i < 8; i++) {
-                const y = top + (bottom - top) * (i / 7);
-                const offset = Math.sin(i * 1.12) * geometry.binWidth * 0.7;
-                createMagicBoardPinAt(midX - geometry.binWidth * 1.1 - offset, y, "鏡像ピン", color, 1.25);
-                createMagicBoardPinAt(midX + geometry.binWidth * 1.1 + offset, y, "鏡像ピン", color, 1.25);
-            }
-            addMagicPhysicsField("wave", midX, midY, spanX, 0.00011, 9000, "左右反射");
-            break;
-        case "dragon":
-            for (let i = 0; i < 20; i++) {
-                const p = i / 19;
-                const x = geometry.wallWidth + geometry.binWidth + (geometry.width - geometry.wallWidth * 2 - geometry.binWidth * 2) * p;
-                const y = top + (bottom - top) * p + Math.sin(p * Math.PI * 4) * geometry.binWidth * 0.9;
-                createMagicBoardPinAt(x, y, "龍脈ピン", color, i % 5 === 0 ? 1.75 : 1.12);
-            }
-            addMagicPhysicsField("vortex", midX, midY, spanX * 1.35, 0.00016, 11000, "龍脈蛇行");
-            break;
-        case "void":
-            createMagicBoardPinAt(midX, midY, "虚無核ピン", color, 2.45);
-            addMagicPhysicsField("blackhole", midX, midY, spanX * 1.25, 0.00016, 11000, "虚無吸引");
-            break;
-        case "flower":
-            createMagicBoardPinAt(midX, midY, "花芯ピン", color, 1.55);
-            for (let petal = 0; petal < 6; petal++) {
-                const a = petal * Math.PI * 2 / 6;
-                for (let i = 1; i <= 3; i++) createMagicBoardPinAt(midX + Math.cos(a) * geometry.binWidth * 0.62 * i, midY + Math.sin(a) * geometry.binWidth * 0.44 * i, "花弁ピン", color, 1.05);
-            }
-            addMagicPhysicsField("repel", midX, midY, spanX * 0.85, 0.00010, 9000, "開花盤面");
-            break;
-        case "gear":
-            for (let i = 0; i < 16; i++) {
-                const a = i * Math.PI * 2 / 16;
-                const r = i % 2 === 0 ? spanX * 0.44 : spanX * 0.30;
-                createMagicBoardPinAt(midX + Math.cos(a) * r, midY + Math.sin(a) * r * 0.72, "歯車ピン", color, i % 2 === 0 ? 1.35 : 1.05);
-            }
-            addMagicPhysicsField("vortex", midX, midY, spanX, 0.00014, 10000, "歯車回転");
-            break;
-        case "meteor":
-            for (let i = 0; i < 14; i++) createMagicBoardPinAt(midX - spanX * 0.48 + i * geometry.binWidth * 0.46, top + i * geometry.binWidth * 0.42, "隕石軌道ピン", color, 1.22);
-            addMagicPhysicsField("repel", midX, top + spanY * 0.25, spanX, 0.00013, 9000, "隕石斜面");
-            break;
-        case "clock":
-            createMagicBoardPinAt(midX, midY, "時計軸ピン", color, 1.65);
-            createMagicPinLine([
-                { x: midX, y: midY - spanY * 0.55 },
-                { x: midX, y: midY - spanY * 0.28 },
-                { x: midX, y: midY + spanY * 0.18 },
-                { x: midX + spanX * 0.18, y: midY + spanY * 0.28 },
-                { x: midX + spanX * 0.36, y: midY + spanY * 0.38 },
-            ], "時計針ピン", color, 1.18);
-            addMagicPhysicsField("blackhole", midX, midY, spanX * 0.92, 0.00010, 10000, "時間の針");
-            break;
-        case "crown":
-            createMagicPinLine([
-                { x: midX - spanX * 0.48, y: bottom },
-                { x: midX - spanX * 0.36, y: midY },
-                { x: midX - spanX * 0.18, y: bottom - spanY * 0.22 },
-                { x: midX, y: top + spanY * 0.12 },
-                { x: midX + spanX * 0.18, y: bottom - spanY * 0.22 },
-                { x: midX + spanX * 0.36, y: midY },
-                { x: midX + spanX * 0.48, y: bottom },
-            ], "王冠ピン", color, 1.55);
-            addMagicPhysicsField("repel", midX, midY, spanX, 0.00012, 10000, "王冠導線");
-            break;
+    const plan = buildMagicBoardPlan(def, geometry);
+    for (const pin of plan.pins) createMagicBoardPinAt(pin.x, pin.y, pin.label, pin.color, pin.radiusScale);
+    for (const field of plan.fields) addMagicPhysicsField(field.kind, field.x, field.y, field.radius, field.strength, field.durationMs, field.label);
+    if (plan.restoreGravity) {
+        engine.gravity.y = 3.6;
+        window.setTimeout(() => {
+            if (!tiltExperimentEnabled && token === magicBoardShapeToken) engine.gravity.y = plan.restoreGravity!.y;
+        }, plan.restoreGravity.delayMs);
     }
-    addFloatingText(`盤面変化: ${def.label}`, midX, top + 18 * geometry.scale, color);
+    addFloatingText(plan.floatingText.text, plan.floatingText.x, plan.floatingText.y, plan.floatingText.color);
     restorePinsAfterMagic(token);
 }
 
@@ -5381,34 +5202,10 @@ function enableTemporaryPinPlacement(): void {
     showSoftToast("盤面をタップすると一時的な観測ピンを設置します");
 }
 
-function createIntruderDrop(x: number, y: number, vx: number, vy: number, radiusScale = 1): Matter.Body {
-    const radius = geometry.ballRadius * radiusScale;
-    const body = Bodies.circle(x, y, radius, {
-        restitution: 0.92, friction: 0.01, frictionAir: 0.0018, density: 0.0011,
-        render: { fillStyle: "#d9e2ee", strokeStyle: "rgba(255,255,255,.95)", lineWidth: Math.max(1, 2.4 * geometry.scale) } as any,
-    });
-    (body as any).plugin = createDropPlugin("normal", x, y, radius, { intruder: true, timeBallSkin: "gloss", timeBallSkinLabel: "外部侵入玉" });
-    Body.setVelocity(body, { x: vx, y: vy });
-    Body.setAngularVelocity(body, (appRandom() - 0.5) * 0.55);
-    activeDropCount++;
-    return body;
-}
-
 function spawnExternalIntruderBalls(count = 12, reason = "event"): void {
-    const bodies: Matter.Body[] = [];
-    for (let i = 0; i < count; i++) {
-        const side = Math.floor(appRandom() * 4);
-        const speed = (5 + appRandom() * 7) * geometry.scale;
-        let x = -geometry.ballRadius * 3;
-        let y = geometry.height * (0.12 + appRandom() * 0.62);
-        let vx = speed;
-        let vy = (appRandom() - 0.35) * speed;
-        if (side === 1) { x = geometry.width + geometry.ballRadius * 3; vx = -speed; }
-        else if (side === 2) { x = geometry.width * appRandom(); y = -geometry.ballRadius * 4; vx = (appRandom() - 0.5) * speed; vy = speed; }
-        else if (side === 3) { x = geometry.width * appRandom(); y = geometry.height + geometry.ballRadius * 4; vx = (appRandom() - 0.5) * speed; vy = -speed * 0.7; }
-        bodies.push(createIntruderDrop(x, y, vx, vy, clamp(0.85 + appRandom() * 0.55, 0.85, 1.4)));
-    }
+    const bodies = createExternalIntruderDrops({ count, geometry, random: appRandom });
     Composite.add(engine.world, bodies);
+    activeDropCount += bodies.length;
     triggerCameraShake(18 * geometry.scale, 420);
     addFloatingText("画面外から玉が侵入", geometry.width / 2, geometry.height * 0.18, "#dbeafe");
     maybeShowCommentary(`外部侵入イベント「${reason}」`, true);
@@ -5462,33 +5259,27 @@ function activateMagicCircle(def: MagicCircleDef, points: Array<{ x: number; y: 
     showBrokenResearchNote(def.label);
     showSoftToast(`魔法陣発動: ${def.label} / ${def.chant}`);
     reshapeBoardWithMagicCircle(def, center);
-    // 発動したことが必ず分かるように、どの魔法陣でも軽い侵入玉と物理場を出します。
-    // 個別効果はこの後の switch でさらに上乗せします。
-    spawnExternalIntruderBalls(Math.max(4, Math.min(10, Math.round(6 * geometry.scale))), def.label);
-    const fieldRadius = clamp(230 * geometry.scale, 150, 420);
-    if (["wind", "wave", "gate", "dragon"].includes(def.effect)) addMagicPhysicsField("vortex", center.x, center.y, fieldRadius, 0.00009, 5600, def.label);
-    else if (["void", "moon", "clock"].includes(def.effect)) addMagicPhysicsField("blackhole", center.x, center.y, fieldRadius * 1.1, 0.000075, 5200, def.label);
-    else if (["sun", "crown", "flower", "earth"].includes(def.effect)) addMagicPhysicsField("repel", center.x, center.y, fieldRadius, 0.000075, 4400, def.label);
-    else addMagicPhysicsField("wave", center.x, center.y, fieldRadius, 0.00007, 4800, def.label);
-    triggerCameraShake(26 * geometry.scale, 620);
-    switch (def.effect) {
-        case "sun": spawnExternalIntruderBalls(8, def.label); break;
-        case "moon": engine.gravity.y = 4.2; window.setTimeout(() => { if (tiltExperimentEnabled) return; engine.gravity.y = 8; }, 3600); break;
-        case "star": spawnExternalIntruderBalls(18, def.label); break;
-        case "thunder": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "lightning"); break;
-        case "wave": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "tsunami"); break;
-        case "earth": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "earthquake"); break;
-        case "wind": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "typhoon"); break;
-        case "gate": spawnExternalIntruderBalls(24, def.label); break;
-        case "mirror": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "mirror"); break;
-        case "dragon": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "dragon"); addMagicPhysicsField("vortex", center.x, center.y, fieldRadius * 1.45, 0.00013, 7600, "龍脈暴走"); spawnExternalIntruderBalls(32, "龍脈暴走"); break;
-        case "void": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "void"); break;
-        case "flower": for (let i = 0; i < 6; i++) createTemporaryPinAt(center.x + Math.cos(i * Math.PI / 3) * 58 * geometry.scale, center.y + Math.sin(i * Math.PI / 3) * 58 * geometry.scale, "花冠ピン", 12000); break;
-        case "gear": for (const body of engine.world.bodies) { const plugin = (body as any).plugin; if (plugin?.isPin) plugin.wiggleFrames = Math.max(plugin.wiggleFrames ?? 0, 120); } break;
-        case "meteor": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "meteor"); spawnExternalIntruderBalls(10, def.label); break;
-        case "clock": triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "timebreak"); break;
-        case "crown": createTemporaryPinAt(center.x, center.y, "王冠観測ピン", 20000); fireConfetti("miracle"); break;
+    const activationPlan = buildMagicCircleActivationPlan(def, center, geometry);
+    addMagicPhysicsField(activationPlan.field.kind, activationPlan.field.x, activationPlan.field.y, activationPlan.field.radius, activationPlan.field.strength, activationPlan.field.durationMs, activationPlan.field.label);
+    for (const field of activationPlan.extraFields) addMagicPhysicsField(field.kind, field.x, field.y, field.radius, field.strength, field.durationMs, field.label);
+    for (const burst of activationPlan.intruderBursts) spawnExternalIntruderBalls(burst.count, burst.reason);
+    for (const kind of activationPlan.catastrophes) triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], kind);
+    for (const pin of activationPlan.tempPins) createTemporaryPinAt(pin.x, pin.y, pin.label, pin.lifetimeMs ?? 12000);
+    if (activationPlan.gravityRestore) {
+        engine.gravity.y = 4.2;
+        window.setTimeout(() => {
+            if (tiltExperimentEnabled) return;
+            engine.gravity.y = activationPlan.gravityRestore!.y;
+        }, activationPlan.gravityRestore.delayMs);
     }
+    if (activationPlan.wiggleAllPins) {
+        for (const body of engine.world.bodies) {
+            const plugin = (body as any).plugin;
+            if (plugin?.isPin) plugin.wiggleFrames = Math.max(plugin.wiggleFrames ?? 0, 120);
+        }
+    }
+    if (activationPlan.confettiMode) fireConfetti(activationPlan.confettiMode);
+    triggerCameraShake(26 * geometry.scale, 620);
 }
 
 function enableMagicCircleMode(): void {
@@ -5587,11 +5378,14 @@ function showMiracleGachaPopup(): void {
 }
 
 function pickGachaRewardTheme(def: SpecialEventDef, index: number): ThemeMode | undefined {
-    if (getRankScore(def.rank) < getRankScore("SR")) return undefined;
-    const themes = getThemeOptions().map((x) => x.value);
-    if (themes.length === 0) return undefined;
-    const seed = hashTextToNumber(`${def.kind}-${Date.now()}-${index}`);
-    return themes[Math.abs(seed) % themes.length] ?? "lab";
+    return pickGachaRewardThemeBase({
+        def,
+        index,
+        now: Date.now(),
+        themes: getThemeOptions().map((x) => x.value),
+        getRankScore,
+        hashTextToNumber,
+    });
 }
 
 function grantGachaReward(def: SpecialEventDef, count: number): GachaRewardEntry {
@@ -5758,25 +5552,23 @@ function activateBossForRun(): void {
 }
 
 function getBossElapsedMs(now = Date.now()): number {
-    return activeBossExperiment ? Math.max(0, now - startTime) : 0;
+    return getBossElapsedMsBase(activeBossExperiment, startTime, now);
 }
 
 function getBossRemainingMs(now = Date.now()): number {
-    if (!activeBossExperiment) return 0;
-    return Math.max(0, activeBossExperiment.timeLimitSec * 1000 - getBossElapsedMs(now));
+    return getBossRemainingMsBase(activeBossExperiment, startTime, now);
 }
 
 function damageBoss(amount: number, reason: string, x = geometry.width / 2, y = geometry.height * 0.20): void {
     if (!activeBossExperiment || bossHp <= 0 || !isStarted || isFinished) return;
-    const damageCap = Math.max(30000, Math.floor(bossMaxHp * 0.18));
-    const damage = Math.min(damageCap, Math.max(0, Math.floor(amount)));
+    const damage = calculateBossDamage(amount, bossMaxHp);
     if (damage <= 0) return;
     bossHp = Math.max(0, bossHp - damage);
     bossDamageTotal += damage;
     bossDamageFlashUntil = Date.now() + 260;
     addFloatingText(`BOSS -${damage.toLocaleString()} ${reason}`, x, y, activeBossExperiment.color);
     addScore(Math.floor(damage * 0.2), `BOSS ${reason}`, x, y + 22 * geometry.scale);
-    const nextPhase = bossHp <= bossMaxHp * 0.33 ? 3 : bossHp <= bossMaxHp * 0.66 ? 2 : 1;
+    const nextPhase = getBossPhase(bossHp, bossMaxHp);
     if (nextPhase !== bossPhase) {
         bossPhase = nextPhase;
         triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], bossPhase === 2 ? "gravity" : "supernova");
@@ -5837,28 +5629,21 @@ function maybeFinishBossExperimentByTime(): boolean {
 
 function damageBossForYakumono(kind: PachinkoYakumonoKind, def: PachinkoYakumonoDef, drop: Matter.Body): void {
     if (!activeBossExperiment) return;
-    const weak = activeBossExperiment.weakness === kind;
-    const base = kind === "premium" ? 28 : kind === "center" ? 18 : 10;
-    damageBoss(Math.round(base * (weak ? 2.2 : 1)), def.label, drop.position.x, drop.position.y - 44 * geometry.scale);
+    damageBoss(getBossYakumonoDamage(kind, activeBossExperiment.weakness), def.label, drop.position.x, drop.position.y - 44 * geometry.scale);
 }
 
 function damageBossForDrop(kind: DropKind, binIndex: number, body: Matter.Body): void {
     if (!activeBossExperiment || binIndex < 0) return;
     const def = findSpecialDef(kind);
-    if (!def) {
-        if (kind === "gold") damageBoss(900, "金玉", body.position.x, body.position.y);
-        if (kind === "rainbow") damageBoss(2400, "虹玉", body.position.x, body.position.y);
-        return;
-    }
-    const rankScore = getRankScore(def.rank);
-    const base = rankScore >= getRankScore("GOD") ? 120000 : rankScore >= getRankScore("EX") ? 72000 : rankScore >= getRankScore("UR") ? 36000 : rankScore >= getRankScore("SSR") ? 18000 : rankScore >= getRankScore("SR") ? 7200 : 3600;
-    damageBoss(Math.round(base * (activeBossExperiment.weakness === "miracle" ? 1.45 : 1)), def.label, body.position.x, body.position.y);
+    const damage = getBossDropDamage({ kind, def, weakness: activeBossExperiment.weakness, getRankScore });
+    if (damage <= 0) return;
+    damageBoss(damage, def?.label ?? (kind === "gold" ? "金玉" : "虹玉"), body.position.x, body.position.y);
 }
 
 function maybeBossAttack(): void {
     if (!activeBossExperiment || !isStarted || isFinished || isPaused || isMiraclePaused || bossHp <= 0) return;
     const now = Date.now();
-    const interval = bossPhase === 1 ? 9000 : bossPhase === 2 ? 6500 : 4600;
+    const interval = getBossAttackInterval(bossPhase);
     if (now - bossLastAttackAt < interval) return;
     bossLastAttackAt = now;
     triggerCameraShake((10 + bossPhase * 5) * geometry.scale, 360);
@@ -5869,30 +5654,33 @@ function maybeBossAttack(): void {
 
 function recordBossResult(): BossExperimentRecord | null {
     if (!activeBossExperiment) return null;
-    const rewardParts: string[] = [];
+    const rewardParts = getBossRewardParts({
+        cleared: bossClearedThisRun,
+        rewardPoint: activeBossExperiment.rewardPoint,
+        rewardTheme: activeBossExperiment.rewardTheme,
+        getThemeDisplayName,
+    });
     if (bossClearedThisRun) {
         addGachaPoint(activeBossExperiment.rewardPoint, `ボス討伐:${activeBossExperiment.name}`, false);
-        rewardParts.push(`P+${activeBossExperiment.rewardPoint}`);
         if (activeBossExperiment.rewardTheme) {
             markThemeUnlocked(activeBossExperiment.rewardTheme);
-            rewardParts.push(`テーマ:${getThemeDisplayName(activeBossExperiment.rewardTheme)}`);
         }
         savedRecords.bossCleared = savedRecords.bossCleared ?? {};
         savedRecords.bossCleared[activeBossExperiment.id] = Date.now();
     }
-    const record: BossExperimentRecord = {
+    const record = createBossExperimentRecord({
         id: createId("boss"),
-        bossId: activeBossExperiment.id,
-        bossName: activeBossExperiment.name,
+        boss: activeBossExperiment,
         cleared: bossClearedThisRun,
+        timedOut: bossTimedOutThisRun,
         damage: bossDamageTotal,
         maxHp: bossMaxHp,
         score: runScore,
         finishedCount,
         createdAt: Date.now(),
-        rewardLabel: rewardParts.join(" / ") || (bossTimedOutThisRun ? "時間切れ" : "討伐失敗"),
-    };
-    savedRecords.bossRecords = [record, ...((savedRecords.bossRecords ?? []).filter((x) => x.id !== record.id))].slice(0, 80);
+        rewardParts,
+    });
+    savedRecords.bossRecords = prependBossRecord(savedRecords.bossRecords, record);
     return record;
 }
 
@@ -6046,37 +5834,30 @@ function showLabHome(): void {
     bindLabHomeButtons();
 }
 
-function getPlainResearchMemo(): string {
-    const text = generateResearchMemoHtml().replace(/<br\s*\/?>(\n)?/gi, " / ").replace(/<[^>]+>/g, "");
-    return text.replace(/\s+/g, " ").trim();
-}
-
 function createResearchReportEntry(): ResearchReportEntry {
-    const ranking = binCounts.map((count, index) => ({ label: labels[index] ?? "-", count })).sort((a, b) => b.count - a.count);
-    const top = ranking[0] ?? { label: "-", count: 0 };
-    const evaluation = getResearchEvaluation();
-    const best = miracleLogs[0];
-    return {
-        id: `report-${Date.now()}-${Math.floor(appRandom() * 100000)}`,
-        createdAt: Date.now(),
+    return createResearchReportEntryBase({
+        now: Date.now(),
+        random: appRandom,
         runNo: savedRecords.totalRuns + 1,
         targetCount: settings.targetCount,
         finishedCount,
         discardedCount,
-        topLabel: top.label,
-        topCount: top.count,
-        grade: evaluation.grade,
-        type: evaluation.type,
-        score: runScore,
-        bestMiracleLabel: best?.label ?? "なし",
-        bestMiracleRank: best?.rank ?? "-",
-        memo: getPlainResearchMemo().slice(0, 260),
-    };
+        labels,
+        binCounts,
+        evaluation: getResearchEvaluation(),
+        runScore,
+        bestMiracle: miracleLogs[0],
+        memoHtml: generateResearchMemoHtml(),
+    });
 }
 
 function saveCurrentResearchReport(): ResearchReportEntry {
     const report = createResearchReportEntry();
-    savedRecords.researchReports = [report, ...((savedRecords.researchReports ?? []).filter((x) => x.id !== report.id))].slice(0, getResearchReportLimit());
+    savedRecords.researchReports = prependResearchReport({
+        reports: savedRecords.researchReports,
+        report,
+        limit: getResearchReportLimit(),
+    });
     return report;
 }
 
@@ -8338,7 +8119,7 @@ function rollNormalBallTrait(): NormalBallTraitDef | null {
 }
 
 function getNormalTraitSummaryHtml(): string {
-    return NORMAL_BALL_TRAITS.map((trait) => `<li><b>${trait.label}</b>: ${trait.description}</li>`).join("");
+    return getNormalTraitSummaryHtmlBase(NORMAL_BALL_TRAITS);
 }
 
 function maybeShowCommentary(text?: string, force = false): void {
@@ -8361,7 +8142,7 @@ function maybeShowCommentary(text?: string, force = false): void {
     const message = text || candidates[Math.floor(appRandom() * candidates.length)] || candidates[0];
     lastCommentaryAt = now;
     if (commentaryTimer !== undefined) window.clearTimeout(commentaryTimer);
-    commentaryOverlay.innerHTML = `<div style="position:absolute;white-space:nowrap;left:100vw;bottom:0;padding:4px 16px;border-radius:999px;background:rgba(15,23,42,.74);color:#fff;font-weight:900;font-size:${isMobile ? "18px" : "16px"};line-height:1.4;text-shadow:0 2px 8px rgba(0,0,0,.45);box-shadow:0 8px 22px rgba(0,0,0,.22);transition:transform ${COMMENTARY_DISPLAY_MS}ms linear;">${message}</div>`;
+    commentaryOverlay.innerHTML = getCommentaryLineHtml({ message, isMobile, displayMs: COMMENTARY_DISPLAY_MS });
     commentaryOverlay.style.display = "block";
     const line = commentaryOverlay.firstElementChild as HTMLElement | null;
     if (line) {
@@ -8400,13 +8181,7 @@ function showMilestone(text: string): void {
 }
 
 function pickCelebrationEffect(): { name: string; icon: string } {
-    const icons = ["🎆", "💥", "🌊", "🎂", "👍", "⚡", "🐶", "🐱", "⭐", "🔥", "🪐", "🎉", "🌈", "🦊", "🐸", "🦄", "🍀", "🍙", "🍜", "🍤", "🍣", "🥁", "🎺", "🎸", "🪩", "🛸", "🚀", "🌋", "🗿", "👺", "🥷", "🧊", "🫧", "🌪️", "☄️", "🌕", "🌞", "🦖", "🐉", "🦕"];
-    const prefixes = ["大", "超", "激", "謎", "夢", "夜", "朝", "山", "海", "森", "宇宙", "古代", "未来", "昭和", "平成", "令和", "無音", "爆速", "低速", "ぬるぬる"];
-    const suffixes = ["花火", "爆発", "祭り", "旋風", "波動", "祝福", "行進", "ダンス", "点滅", "ジャンプ", "拍手", "覚醒", "降臨", "乱舞", "パレード", "お祝い", "びっくり", "フィーバー", "チャンス", "ミラクル"];
-    const i = Math.floor(appRandom() * icons.length);
-    const prefix = prefixes[Math.floor(appRandom() * prefixes.length)];
-    const suffix = suffixes[Math.floor(appRandom() * suffixes.length)];
-    return { icon: icons[i], name: `${prefix}${suffix}` };
+    return pickCelebrationEffectBase(appRandom);
 }
 
 function showFullScreenCelebration(count: number): void {
@@ -8415,14 +8190,11 @@ function showFullScreenCelebration(count: number): void {
     vibrateOnMobile([35, 20, 35]);
     fireConfetti("normal");
     const effect = pickCelebrationEffect();
-    celebrationOverlay.innerHTML = `
-        <div style="position:absolute;inset:0;background:${randomRgba(0.45)};backdrop-filter:blur(4px);"></div>
-        <div style="position:relative;z-index:2;padding:30px;border-radius:30px;background:rgba(255,255,255,0.22);box-shadow:0 24px 70px rgba(0,0,0,0.32);animation:celeb-main-pop 2s ease-out forwards;">
-            <style>@keyframes celeb-main-pop{0%{transform:scale(.72);opacity:0}18%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:0}}</style>
-            <div style="font-size:clamp(70px,17vw,180px);line-height:1;">${effect.icon}</div>
-            <div style="margin-top:14px;font-size:clamp(30px,8vw,96px);font-weight:900;color:white;text-shadow:0 6px 22px rgba(0,0,0,.45);">${count.toLocaleString()}回達成！</div>
-            <div style="margin-top:8px;font-size:clamp(20px,4vw,46px);font-weight:800;color:white;text-shadow:0 4px 16px rgba(0,0,0,.42);">${effect.name} 演出</div>
-        </div>`;
+    celebrationOverlay.innerHTML = getFullScreenCelebrationHtml({
+        count,
+        background: randomRgba(0.45),
+        effect,
+    });
     celebrationOverlay.style.display = "flex";
     window.setTimeout(() => { celebrationOverlay.style.display = "none"; celebrationOverlay.innerHTML = ""; }, 2100);
 }
@@ -8479,7 +8251,7 @@ async function playAnimeMiracleEffect(def?: SpecialEventDef): Promise<void> {
 function speakLifeQuoteEvent(): void {
     const text = "ふふっ、自分の人生で言葉に出来ない程の感動する感情に出会えたらどんに辛いことがあってもまたこの人生をやりたいと思えるらしい";
     if (lifeQuoteOverlayTimer !== undefined) window.clearTimeout(lifeQuoteOverlayTimer);
-    subtitleOverlay.innerHTML = `<div style="font-size:${isMobile ? "26px" : "34px"};font-weight:1000;line-height:1.7;text-shadow:0 3px 18px rgba(0,0,0,.55);">${text}</div>`;
+    subtitleOverlay.innerHTML = getLifeQuoteHtml({ text, isMobile });
     subtitleOverlay.style.display = "block";
     subtitleOverlay.style.left = "50%";
     subtitleOverlay.style.right = "";
@@ -8572,16 +8344,15 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
     const repeatedInRun = !!def && (repeatedMiracleRunCounts[def.kind] ?? 0) >= 2;
     const overlayDurationMs = getMiraclePauseDuration(def, repeatedInRun);
     const overlayDurationSec = Math.max(0.24, overlayDurationMs / 1000);
-    miracleOverlay.innerHTML = `
-        <div style="max-width:900px;animation:miracle-pop ${overlayDurationSec.toFixed(2)}s ease-out forwards;">
-            <style>@keyframes miracle-pop{0%{transform:scale(.65);opacity:0}15%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:0}}</style>
-            ${getMiracleIconHtml(kind, symbol)}
-            <div style="font-size:clamp(36px,8vw,90px);font-weight:900;margin-top:12px;text-shadow:0 8px 30px rgba(0,0,0,.6);">${def?.label ?? "奇跡"} 発生</div>
-            <div style="font-size:clamp(22px,4vw,44px);font-weight:900;margin-top:12px;">${probabilityText}</div>
-            <div style="font-size:clamp(18px,3vw,32px);margin-top:12px;opacity:.94;line-height:1.5;">${feelingText}</div>
-            ${miracleCombo >= 2 ? `<div style="margin-top:10px;font-size:clamp(20px,4vw,40px);font-weight:900;color:#ffe560;">${t("奇跡コンボ", "Miracle combo")} x${miracleCombo}</div>` : ""}
-            ${repeatedInRun && (def?.rank === "SR" || def?.rank === "SSR") ? `<div style="margin-top:8px;font-size:clamp(16px,3vw,26px);font-weight:900;color:#bbf7d0;">同じSR/SSRのため短縮演出</div>` : ""}
-        </div>`;
+    miracleOverlay.innerHTML = getMiracleOverlayHtml({
+        iconHtml: getMiracleIconHtml(kind, symbol),
+        label: def?.label ?? "奇跡",
+        probabilityText,
+        feelingText,
+        comboText: miracleCombo >= 2 ? `<div style="margin-top:10px;font-size:clamp(20px,4vw,40px);font-weight:900;color:#ffe560;">${t("奇跡コンボ", "Miracle combo")} x${miracleCombo}</div>` : "",
+        repeatedText: repeatedInRun && (def?.rank === "SR" || def?.rank === "SSR") ? `<div style="margin-top:8px;font-size:clamp(16px,3vw,26px);font-weight:900;color:#bbf7d0;">同じSR/SSRのため短縮演出</div>` : "",
+        durationSec: overlayDurationSec,
+    });
     if (miracleOverlayTimer !== undefined) {
         window.clearTimeout(miracleOverlayTimer);
         miracleOverlayTimer = undefined;
@@ -8595,51 +8366,27 @@ function showMiracle(kind: DropKind, symbol: string, probabilityText: string, fe
 }
 
 function getSoundVolume(base = -8): number {
-    return base + (isMobile ? -4 : 0);
+    return getAdjustedSoundVolume(base, isMobile);
 }
 
 function playUiSound(kind: "start" | "pause" | "resume" | "open" | "close" | "tick" | "skill" | "time"): void {
     if (!soundEnabled || !toneReady || settings.simpleMode) return;
     try {
-        const Tone = toneModule;
-        if (!Tone) return;
-        const now = Tone.now();
-        const synth = new Tone.Synth({
-            oscillator: { type: kind === "time" ? "sine" : kind === "skill" ? "triangle" : "square" },
-            envelope: { attack: 0.002, decay: 0.06, sustain: 0.05, release: 0.12 },
-        }).toDestination();
-        synth.volume.value = getSoundVolume(kind === "tick" ? -18 : -14);
-        const notes: Record<string, string[]> = {
-            start: ["C5", "E5", "G5"],
-            pause: ["E4", "C4"],
-            resume: ["C4", "E4"],
-            open: ["G4", "B4"],
-            close: ["B4", "G4"],
-            tick: ["C6"],
-            skill: ["D5", "A5"],
-            time: ["F4", "C5", "F5"],
-        };
-        notes[kind].forEach((note, index) => synth.triggerAttackRelease(note, "32n", now + index * 0.055));
-        window.setTimeout(() => synth.dispose(), 650);
+        playUiToneCue({
+            toneModule,
+            kind,
+            volume: getSoundVolume(kind === "tick" ? -18 : -14),
+        });
     } catch {}
 }
 
 function playSecretSound(): void {
     if (!soundEnabled || !toneReady || settings.simpleMode) return;
     try {
-        const Tone = toneModule;
-        if (!Tone) return;
-        const now = Tone.now();
-        const synth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: "fatsawtooth" },
-            envelope: { attack: 0.01, decay: 0.18, sustain: 0.18, release: 0.42 },
-        }).toDestination();
-        synth.volume.value = getSoundVolume(-9);
-        ["C4", "E4", "G4", "B4", "D5", "G5"].forEach((note, i) => synth.triggerAttackRelease(note, i < 4 ? "16n" : "8n", now + i * 0.075));
-        const noise = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.005, decay: 0.13, sustain: 0 } }).toDestination();
-        noise.volume.value = -22;
-        noise.triggerAttackRelease("16n", now + 0.08);
-        window.setTimeout(() => { synth.dispose(); noise.dispose(); }, 1200);
+        playSecretToneCue({
+            toneModule,
+            volume: getSoundVolume(-9),
+        });
     } catch {}
 }
 function updateSoundButton(): void {
@@ -8943,48 +8690,59 @@ function updateRandomGraph(): void {
 }
 
 function buildResultCsv(): string {
-    const rows: Array<Array<string | number>> = [];
-    rows.push(["browser", browserName]);
-    rows.push(["device", isMobile ? "mobile" : "desktop"]);
-    rows.push(["target_count", settings.targetCount]);
-    rows.push(["probability_mode", settings.probabilityMode]);
-    rows.push(["finished_count", finishedCount]);
-    rows.push(["bin_count", settings.binCount]);
-    rows.push(["pin_rows", settings.pinRows]);
-    rows.push(["random_call_count", randomCallCount]);
-    rows.push(["discarded_count", discardedCount]);
-    rows.push(["run_score", runScore]);
-    rows.push(["boss_id", activeBossExperiment?.id ?? ""]);
-    rows.push(["boss_name", activeBossExperiment?.name ?? ""]);
-    rows.push(["boss_damage", bossDamageTotal]);
-    rows.push(["boss_hp_remaining", bossHp]);
-    rows.push(["boss_cleared", bossClearedThisRun ? "yes" : "no"]);
-    rows.push(["boss_timed_out", bossTimedOutThisRun ? "yes" : "no"]);
-    rows.push(["boss_time_limit_sec", activeBossExperiment?.timeLimitSec ?? ""]);
-    rows.push(["boss_elapsed_sec", activeBossExperiment ? Math.round(getBossElapsedMs((endTime ?? Date.now())) / 1000) : ""]);
-    rows.push(["best_combo", bestComboThisRun]);
-    rows.push(["missions_cleared", Object.values(missionProgress).filter(Boolean).length]);
-    rows.push(["gold_created", goldCreated]);
-    rows.push(["rainbow_created", rainbowCreated]);
-    rows.push(["giant_created", giantCreated]);
-    rows.push(["shape_created", shapeCreated]);
-    rows.push(["crown_created", crownCreated]);
-    rows.push(["shooting_star_created", starCreated]);
-    rows.push(["heart_created", heartCreated]);
-    rows.push(["black_sun_created", blackSunCreated]);
-    rows.push(["cosmic_egg_created", cosmicEggCreated]);
-    rows.push(["silver_ufo_created", silverUfoCreated]);
-    rows.push(["blue_flame_created", blueFlameCreated]);
-    rows.push(["lucky_seven_created", luckySevenCreated]);
-    rows.push(["time_rift_created", timeRiftCreated]);
-    rows.push(["lab_explosion_created", labExplosionCreated]);
-    rows.push([]);
-    rows.push(["bin", "label", "count", "percent", "gold", "rainbow", "giant", "shape", "crown", "star", "heart", "blackSun", "cosmicEgg"]);
-    for (let i = 0; i < settings.binCount; i++) {
-        const percent = finishedCount > 0 ? (binCounts[i] / finishedCount) * 100 : 0;
-        rows.push([i + 1, labels[i], binCounts[i], percent.toFixed(4), goldHits[i], rainbowHits[i], giantHits[i], shapeHits[i], crownHits[i], starHits[i], heartHits[i], blackSunHits[i], cosmicEggHits[i]]);
-    }
-    return rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+    return buildResultCsvBase({
+        browserName,
+        device: isMobile ? "mobile" : "desktop",
+        targetCount: settings.targetCount,
+        probabilityMode: settings.probabilityMode,
+        finishedCount,
+        binCount: settings.binCount,
+        pinRows: settings.pinRows,
+        randomCallCount,
+        discardedCount,
+        runScore,
+        boss: {
+            id: activeBossExperiment?.id ?? "",
+            name: activeBossExperiment?.name ?? "",
+            damage: bossDamageTotal,
+            hpRemaining: bossHp,
+            cleared: bossClearedThisRun,
+            timedOut: bossTimedOutThisRun,
+            timeLimitSec: activeBossExperiment?.timeLimitSec ?? "",
+            elapsedSec: activeBossExperiment ? Math.round(getBossElapsedMs((endTime ?? Date.now())) / 1000) : "",
+        },
+        bestComboThisRun,
+        missionsCleared: Object.values(missionProgress).filter(Boolean).length,
+        createdCounts: {
+            gold: goldCreated,
+            rainbow: rainbowCreated,
+            giant: giantCreated,
+            shape: shapeCreated,
+            crown: crownCreated,
+            shooting_star: starCreated,
+            heart: heartCreated,
+            black_sun: blackSunCreated,
+            cosmic_egg: cosmicEggCreated,
+            silver_ufo: silverUfoCreated,
+            blue_flame: blueFlameCreated,
+            lucky_seven: luckySevenCreated,
+            time_rift: timeRiftCreated,
+            lab_explosion: labExplosionCreated,
+        },
+        labels,
+        binCounts,
+        hits: {
+            gold: goldHits,
+            rainbow: rainbowHits,
+            giant: giantHits,
+            shape: shapeHits,
+            crown: crownHits,
+            star: starHits,
+            heart: heartHits,
+            blackSun: blackSunHits,
+            cosmicEgg: cosmicEggHits,
+        },
+    });
 }
 
 async function copyResultCsv(): Promise<void> {

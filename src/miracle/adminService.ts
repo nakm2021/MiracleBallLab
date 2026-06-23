@@ -1,5 +1,7 @@
 import type { AdminLogEntry } from "./adminLog";
 
+export type RuntimeGuardLogEntry = { at: number; reason: string; detail: string };
+
 export function stringifyErrorForAdminLog(value: unknown): string {
     try {
         if (value instanceof Error) {
@@ -62,4 +64,40 @@ export function installGlobalErrorLogger(writeRuntimeErrorToAdminLog: (label: st
             logging = false;
         }
     };
+}
+
+export function readRuntimeGuardLogs(params: {
+    storage: Storage;
+    storageKey: string;
+    limit: number;
+}): RuntimeGuardLogEntry[] {
+    try {
+        const raw = params.storage.getItem(params.storageKey);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.slice(-params.limit) : [];
+    } catch {
+        return [];
+    }
+}
+
+export function addRuntimeGuardLog(params: {
+    storage: Storage;
+    storageKey: string;
+    limit: number;
+    reason: string;
+    detail: string;
+    writeRuntimeErrorToAdminLog: (label: string, detail: string) => void;
+}): void {
+    try {
+        const rows = readRuntimeGuardLogs({
+            storage: params.storage,
+            storageKey: params.storageKey,
+            limit: params.limit,
+        });
+        rows.push({ at: Date.now(), reason: params.reason, detail: params.detail.slice(0, 900) });
+        params.storage.setItem(params.storageKey, JSON.stringify(rows.slice(-params.limit)));
+    } catch {
+        // ログ保存が失敗してもアプリ本体を止めない。
+    }
+    params.writeRuntimeErrorToAdminLog(`guard:${params.reason}`, params.detail);
 }

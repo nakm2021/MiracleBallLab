@@ -168,3 +168,53 @@ export function createRemoteMiracleBadUrlCache(params: {
         isUsable,
     };
 }
+
+export function getAdjustedSoundVolume(base: number, isMobile: boolean): number {
+    return base + (isMobile ? -4 : 0);
+}
+
+export function playUiToneCue(params: {
+    toneModule: any;
+    kind: "start" | "pause" | "resume" | "open" | "close" | "tick" | "skill" | "time";
+    volume: number;
+}): void {
+    const Tone = params.toneModule;
+    if (!Tone) return;
+    const now = Tone.now();
+    const synth = new Tone.Synth({
+        oscillator: { type: params.kind === "time" ? "sine" : params.kind === "skill" ? "triangle" : "square" },
+        envelope: { attack: 0.002, decay: 0.06, sustain: 0.05, release: 0.12 },
+    }).toDestination();
+    synth.volume.value = params.volume;
+    const notes: Record<typeof params.kind, string[]> = {
+        start: ["C5", "E5", "G5"],
+        pause: ["E4", "C4"],
+        resume: ["C4", "E4"],
+        open: ["G4", "B4"],
+        close: ["B4", "G4"],
+        tick: ["C6"],
+        skill: ["D5", "A5"],
+        time: ["F4", "C5", "F5"],
+    };
+    notes[params.kind].forEach((note, index) => synth.triggerAttackRelease(note, "32n", now + index * 0.055));
+    window.setTimeout(() => synth.dispose(), 650);
+}
+
+export function playSecretToneCue(params: {
+    toneModule: any;
+    volume: number;
+}): void {
+    const Tone = params.toneModule;
+    if (!Tone) return;
+    const now = Tone.now();
+    const synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: "fatsawtooth" },
+        envelope: { attack: 0.01, decay: 0.18, sustain: 0.18, release: 0.42 },
+    }).toDestination();
+    synth.volume.value = params.volume;
+    ["C4", "E4", "G4", "B4", "D5", "G5"].forEach((note, i) => synth.triggerAttackRelease(note, i < 4 ? "16n" : "8n", now + i * 0.075));
+    const noise = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.005, decay: 0.13, sustain: 0 } }).toDestination();
+    noise.volume.value = -22;
+    noise.triggerAttackRelease("16n", now + 0.08);
+    window.setTimeout(() => { synth.dispose(); noise.dispose(); }, 1200);
+}
