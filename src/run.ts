@@ -29,7 +29,7 @@ import { RARE_BOARD_CATASTROPHE_DEFS, type RareBoardCatastropheDef, type RareBoa
 import { EVENT_SEASONS, EXPERIMENT_PRESETS, MIRACLE_CRAFT_RECIPES, RESEARCH_SHOP_ITEMS, type EventSeasonDef, type EventSeasonMissionDef, type EventSeasonMissionMetric, type ExperimentPresetDef, type MiracleCraftRecipeDef, type ShopItemDef } from "./miracle/researchFeatures";
 import { APP_VERSION, BASE_HEIGHT, BASE_WIDTH, BLACK_SUN_RATE, COMMENTARY_DISPLAY_MS, COMMENTARY_MIN_INTERVAL_MS, COSMIC_EGG_RATE, CROWN_RATE, FINAL_SWEEP_DELAY_MS, FIRST_RUN_GUIDE_STORAGE_KEY, GIANT_EVENT_INTERVAL, GOLD_RATE, HEART_RATE, LOCAL_GOD_AUDIO_FILES, LOCAL_RARE_AUDIO_FILES, MAGNET_DURATION_MS, MILESTONE_INTERVAL, MIRACLE_ASSET_BASE_URL, MIRACLE_CHAIN_WINDOW_MS, MIRACLE_MANIFEST_URL, MIRACLE_OMEN_DISPLAY_MS, MIRACLE_OMEN_MIN_INTERVAL_MS, RAINBOW_RATE, RANDOM_BUCKET_COUNT, RECORD_STORAGE_KEY, REMOTE_MIRACLE_BAD_URL_CACHE_MS, REMOTE_MIRACLE_MANIFEST_CACHE_MS, REMOTE_MIRACLE_VIDEO_DISPLAY_MS, SCORE_STORAGE_BONUS_INTERVAL, SECRET_KEY_MAX_LENGTH, SECRET_KEY_SEQUENCES, SHAPE_RATE, SHOOTING_STAR_RATE, SMALL_MIRACLE_MIN_INTERVAL_MS, STUCK_EXPLODE_FRAMES, STUCK_NUDGE_FRAMES, SWORD_IMPACT_RATE, TIME_STOP_DURATION_MS, USER_PREFERENCES_STORAGE_KEY, USER_PROFILE_STORAGE_KEY, type RareSoundFlavor } from "./miracle/constants";
 import { getSpecialIconColors } from "./miracle/drawing";
-import { MAGIC_CIRCLE_DEFS, classifyMagicCircle, getMagicCircleMarkSvg, type MagicCircleDef } from "./miracle/magicCircles";
+import { MAGIC_CIRCLE_DEFS, classifyMagicCircle, type MagicCircleDef } from "./miracle/magicCircles";
 import { loadSavedRecords, loadUserPreferences, loadUserProfile, saveSavedRecords, saveUserProfileData } from "./miracle/localData";
 import { clamp, escapeCsv, escapeHtml, formatDateTime, formatDurationMs, formatElapsedTime, formatProbability, getBrowserName, getDateKey, getTodayKey, hashTextToNumber, isMobileDevice, loadExternalScript, parseLabels } from "./miracle/utils";
 import { getDailyMissions, getDailyMissionValue, getResearchRankInfo, getThemeCollection, getThemeForTime, pickRandomTheme } from "./miracle/progression";
@@ -58,8 +58,19 @@ import { getGachaResultHtml, getGachaRewardBookHtml, getGachaSpinHtml, getMiracl
 import { getFamiliarExpeditionHtml, getFamiliarPopupHtml, getMiracleTicketHtml, getSecretResearchNoteHtml } from "./miracle/familiarPresentation";
 import { getMiracleAlbumHtml, getMiracleLogHtml } from "./miracle/miracleAlbumPresentation";
 import { getResearchWorldMapHtml } from "./miracle/researchWorldMapPresentation";
-import { getDailyMissionHtml, getExperimentPresetHtml, getResearchRankHtml, getThemeBookHtml } from "./miracle/labPresentation";
+import { getDailyMissionHtml, getExperimentPresetHtml, getLabHomeHtml, getResearchRankHtml, getResearchReportSummaryHtml, getThemeBookHtml } from "./miracle/labPresentation";
 import { getEventSeasonHtml, getMiracleCraftHtml, getResearchShopHtml } from "./miracle/researchCommercePresentation";
+import { getAboutHtml, getButtonHelpHtml } from "./miracle/aboutPresentation";
+import { getAppInfoHtml, getMiracleBookHtml, getRecordsHtml, getUserSettingsHtml } from "./miracle/userPresentation";
+import { getDailyFortuneHtml, getFusionHtml, getMissionHtml, getReplayHtml, getShareHtml } from "./miracle/activityPresentation";
+import { getSecretHtml, getSecretUnlockHtml, SECRET_DEFS } from "./miracle/secretPresentation";
+import { getAdminGateHtml, getAdminMiracleButtonHtml, getAdminPanelHtml, getAdminRemoteVideoEmptyHtml, getAdminRemoteVideoListHtml, getAdminRemoteVideoLoadingHtml, getAdminRemoteVideoRowHtml, getAnagoTempuraSecretHtml, getEmergencyRuntimeLogOverlayHtml, getRuntimeGuardLogHtml } from "./miracle/adminPresentation";
+import { getEndingResultHtml, getFinalResultHtml, getSafeStopResultHtml } from "./miracle/resultPresentation";
+import { getAdminMagicCircleAnswerHtml, getMagicCircleSummonOverlayHtml } from "./miracle/magicCirclePresentation";
+import { createDividers as createDividersBase, createDropPlugin as createDropPluginBase, createHeartBody as createHeartBodyBase, createPachinkoNailGate as createPachinkoNailGateBase, createPachinkoYakumonoSensors as createPachinkoYakumonoSensorsBase, createPins as createPinsBase, createRandomShapeBody as createRandomShapeBodyBase, createSymbolBody as createSymbolBodyBase, createTinyFragment as createTinyFragmentBase, createWallsAndFloor as createWallsAndFloorBase, getPachinkoYakumonoDef as getPachinkoYakumonoDefBase, getRarePinDef as getRarePinDefBase, rollRarePin as rollRarePinBase } from "./miracle/physicsService";
+import { createRemoteMiracleAssetLoader, createRemoteMiracleBadUrlCache, getFreshRemoteVideoSourceUrl as getFreshRemoteVideoSourceUrlBase, isIOSLikeDevice as isIOSLikeDeviceBase, prepareRemoteVideoForSound as prepareRemoteVideoForSoundBase } from "./miracle/videoAudioService";
+import { createRuntimeErrorLogWriter, installGlobalErrorLogger as installGlobalErrorLoggerBase, stringifyErrorForAdminLog } from "./miracle/adminService";
+import { applyUserPreferences, buildUserPreferences, getAppOnlineStatusHtml as getAppOnlineStatusHtmlBase, getUserPlayStyleLabel as getUserPlayStyleLabelBase, registerAppOpenInProfile } from "./miracle/stateService";
 import type {
     DropKind,
     ProbabilityMode,
@@ -69,8 +80,6 @@ import type {
     DailyFortune,
     MiracleClip,
     RemoteMiracleAsset,
-    RemoteMiracleAssetSource,
-    RemoteMiracleManifest,
     ThemeMode,
     ThemeAutoMode,
     DailyMissionDef,
@@ -81,7 +90,6 @@ import type {
     SavedRecords,
     MissionDef,
     SkillKind,
-    SecretDef,
     SkillState,
     Settings,
     UserPlayStyle,
@@ -94,7 +102,6 @@ import type {
     MiracleChainDef,
     BoardAnomalyMode,
     RarePinKind,
-    RarePinDef,
     PachinkoYakumonoKind,
     PachinkoYakumonoDef,
     TutorialMissionDef,
@@ -1061,21 +1068,7 @@ function installMobileRuntimeGuard(): void {
 }
 
 function showRuntimeGuardLogPopup(): void {
-    const rows = readRuntimeGuardLogs().slice().reverse().map((entry, index) => `
-        <div style="padding:10px 0;border-bottom:1px solid rgba(100,116,139,.18);">
-            <div style="font-weight:1000;">${index + 1}. ${escapeHtml(entry.reason)}</div>
-            <div style="opacity:.72;font-size:.86em;">${escapeHtml(new Date(entry.at).toLocaleString())}</div>
-            <div style="margin-top:4px;line-height:1.55;word-break:break-all;">${escapeHtml(entry.detail)}</div>
-        </div>
-    `).join("") || `<p>復旧ログはまだありません。</p>`;
-    showPopup("スマホ復旧ログ", `
-        <p>画面縮小・白画面・操作不能などを検知したときのログです。</p>
-        <div class="miracle-user-card" style="max-height:58dvh;overflow:auto;">${rows}</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-            <button id="runtime-guard-recover-button" class="miracle-home-button miracle-home-primary">今すぐ復旧</button>
-            <button id="runtime-guard-clear-button" class="miracle-home-button">ログ削除</button>
-        </div>
-    `);
+    showPopup("スマホ復旧ログ", getRuntimeGuardLogHtml(readRuntimeGuardLogs()));
     document.getElementById("runtime-guard-recover-button")?.addEventListener("click", () => recoverMobileLayoutIfBroken("admin-manual", true));
     document.getElementById("runtime-guard-clear-button")?.addEventListener("click", () => {
         localStorage.removeItem(RUNTIME_GUARD_LOG_STORAGE_KEY);
@@ -1134,19 +1127,7 @@ function showEmergencyRuntimeLogOverlay(reason = "manual"): void {
     overlay.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
     overlay.style.touchAction = "auto";
     const text = getEmergencyRuntimeLogText();
-    overlay.innerHTML = `
-        <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px;position:sticky;top:0;background:rgba(0,0,0,.92);padding-bottom:8px;">
-            <div style="font-weight:1000;font-size:18px;">緊急ログ</div>
-            <button id="emergency-log-close" style="font-size:18px;font-weight:900;padding:8px 12px;border-radius:12px;border:1px solid #94a3b8;background:#e2e8f0;color:#0f172a;">閉じる</button>
-        </div>
-        <p style="line-height:1.6;margin:0 0 10px;">下のテキスト欄を長押ししてコピーできます。ボタンが効く場合は「ログをコピー」を押してください。</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-            <button id="emergency-log-copy" style="font-size:16px;font-weight:900;padding:10px 14px;border-radius:12px;border:1px solid #67e8f9;background:#22d3ee;color:#082f49;">ログをコピー</button>
-            <button id="emergency-log-recover" style="font-size:16px;font-weight:900;padding:10px 14px;border-radius:12px;border:1px solid #86efac;background:#22c55e;color:#052e16;">今すぐ復旧</button>
-            <button id="emergency-log-clear" style="font-size:16px;font-weight:900;padding:10px 14px;border-radius:12px;border:1px solid #fecaca;background:#ef4444;color:#fff;">ログ削除</button>
-        </div>
-        <textarea id="emergency-log-textarea" readonly style="width:100%;height:68vh;box-sizing:border-box;border-radius:14px;padding:12px;font-size:12px;line-height:1.45;background:#0f172a;color:#d1fae5;border:1px solid #475569;white-space:pre;">${escapeHtml(text)}</textarea>
-    `;
+    overlay.innerHTML = getEmergencyRuntimeLogOverlayHtml(text);
     document.body.appendChild(overlay);
     const close = document.getElementById("emergency-log-close") as HTMLButtonElement | null;
     const copy = document.getElementById("emergency-log-copy") as HTMLButtonElement | null;
@@ -1947,13 +1928,20 @@ let miracleOverlayTimer: number | undefined;
 let miracleOverlayEndsAt = 0;
 let miracleOverlayRemainingMs = 0;
 let miracleOverlayFrozen = false;
-let remoteMiracleAssets: RemoteMiracleAsset[] = [];
-let remoteMiracleAssetsLoadedAt = 0;
-let remoteMiracleAssetsLoading: Promise<RemoteMiracleAsset[]> | null = null;
 let activeRemoteMiracleVideo: HTMLVideoElement | null = null;
 const REMOTE_MIRACLE_MANIFEST_BACKUP_STORAGE_KEY = "miracleBallLab.remoteManifestBackup.v1";
+const remoteMiracleAssetLoader = createRemoteMiracleAssetLoader({
+    manifestUrl: MIRACLE_MANIFEST_URL,
+    cacheMs: REMOTE_MIRACLE_MANIFEST_CACHE_MS,
+    backupStorageKey: REMOTE_MIRACLE_MANIFEST_BACKUP_STORAGE_KEY,
+    normalizeManifest: normalizeRemoteMiracleAssetsFromManifest,
+    storage: localStorage,
+});
 let remoteMiracleVideoTimer: number | undefined;
-let remoteMiracleBadUrls = new Map<string, number>();
+const remoteMiracleBadUrlCache = createRemoteMiracleBadUrlCache({
+    cacheMs: REMOTE_MIRACLE_BAD_URL_CACHE_MS,
+    getSources: getRemoteMiracleAssetSources,
+});
 
 const flashOverlay = document.createElement("div");
 flashOverlay.style.position = "fixed";
@@ -2563,142 +2551,52 @@ function showAdminStatsPopup(): void {
     adminLogApi?.showAdminStatsPopup();
 }
 
-let globalErrorLogCount = 0;
 const MAX_GLOBAL_ERROR_LOGS_PER_SESSION = 80;
-
-function stringifyErrorForAdminLog(value: unknown): string {
-    try {
-        if (value instanceof Error) {
-            return [value.name, value.message, value.stack].filter(Boolean).join(" | ").slice(0, 900);
-        }
-        if (typeof value === "string") return value.slice(0, 900);
-        const json = JSON.stringify(value, (_key, current) => {
-            if (typeof current === "function") return `[Function ${current.name || "anonymous"}]`;
-            if (current instanceof Error) return { name: current.name, message: current.message, stack: current.stack };
-            return current;
-        });
-        return (json || String(value)).slice(0, 900);
-    } catch {
-        return String(value).slice(0, 900);
-    }
-}
-
-function writeRuntimeErrorToAdminLog(label: string, detail: string): void {
-    if (globalErrorLogCount >= MAX_GLOBAL_ERROR_LOGS_PER_SESSION) return;
-    globalErrorLogCount += 1;
-    try {
-        recordAdminEvent({
-            type: "video_fail",
-            at: Date.now(),
-            label,
-            rank: "ERROR",
-            detail,
-        });
-    } catch {
-        // ログ保存自体の失敗でさらにエラーを増やさない。
-    }
-}
+const writeRuntimeErrorToAdminLog = createRuntimeErrorLogWriter({
+    maxLogsPerSession: MAX_GLOBAL_ERROR_LOGS_PER_SESSION,
+    recordAdminEvent,
+});
 
 function installGlobalErrorLogger(): void {
-    const originalConsoleError = console.error.bind(console);
-    let logging = false;
-
-    window.addEventListener("error", (event) => {
-        const detail = `${event.message || "runtime error"} @ ${event.filename || "unknown"}:${event.lineno || 0}:${event.colno || 0}${event.error ? " | " + stringifyErrorForAdminLog(event.error) : ""}`;
-        writeRuntimeErrorToAdminLog("runtime_error", detail);
-    });
-
-    window.addEventListener("unhandledrejection", (event) => {
-        writeRuntimeErrorToAdminLog("unhandled_rejection", stringifyErrorForAdminLog(event.reason));
-    });
-
-    console.error = (...args: unknown[]) => {
-        originalConsoleError(...args);
-        if (logging) return;
-        logging = true;
-        try {
-            writeRuntimeErrorToAdminLog("console_error", args.map(stringifyErrorForAdminLog).join(" / "));
-        } finally {
-            logging = false;
-        }
-    };
+    installGlobalErrorLoggerBase(writeRuntimeErrorToAdminLog);
 }
 
 function applyUserPreferencesToCurrentState(): void {
-    const prefs = userPreferences;
-    if (!prefs || typeof prefs !== "object") return;
-    settings = { ...settings, ...prefs };
-    if (!localStorage.getItem(COMMENTARY_DEFAULT_OFF_MIGRATION_KEY)) {
-        settings.commentaryEnabled = false;
-        userPreferences = { ...userPreferences, commentaryEnabled: false };
-        try {
-            localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(userPreferences));
-            localStorage.setItem(COMMENTARY_DEFAULT_OFF_MIGRATION_KEY, "1");
-        } catch {}
+    const applied = applyUserPreferences({
+        prefs: userPreferences,
+        settings,
+        storage: localStorage,
+        storageKey: USER_PREFERENCES_STORAGE_KEY,
+        commentaryMigrationKey: COMMENTARY_DEFAULT_OFF_MIGRATION_KEY,
+        pinRowsMigrationKey: PIN_ROWS_DEFAULT_4_MIGRATION_KEY,
+        binCountMigrationKey: BIN_COUNT_DEFAULT_4_MIGRATION_KEY,
+        createDefaultLabelText,
+    });
+    settings = applied.settings;
+    userPreferences = applied.userPreferences;
+    if (applied.speedLabelText) speedLabelText = applied.speedLabelText;
+    if (applied.currentTheme) currentTheme = applied.currentTheme;
+    if (applied.themeAutoMode) {
+        themeAutoMode = applied.themeAutoMode;
+        settings.themeAutoMode = applied.themeAutoMode;
     }
-    try {
-        if (!localStorage.getItem(PIN_ROWS_DEFAULT_4_MIGRATION_KEY)) {
-            const savedRows = Number((prefs as UserPreferences).pinRows);
-            if (!Number.isFinite(savedRows) || savedRows === 6 || savedRows === 7) {
-                settings.pinRows = 4;
-                userPreferences = { ...userPreferences, pinRows: 4 };
-                localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(userPreferences));
-            }
-            localStorage.setItem(PIN_ROWS_DEFAULT_4_MIGRATION_KEY, "1");
-        }
-    } catch {}
-    try {
-        if (!localStorage.getItem(BIN_COUNT_DEFAULT_4_MIGRATION_KEY)) {
-            const savedBins = Number((prefs as UserPreferences).binCount);
-            if (!Number.isFinite(savedBins) || savedBins === 6 || savedBins === 8) {
-                settings.binCount = 4;
-                settings.labelText = createDefaultLabelText(settings.binCount);
-                userPreferences = { ...userPreferences, binCount: 4, labelText: settings.labelText };
-                localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(userPreferences));
-            }
-            localStorage.setItem(BIN_COUNT_DEFAULT_4_MIGRATION_KEY, "1");
-        }
-    } catch {}
-    if (prefs.speedLabelText) speedLabelText = prefs.speedLabelText;
-    if (prefs.theme) currentTheme = prefs.theme;
-    if (prefs.themeAutoMode) themeAutoMode = prefs.themeAutoMode;
-    if (prefs.themeAutoMode) settings.themeAutoMode = prefs.themeAutoMode;
-    if (typeof prefs.soundEnabled === "boolean") soundEnabled = prefs.soundEnabled;
-    if (typeof prefs.confettiEnabled === "boolean") confettiEnabled = prefs.confettiEnabled;
-    if (prefs.language === "en") isEnglish = true;
+    if (typeof applied.soundEnabled === "boolean") soundEnabled = applied.soundEnabled;
+    if (typeof applied.confettiEnabled === "boolean") confettiEnabled = applied.confettiEnabled;
+    if (applied.isEnglish) isEnglish = true;
 }
 
 function saveUserPreferencesFromCurrentState(): void {
-    const prefs: UserPreferences = {
-        version: 1,
-        targetCount: settings.targetCount,
-        activeLimit: settings.activeLimit,
-        binCount: settings.binCount,
-        pinRows: settings.pinRows,
-        labelText: settings.labelText,
-        backgroundImage: settings.backgroundImage === selectedBackgroundObjectUrl ? DEFAULT_BACKGROUND_IMAGE_URL : settings.backgroundImage,
-        simpleMode: settings.simpleMode,
-        cameraShakeEnabled: settings.cameraShakeEnabled,
-        slowMiracleEffects: settings.slowMiracleEffects,
-        effectsEnabled: settings.effectsEnabled,
-        commentaryEnabled: settings.commentaryEnabled,
-        boardAnomalyEnabled: settings.boardAnomalyEnabled,
-        normalBallTraitsEnabled: settings.normalBallTraitsEnabled,
-        timeBallSkinsEnabled: settings.timeBallSkinsEnabled,
-        mobileCompactMode: settings.mobileCompactMode,
-        lowSpecMode: settings.lowSpecMode,
-        showRecentMiracles: settings.showRecentMiracles,
-        familiarEnabled: settings.familiarEnabled,
-        blackModeEnabled: settings.blackModeEnabled,
-        effectMode: settings.effectMode,
-        probabilityMode: settings.probabilityMode,
+    const prefs = buildUserPreferences({
+        settings,
+        selectedBackgroundObjectUrl,
+        defaultBackgroundImageUrl: DEFAULT_BACKGROUND_IMAGE_URL,
         speedLabelText,
-        theme: currentTheme,
+        currentTheme,
         themeAutoMode,
         soundEnabled,
         confettiEnabled,
-        language: isEnglish ? "en" : "ja",
-    };
+        isEnglish,
+    });
     userPreferences = prefs;
     try { localStorage.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(prefs)); } catch {}
 }
@@ -2710,33 +2608,22 @@ function persistUserPreferencesSoon(): void {
 }
 
 function registerAppOpen(): void {
-    recordAdminEvent({ type: "app_open", at: Date.now(), detail: `${browserName} / ${window.innerWidth}x${window.innerHeight}` });
-    const today = getDateKey();
-    const last = userProfile.lastPlayedDateKey;
-    const yesterday = getDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
-    userProfile.openCount += 1;
-    userProfile.lastOpenedAt = Date.now();
-    if (last !== today) {
-        userProfile.consecutiveDays = last === yesterday ? userProfile.consecutiveDays + 1 : 1;
-        userProfile.lastPlayedDateKey = today;
-    }
+    const now = Date.now();
+    recordAdminEvent({ type: "app_open", at: now, detail: `${browserName} / ${window.innerWidth}x${window.innerHeight}` });
+    userProfile = registerAppOpenInProfile({ profile: userProfile, now, getDateKey });
     saveUserProfile();
 }
 
 function getUserPlayStyleLabel(style: UserPlayStyle): string {
-    const ja: Record<UserPlayStyle, string> = { standard: "標準", viewer: "演出を見る", collector: "図鑑収集", recording: "録画・SNS" };
-    const en: Record<UserPlayStyle, string> = { standard: "Standard", viewer: "Effects", collector: "Collection", recording: "Recording" };
-    return isEnglish ? en[style] : ja[style];
+    return getUserPlayStyleLabelBase(style, isEnglish);
 }
 
 function getAppOnlineStatusHtml(): string {
-    const online = navigator.onLine;
-    const swReady = "serviceWorker" in navigator;
-    return `
-        <span class="miracle-status-pill">${online ? "オンライン" : "オフライン"}</span>
-        <span class="miracle-status-pill">${swReady ? "オフライン起動準備あり" : "Service Workerなし"}</span>
-        <span class="miracle-status-pill">v${APP_VERSION}</span>
-    `;
+    return getAppOnlineStatusHtmlBase({
+        online: navigator.onLine,
+        serviceWorkerReady: "serviceWorker" in navigator,
+        appVersion: APP_VERSION,
+    });
 }
 
 function markThemeUnlocked(theme: ThemeMode): void {
@@ -4245,19 +4132,12 @@ function saveShareCard(): void {
 }
 
 function showMissionPopup(): void {
-    const rows = missionDefs.map((mission) => {
-        const cleared = !!missionProgress[mission.id];
-        const totalClear = savedRecords.missionCompleted[mission.id] ?? 0;
-        return `<div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
-                <div style="font-weight:900;font-size:${isMobile ? 22 : 18}px;color:${cleared ? "#166534" : "#1f2937"};">${cleared ? "✅" : "⬜"} ${mission.title}</div>
-                <div style="font-weight:800;color:#475569;">+${mission.rewardScore.toLocaleString()} score</div>
-            </div>
-            <div style="margin-top:6px;opacity:.82;line-height:1.55;">${mission.description}</div>
-            <div style="margin-top:6px;font-size:${isMobile ? 16 : 14}px;opacity:.72;">通算達成 ${totalClear}回</div>
-        </div>`;
-    });
-    showPopup("ミッション", `<div style="margin-top:8px;border-radius:18px;background:rgba(255,255,255,.72);padding:${isMobile ? "8px 14px" : "8px 16px"};">${rows}</div>`);
+    showPopup("ミッション", getMissionHtml({
+        missions: missionDefs,
+        progress: missionProgress,
+        totalCompleted: savedRecords.missionCompleted,
+        isMobile,
+    }));
 }
 
 
@@ -4290,14 +4170,7 @@ function saveCurrentScreenshot(): void {
 }
 
 function showSharePopup(): void {
-    showPopup("録画・SNS", `
-        <p>奇跡クリップのGIF保存は「リプレイ」から行えます。ここでは投稿文コピー、現在画面のスクリーンショット保存、縦長シェアカード保存を行えます。</p>
-        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:18px;">
-            <button id="sns-copy-button" style="font-size:18px;padding:12px 18px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);">投稿文コピー</button>
-            <button id="screenshot-save-button" style="font-size:18px;padding:12px 18px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#fff7ed 0%,#fed7aa 100%);">現在画面を保存</button>
-            <button id="sns-card-button" style="font-size:18px;padding:12px 18px;border-radius:999px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:900;background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);">SNSカード保存</button>
-        </div>
-    `);
+    showPopup("録画・SNS", getShareHtml());
     const copyBtn = document.getElementById("sns-copy-button") as HTMLButtonElement | null;
     const shotBtn = document.getElementById("screenshot-save-button") as HTMLButtonElement | null;
     const cardBtn = document.getElementById("sns-card-button") as HTMLButtonElement | null;
@@ -4447,20 +4320,11 @@ function tryUnlockFusions(): void {
 function showDailyFortunePopup(): void {
     const fortune = currentDailyFortune ?? getDailyFortune();
     currentDailyFortune = fortune;
-    showPopup("今日の運勢・奇跡率", `
-        <div style="display:grid;gap:12px;">
-            <div style="font-size:${isMobile ? "30px" : "26px"};font-weight:1000;">${fortune.title}</div>
-            <div><b>今日の奇跡率:</b> x${fortune.rateBoost.toFixed(2)}</div>
-            <div><b>今日の注目奇跡:</b> ${fortune.luckyKind}</div>
-            <div><b>ラッキー受け皿:</b> ${fortune.luckyBin}</div>
-            <div style="line-height:1.7;">${fortune.advice}</div>
-            <div style="opacity:.7;font-size:${isMobile ? "15px" : "13px"};">日付ごとに固定されます。奇跡率はレア抽選にほんの少しだけ加算されます。</div>
-        </div>
-    `);
+    showPopup("今日の運勢・奇跡率", getDailyFortuneHtml(fortune, isMobile));
 }
 
 function showFusionPopup(): void {
-    const rows = FUSION_DEFS.map((fusion) => {
+    const fusions = FUSION_DEFS.map((fusion) => {
         const unlocked = getFusionUnlocked(fusion);
         const ready = getFusionReady(fusion);
         const sources = fusion.sourceKinds.map((kind) => {
@@ -4468,39 +4332,14 @@ function showFusionPopup(): void {
             const count = savedRecords.discovered[kind] ?? 0;
             return `${def?.label ?? kind} ${count}/${fusion.requiredCount}`;
         }).join(" / ");
-        return `<div style="padding:13px 0;border-bottom:1px solid rgba(80,90,120,.16);">
-            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
-                <div style="font-weight:1000;font-size:${isMobile ? "22px" : "18px"};color:${unlocked ? "#166534" : ready ? "#854d0e" : "#334155"};">${unlocked ? "✅" : ready ? "🧪" : "🔒"} ${unlocked || ready ? fusion.label : "未解放の派生奇跡"} [${fusion.rank}]</div>
-                <div style="font-weight:900;color:#475569;">+${fusion.rewardScore.toLocaleString()} score</div>
-            </div>
-            <div style="margin-top:6px;opacity:.80;line-height:1.55;">${unlocked ? fusion.description : "素材奇跡を集めると解放されます。"}</div>
-            <div style="margin-top:6px;opacity:.72;">素材: ${sources}</div>
-        </div>`;
+        return { fusion, unlocked, ready, sources };
     });
-    const chainRows = MIRACLE_CHAIN_DEFS.map((chain) => {
+    const chains = MIRACLE_CHAIN_DEFS.map((chain) => {
         const names = chain.sequence.map((kind) => findSpecialDef(kind)?.label ?? kind).join(" → ");
         const unlocked = !!unlockedChainRunIds[chain.id];
-        return `<div style="padding:10px 0;border-bottom:1px dashed rgba(80,90,120,.18);"><b>${unlocked ? "✅" : "🔁"} ${chain.label} [${chain.rank}]</b><div style="margin-top:4px;opacity:.74;">順番: ${names}</div><div style="margin-top:4px;opacity:.74;">${chain.description}</div></div>`;
+        return { chain, names, unlocked };
     });
-    showPopup("奇跡合成・派生", `<p>特定の奇跡を観測すると、合成・派生の研究記録が解放されます。</p>${rows}<h3 style="margin-top:18px;">実験中の奇跡連鎖</h3><p>下記の順番で奇跡が続くと、その実験中だけの連鎖演出が発生します。</p>${chainRows}`);
-}
-
-function getSecretDefs(): SecretDef[] {
-    return [
-        { id: "keyword-miracle", label: "MIRACLE コード", hint: "PCで研究所の合言葉を英字入力", detail: "キーボードで隠しコードを入力しました。今日の研究所は少しだけ騒がしくなります。", rewardScore: 7777 },
-        { id: "keyword-lab", label: "LAB コード", hint: "研究所の短縮名を英字入力", detail: "短い研究所コードを入力しました。", rewardScore: 5000 },
-        { id: "keyword-neko", label: "NEKO コード", hint: "猫っぽい英字を入力", detail: "ねこちゃんモードの気配を呼びました。", rewardScore: 5000 },
-        { id: "keyword-sun", label: "SUN コード", hint: "太陽に関係する英字を入力", detail: "黒い太陽を探す研究者用の短縮コードです。", rewardScore: 5000 },
-        { id: "favicon-five-taps", label: "favicon 5連打", hint: "起動画面のロゴを連打", detail: "起動ロゴを5回タップしました。ロード画面にも秘密がありました。", rewardScore: 7777 },
-        { id: "pause-seven-taps", label: "時間停止ごっこ", hint: "一時停止を短時間に何度も操作", detail: "一時停止操作を短時間に7回行いました。時間を止めようとする研究記録です。", rewardScore: 9000 },
-        { id: "settings-three-open", label: "設定室の常連", hint: "スマホの設定画面を何度か開く", detail: "スマホ設定画面を3回開きました。設定画面にも観測ログが残ります。", rewardScore: 6000 },
-        { id: "familiar-neko", label: "使い魔契約: ねこ式使い魔", hint: "使い魔研究室かPCキー入力で猫系コード", detail: "ねこ式使い魔を解放しました。", rewardScore: 14000 },
-        { id: "familiar-kuro", label: "使い魔契約: 黒羽コウモリ", hint: "使い魔研究室かPCキー入力で黒羽系コード", detail: "黒羽コウモリを解放しました。", rewardScore: 14000 },
-        { id: "familiar-tokei", label: "使い魔契約: 時計キツネ", hint: "使い魔研究室かPCキー入力で時計系コード", detail: "時計キツネを解放しました。", rewardScore: 14000 },
-        { id: "familiar-hoshi", label: "使い魔契約: 星くらげ", hint: "使い魔研究室かPCキー入力で星系コード", detail: "星くらげを解放しました。", rewardScore: 14000 },
-        { id: "familiar-miko", label: "使い魔契約: 秘密巫女うさぎ", hint: "使い魔研究室かPCキー入力で短い秘密コード", detail: "秘密巫女うさぎを解放しました。", rewardScore: 14000 },
-        { id: "skill-combo-lab", label: "三種の介入", hint: "実験中に衝撃波→磁石→時止めの順で使う", detail: "盤面介入スキルを決まった順番で使いました。研究員が完全に介入しています。", rewardScore: 12000 },
-    ];
+    showPopup("奇跡合成・派生", getFusionHtml({ fusions, chains, isMobile }));
 }
 
 function unlockSecret(id: string, label: string, detail: string, rewardScore?: number): void {
@@ -4508,13 +4347,13 @@ function unlockSecret(id: string, label: string, detail: string, rewardScore?: n
         showMilestone(label + " 起動");
         return;
     }
-    const def = getSecretDefs().find((x) => x.id === id);
+    const def = SECRET_DEFS.find((x) => x.id === id);
     const score = rewardScore ?? def?.rewardScore ?? 7777;
     savedRecords.secretUnlocked[id] = Date.now();
     addScore(score, "SECRET " + label);
     saveRecords();
     playSecretSound();
-    showPopup("秘密操作を発見", "<p><b>" + label + "</b> を解放しました。</p><p>" + detail + "</p><p>報酬: +" + score.toLocaleString() + " score</p><p>研究レベルに少しだけボーナスが入ります。</p>");
+    showPopup("秘密操作を発見", getSecretUnlockHtml(label, detail, score));
 }
 
 function showAdminGateOrPanel(): void {
@@ -4536,14 +4375,7 @@ function updateAdminButton(): void {
 }
 
 function showAdminGatePopup(): void {
-    showPopup("合言葉", `
-        <p>研究主任モードに入るための合言葉を入力してください。</p>
-        <input id="admin-passcode-input" type="password" autocomplete="off" placeholder="合言葉" style="width:100%;box-sizing:border-box;padding:${isMobile ? "16px" : "12px 14px"};border-radius:18px;border:1px solid #b8c1d1;font-size:${uiFontPx}px;font-family:${ROUNDED_UI_FONT};">
-        <div id="admin-passcode-message" style="margin-top:10px;font-weight:900;color:#7f1d1d;min-height:1.4em;"></div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
-            <button id="admin-unlock-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px 22px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#fee2e2 0%,#fecaca 100%);color:#7f1d1d;cursor:pointer;">解放する</button>
-        </div>
-    `);
+    showPopup("合言葉", getAdminGateHtml({ isMobile, uiFontPx, uiButtonFontPx, roundedUiFont: ROUNDED_UI_FONT }));
     const input = document.getElementById("admin-passcode-input") as HTMLInputElement | null;
     const button = document.getElementById("admin-unlock-button") as HTMLButtonElement | null;
     const message = document.getElementById("admin-passcode-message") as HTMLDivElement | null;
@@ -4585,27 +4417,9 @@ function showAdminPanelPopup(): void {
     const miracleButtons = SPECIAL_EVENT_DEFS
         .slice()
         .sort((a, b) => b.denominator - a.denominator)
-        .map((def) => `<button class="admin-miracle-button" data-kind="${def.kind}" style="font-size:${isMobile ? "16px" : "15px"};font-weight:900;padding:10px 12px;border-radius:14px;border:1px solid rgba(127,29,29,.24);background:linear-gradient(180deg,#fff7ed 0%,#fed7aa 100%);color:#7c2d12;cursor:pointer;text-align:left;white-space:normal;overflow-wrap:anywhere;line-height:1.2;">${def.label}<br><span style="font-size:.82em;opacity:.78;">[${def.rank}] ${formatProbability(def.denominator)}</span></button>`)
+        .map((def) => getAdminMiracleButtonHtml(def, { isMobile, formatProbability }))
         .join("");
-    showPopup("研究主任モード", `
-        <p><b>管理者専用のテスト操作です。</b> 1兆分の1級の演出もボタンで強制発動できます。</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(${isMobile ? "150px" : "180px"},1fr));gap:10px;margin:14px 0;">
-            <button id="admin-cosmic-egg-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(127,29,29,.25);background:linear-gradient(180deg,#2e1065 0%,#111827 100%);color:#fff;cursor:pointer;">宇宙卵<br><span style="font-size:.75em;">1兆分の1</span></button>
-            <button id="admin-sword-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">剣の衝撃</button>
-            <button id="admin-all-effects-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#dcfce7 0%,#bbf7d0 100%);color:#14532d;cursor:pointer;">演出系を全部ON</button>
-            <button id="admin-r2-video-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">R2動画確認</button>
-            <button id="admin-offline-video-save-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#ecfeff 0%,#67e8f9 100%);color:#155e75;cursor:pointer;">オフライン動画保存</button>
-            <button id="admin-log-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;cursor:pointer;">管理者ログ</button>
-            <button id="admin-runtime-guard-log-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(14,116,144,.25);background:linear-gradient(180deg,#ecfeff 0%,#a5f3fc 100%);color:#155e75;cursor:pointer;">復旧ログ</button>
-            <button id="admin-tempura-secret-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(245,158,11,.32);background:linear-gradient(180deg,#fff7ed 0%,#fdba74 100%);color:#7c2d12;cursor:pointer;">穴子天ぷら</button>
-            <button id="admin-magic-answer-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(88,28,135,.25);background:linear-gradient(180deg,#f3e8ff 0%,#ddd6fe 100%);color:#581c87;cursor:pointer;">魔法陣回答</button>
-            <button id="admin-skill-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#eef2ff 0%,#c7d2fe 100%);color:#312e81;cursor:pointer;">スキル+99</button>
-            <button id="admin-unlock-book-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(87,112,51,.25);background:linear-gradient(180deg,#fef9c3 0%,#fde68a 100%);color:#713f12;cursor:pointer;">図鑑テスト解放</button>
-            <button id="admin-lock-button" style="font-size:${uiButtonFontPx}px;font-weight:900;padding:12px;border-radius:18px;border:1px solid rgba(127,29,29,.25);background:linear-gradient(180deg,#fee2e2 0%,#fecaca 100%);color:#7f1d1d;cursor:pointer;">管理者解除</button>
-        </div>
-        <h3 style="margin-top:18px;">全レア演出テスト</h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(${isMobile ? "142px" : "170px"},1fr));gap:8px;">${miracleButtons}</div>
-    `);
+    showPopup("研究主任モード", getAdminPanelHtml({ miracleButtons, isMobile, uiButtonFontPx }));
     document.getElementById("admin-cosmic-egg-button")!.onclick = () => triggerAdminMiracle("cosmicEgg");
     document.getElementById("admin-sword-button")!.onclick = () => triggerAdminMiracle("swordImpact");
     document.getElementById("admin-all-effects-button")!.onclick = () => adminEnableAllEffects();
@@ -4624,13 +4438,7 @@ function showAdminPanelPopup(): void {
 }
 
 function showAnagoTempuraSecretPopup(): void {
-    showPopup("隠し要素：穴子の天ぷら", `
-        <div class="miracle-user-card" style="text-align:center;background:radial-gradient(circle at 50% 0%,rgba(255,247,237,.96),rgba(251,191,36,.58),rgba(124,45,18,.20));">
-            <div style="font-size:clamp(54px,12vw,110px);line-height:1;">🍤</div>
-            <div style="font-size:clamp(24px,5vw,44px);font-weight:1000;margin-top:10px;">穴子の天ぷら、研究所奥義</div>
-            <p style="line-height:1.9;text-align:left;max-width:720px;margin:16px auto 0;">管理者用メモ：隠し魔法陣 <b>穴子天ぷら陣</b> を追加済みです。魔法陣判定で選ばれると、衣が流星のように舞う演出として扱われます。表向きはただの研究所ですが、奥では穴子が揚がっています。</p>
-        </div>
-    `);
+    showPopup("隠し要素：穴子の天ぷら", getAnagoTempuraSecretHtml());
 }
 
 function triggerAdminMiracle(kind: string): void {
@@ -4650,65 +4458,29 @@ async function showAdminRemoteVideoTestPopup(): Promise<void> {
         return;
     }
 
-    showPopup("R2動画確認", `
-        <p>R2 の <b>manifest.json</b> を再取得しています。</p>
-        <p style="opacity:.72;">${escapeHtml(MIRACLE_MANIFEST_URL)}</p>
-    `);
+    showPopup("R2動画確認", getAdminRemoteVideoLoadingHtml(MIRACLE_MANIFEST_URL));
 
     const assets = await loadRemoteMiracleAssets(true);
     const videos = assets.filter((asset) => asset.kind === "video");
 
     if (videos.length === 0) {
-        showPopup("R2動画確認", `
-            <p>manifest.json に動画が見つかりませんでした。</p>
-            <p style="opacity:.72;">動画は <code>kind: "video"</code> で登録してください。</p>
-        `);
+        showPopup("R2動画確認", getAdminRemoteVideoEmptyHtml());
         return;
     }
 
     const rows = videos.map((asset, index) => {
-        const mainUrl = getRemoteMiracleAssetMainUrl(asset);
-        const rank = escapeHtml(String(asset.rank ?? "common").toUpperCase());
-        const id = escapeHtml(asset.id);
-        const seconds = "10秒固定";
-        const opacity = asset.opacity ?? 0.45;
-        const weight = asset.weight ?? 1;
-        const urlText = escapeHtml(mainUrl);
-
-        return `
-            <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.18);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;">
-                <div style="min-width:0;">
-                    <div style="font-weight:1000;font-size:${isMobile ? "18px" : "16px"};">
-                        ${index + 1}. [${rank}] ${id}
-                    </div>
-                    <div style="margin-top:4px;opacity:.78;font-size:${isMobile ? "14px" : "13px"};line-height:1.5;">
-                        秒数: ${escapeHtml(seconds)} / 透明度: ${escapeHtml(opacity)} / weight: ${escapeHtml(weight)}
-                    </div>
-                    <div style="margin-top:4px;opacity:.62;font-size:${isMobile ? "12px" : "12px"};word-break:break-all;">
-                        ${urlText}
-                    </div>
-                </div>
-                <div style="display:flex;flex-direction:column;gap:8px;">
-                    <button class="admin-r2-video-play-button" data-asset-id="${id}" style="font-size:${isMobile ? "16px" : "14px"};font-weight:900;padding:10px 14px;border-radius:999px;border:1px solid rgba(14,116,144,.24);background:linear-gradient(180deg,#e0f2fe 0%,#bae6fd 100%);color:#0c4a6e;cursor:pointer;">再生</button>
-                    <button class="admin-r2-video-open-button" data-asset-id="${id}" style="font-size:${isMobile ? "16px" : "14px"};font-weight:900;padding:10px 14px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);color:#26351f;cursor:pointer;">URLを開く</button>
-                </div>
-            </div>
-        `;
+        return getAdminRemoteVideoRowHtml({
+            index,
+            id: asset.id,
+            rank: String(asset.rank ?? "common").toUpperCase(),
+            mainUrl: getRemoteMiracleAssetMainUrl(asset),
+            opacity: asset.opacity ?? 0.45,
+            weight: asset.weight ?? 1,
+            isMobile,
+        });
     }).join("");
 
-    showPopup("R2動画確認", `
-        <p><b>${videos.length}件</b> の動画を確認できます。</p>
-        <p style="opacity:.72;line-height:1.6;">
-            「再生」を押すと、このポップアップを閉じて対象動画を半透明オーバーレイで強制再生します。
-        </p>
-        <div style="margin-top:10px;border-radius:18px;background:rgba(255,255,255,.70);padding:4px 14px;">
-            ${rows}
-        </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
-            <button id="admin-r2-video-reload-button" style="font-size:${isMobile ? "18px" : "16px"};font-weight:900;padding:10px 16px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:linear-gradient(180deg,#fef9c3 0%,#fde68a 100%);color:#713f12;cursor:pointer;">manifest再読込</button>
-            <button id="admin-r2-video-stop-button" style="font-size:${isMobile ? "18px" : "16px"};font-weight:900;padding:10px 16px;border-radius:999px;border:1px solid rgba(127,29,29,.24);background:linear-gradient(180deg,#fee2e2 0%,#fecaca 100%);color:#7f1d1d;cursor:pointer;">動画停止</button>
-        </div>
-    `);
+    showPopup("R2動画確認", getAdminRemoteVideoListHtml({ count: videos.length, rows, isMobile }));
 
     document.querySelectorAll<HTMLButtonElement>(".admin-r2-video-play-button").forEach((button) => {
         button.onclick = () => {
@@ -4808,30 +4580,11 @@ function adminLockMode(): void {
 }
 
 function showSecretPopup(): void {
-    const defs = getSecretDefs();
-    const unlockedCount = defs.filter((x) => savedRecords.secretUnlocked[x.id]).length;
-    const rows = defs.map((def) => {
-        const ts = savedRecords.secretUnlocked[def.id];
-        const unlocked = !!ts;
-        const title = unlocked ? def.label : "未発見の秘密操作";
-        const mark = unlocked ? "✅" : "🔒";
-        const titleColor = unlocked ? "#166534" : "#334155";
-        const scoreColor = unlocked ? "#166534" : "#64748b";
-        const size = isMobile ? "20px" : "17px";
-        return "<div style=\"padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);\">" +
-            "<div style=\"display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;\">" +
-            "<b style=\"font-size:" + size + ";color:" + titleColor + ";\">" + mark + " " + title + "</b>" +
-            "<span style=\"font-weight:900;color:" + scoreColor + ";\">+" + def.rewardScore.toLocaleString() + "</span>" +
-            "</div>" +
-            "<div style=\"margin-top:6px;opacity:.78;line-height:1.55;\">ヒント: " + def.hint + "</div>" +
-            "<div style=\"margin-top:4px;opacity:.68;\">" + (unlocked ? new Date(ts).toLocaleString() : "未解放") + "</div>" +
-        "</div>";
-    }).join("");
-    showPopup("秘密操作",
-        "<p>秘密操作をゲーム内実績のように整理しました。見つけるとスコアと研究レベルに少しだけ反映されます。</p>" +
-        "<p><b>解放状況:</b> " + unlockedCount + " / " + defs.length + "</p>" +
-        "<div style=\"border-radius:18px;background:rgba(255,255,255,.70);padding:4px 14px;\">" + rows + "</div>"
-    );
+    showPopup("秘密操作", getSecretHtml({
+        defs: SECRET_DEFS,
+        unlocked: savedRecords.secretUnlocked,
+        isMobile,
+    }));
 }
 
 function handleSecretKey(event: KeyboardEvent): void {
@@ -5183,18 +4936,13 @@ function showReplayPopup(): void {
         showPopup(t("リプレイ", "Replay"), `<p>${t("まだ奇跡クリップがありません。", "No miracle clips yet.")}</p>`);
         return;
     }
-    const rows = miracleClips.map((clip, i) => `
-        <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;">
-            <div>
-                <div style="font-weight:900;">${i + 1}. ${clip.label} [${clip.rank}]</div>
-                <div style="opacity:.76;">${formatProbability(clip.denominator)} / ${clip.finishedCount.toLocaleString()}投目 / ${new Date(clip.createdAt).toLocaleTimeString()}</div>
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;">
-                <button data-replay-id="${clip.id}" style="font-size:${isMobile ? "18px" : "16px"};padding:10px 16px;border-radius:999px;border:1px solid rgba(87,112,51,.28);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);font-weight:900;cursor:pointer;">${t("再生", "Play")}</button>
-                <button data-gif-id="${clip.id}" style="font-size:${isMobile ? "18px" : "16px"};padding:10px 16px;border-radius:999px;border:1px solid rgba(100,90,180,.28);background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);font-weight:900;cursor:pointer;">${t("GIF保存", "Save GIF")}</button>
-            </div>
-        </div>
-    `).join("");
+    const rows = getReplayHtml({
+        clips: miracleClips,
+        isMobile,
+        playLabel: t("再生", "Play"),
+        gifLabel: t("GIF保存", "Save GIF"),
+        formatProbability,
+    });
     showPopup(t("奇跡クリップ保存", "Miracle clips"), rows);
     helpOverlay.querySelectorAll("[data-replay-id]").forEach((el) => {
         (el as HTMLButtonElement).onclick = () => replayClipById((el as HTMLButtonElement).dataset.replayId || "");
@@ -5240,19 +4988,7 @@ async function playGachaRemoteMiracleVideo(def: SpecialEventDef): Promise<void> 
 }
 
 function showAdminMagicCircleAnswerPopup(): void {
-    const rows = MAGIC_CIRCLE_DEFS.map((def, index) => `
-        <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);border:1px solid rgba(80,90,120,.16);text-align:center;">
-            ${getMagicCircleMarkSvg(def)}
-            <div style="font-weight:1000;font-size:1.05em;">${index + 1}. ${def.emoji} ${escapeHtml(def.label)}</div>
-            <div style="margin-top:6px;opacity:.76;line-height:1.65;text-align:left;"><b>${escapeHtml(def.chant)}</b><br>${escapeHtml(def.description)}</div>
-            <div style="margin-top:5px;font-size:.84em;opacity:.62;text-align:left;">内部ID: ${escapeHtml(def.kind)}</div>
-        </div>
-    `).join("");
-    showPopup("魔法陣の回答一覧", `
-        <p style="line-height:1.8;margin-top:0;">管理者確認用です。各魔法陣の見た目イメージを表示しています。実際の判定は線の長さ、曲がり方、描いた範囲、閉じ具合、点数から分類します。</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(${isMobile ? "180px" : "220px"},1fr));gap:12px;">${rows}</div>
-        <p style="line-height:1.8;opacity:.72;margin-bottom:0;">「魔法陣を書く」を押して、上のマークに近い形を盤面へ描いてください。</p>
-    `);
+    showPopup("魔法陣の回答一覧", getAdminMagicCircleAnswerHtml(MAGIC_CIRCLE_DEFS, isMobile));
 }
 
 function getCanvasPointFromEvent(event: PointerEvent): { x: number; y: number } {
@@ -5697,20 +5433,7 @@ function showMagicCircleSummonOverlay(def: MagicCircleDef, center: { x: number; 
     overlay.style.alignItems = "center";
     overlay.style.justifyContent = "center";
     overlay.style.overflow = "hidden";
-    overlay.innerHTML = `
-        <style>
-            @keyframes miracleSummonFade { 0%{opacity:0;transform:scale(.86) rotate(-3deg);} 15%{opacity:1;transform:scale(1.02) rotate(1deg);} 72%{opacity:1;} 100%{opacity:0;transform:scale(1.22) rotate(6deg);} }
-            @keyframes miracleSummonRing { 0%{transform:scale(.25) rotate(0deg);opacity:0;} 25%{opacity:.95;} 100%{transform:scale(1.85) rotate(220deg);opacity:0;} }
-            @keyframes miracleDragonFly { 0%{transform:translateX(-42vw) scale(.7) rotate(-10deg);opacity:0;} 20%{opacity:1;} 50%{transform:translateX(0) scale(1.35) rotate(4deg);} 100%{transform:translateX(42vw) scale(.9) rotate(12deg);opacity:0;} }
-        </style>
-        <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 38%, rgba(255,255,255,.24), rgba(8,12,28,.48) 42%, rgba(0,0,0,.74));mix-blend-mode:screen;"></div>
-        <div style="position:absolute;width:min(78vw,760px);height:min(78vw,760px);border-radius:999px;border:5px solid ${def.color};box-shadow:0 0 44px ${def.color}, inset 0 0 34px ${def.color};animation:miracleSummonRing 1500ms ease-out forwards;"></div>
-        <div style="position:absolute;width:min(60vw,520px);height:min(60vw,520px);border-radius:999px;background:repeating-conic-gradient(from 0deg, rgba(255,255,255,.72) 0 5deg, transparent 5deg 17deg);clip-path:circle(50%);mix-blend-mode:screen;animation:miracleSummonRing 1650ms ease-out forwards reverse;"></div>
-        <div style="text-align:center;color:#fff;text-shadow:0 6px 24px rgba(0,0,0,.7);animation:miracleSummonFade 1900ms ease-out forwards;">
-            <div style="font-size:clamp(70px,22vw,210px);line-height:1;filter:drop-shadow(0 0 30px ${def.color});animation:${isDragon ? "miracleDragonFly" : "none"} 1900ms ease-out forwards;">${icon}</div>
-            <div style="margin-top:10px;font-size:clamp(28px,7vw,72px);font-weight:1000;letter-spacing:.08em;color:#fff7cc;">${escapeHtml(title)}</div>
-            <div style="margin-top:8px;font-size:clamp(15px,3.2vw,26px);font-weight:900;max-width:min(92vw,860px);line-height:1.6;">${escapeHtml(subtitle)}</div>
-        </div>`;
+    overlay.innerHTML = getMagicCircleSummonOverlayHtml({ def, icon, title, subtitle, isDragon });
     document.body.appendChild(overlay);
     window.setTimeout(() => overlay.remove(), 2050);
     if (isDragon) {
@@ -6303,36 +6026,22 @@ function showLabHome(): void {
     const reports = savedRecords.researchReports ?? [];
     const latestReport = reports[0];
     const season = getCurrentEventSeason();
-    const homeHtml = `
-        <div style="display:grid;gap:18px;">
-            <div class="miracle-user-card miracle-home-hero">
-                <div style="font-size:clamp(28px,6vw,54px);font-weight:1000;line-height:1.1;">MiracleBallLab</div>
-                <div style="margin-top:14px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">玉を落として、まれに起きる奇跡を集めよう</div>
-                <div style="margin-top:16px;line-height:1.85;">今日の研究テーマ：<b>${escapeHtml(getDailyFortune().title)}</b><br>開催中：<b>${escapeHtml(season.title)}</b> / 奇跡率 <b>x${season.rateBoost.toFixed(2)}</b><br>研究員ランク：<b>Lv.${rank.level} ${escapeHtml(rank.label)}</b> / 図鑑：<b>${discoveredKinds}</b>種類 / 実験：<b>${savedRecords.totalRuns.toLocaleString()}</b>回 / 奇跡ガチャP：<b>${getGachaPoint().toLocaleString()}</b>P</div>
-            </div>
-            <div style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:14px;">
-                <div class="miracle-user-card"><b>今日やること</b><br><span style="opacity:.82;line-height:1.7;">デイリー研究を確認して、研究レポートを1件作成しましょう。</span></div>
-                <div class="miracle-user-card"><b>最近の記録</b><br><span style="opacity:.82;line-height:1.7;">${latestReport ? `${new Date(latestReport.createdAt).toLocaleString()} / ${escapeHtml(latestReport.grade)} / ${latestReport.finishedCount.toLocaleString()}投下` : "まだ研究レポートはありません。"}</span></div>
-                <div class="miracle-user-card"><b>研究所設備</b><br><span style="opacity:.82;line-height:1.7;">ショップ設備 ${Object.keys(savedRecords.shopPurchased ?? {}).length}件 / レポート上限 ${getResearchReportLimit()}件 / 完了P増幅 ${isShopItemPurchased("gacha-point-booster") ? "ON" : "OFF"}</span></div>
-            </div>
-            <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:2px 0 2px;">
-                <button data-home-action="start" class="miracle-home-button miracle-home-primary">実験を開始</button>
-                <button data-home-action="map" class="miracle-home-button miracle-home-primary">研究所マップ</button>
-                <button data-home-action="presets" class="miracle-home-button">プリセット</button>
-                <button data-home-action="shop" class="miracle-home-button">ショップ</button>
-                <button data-home-action="season" class="miracle-home-button">シーズン</button>
-                <button data-home-action="craft" class="miracle-home-button">クラフト</button>
-                <button data-home-action="boss" class="miracle-home-button">ボス実験</button>
-                <button data-home-action="gacha" class="miracle-home-button">奇跡ガチャ</button>
-                <button data-home-action="daily" class="miracle-home-button">デイリー研究</button>
-                <button data-home-action="album" class="miracle-home-button">奇跡アルバム</button>
-                <button data-home-action="archive" class="miracle-home-button">研究アーカイブ</button>
-                <button data-home-action="book" class="miracle-home-button">奇跡図鑑</button>
-                <button data-home-action="guide" class="miracle-home-button">遊び方</button>
-            </div>
-            ${getUserGuideHtml()}
-        </div>
-    `;
+    const homeHtml = getLabHomeHtml({
+        dailyTitle: getDailyFortune().title,
+        seasonTitle: season.title,
+        seasonRateBoost: season.rateBoost,
+        rankLevel: rank.level,
+        rankLabel: rank.label,
+        discoveredKinds,
+        totalRuns: savedRecords.totalRuns,
+        gachaPoint: getGachaPoint(),
+        latestReportText: latestReport ? `${new Date(latestReport.createdAt).toLocaleString()} / ${latestReport.grade} / ${latestReport.finishedCount.toLocaleString()}投下` : "まだ研究レポートはありません。",
+        shopPurchasedCount: Object.keys(savedRecords.shopPurchased ?? {}).length,
+        reportLimit: getResearchReportLimit(),
+        pointBoosterOn: isShopItemPurchased("gacha-point-booster"),
+        isMobile,
+        userGuideHtml: getUserGuideHtml(),
+    });
     showPopup("研究所ホーム", homeHtml);
     bindLabHomeButtons();
 }
@@ -6428,21 +6137,32 @@ function getResearchReportHtml(): string {
     const recentMiracles = miracleLogs.slice(0, 5).map((x) => `${x.label} [${x.rank}] ${x.denominator > 0 ? formatProbability(x.denominator) : "派生解放"}`).join("<br>") || t("なし", "None");
     const level = getResearchLevelInfo();
     const fortune = currentDailyFortune ?? getDailyFortune();
-    return `
-        <div style="display:grid;gap:10px;">
-            <div><b>研究レベル:</b> Lv.${level.level} ${level.title} (${level.percent.toFixed(1)}%)</div>
-            <div><b>今日の奇跡率:</b> x${fortune.rateBoost.toFixed(2)} / 注目: ${fortune.luckyKind}</div>
-            <div><b>${t("総投下数", "Total count")}:</b> ${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}</div>
-            <div><b>${t("捨て区間", "Discarded")}:</b> ${discardedCount.toLocaleString()}</div>
-            <div><b>${t("最頻受け皿", "Top bin")}:</b> ${topIndex >= 0 ? labels[topIndex] : "-" } (${maxCount.toLocaleString()})</div>
-            <div><b>${t("偏り診断", "Bias diagnosis")}:</b> ${diagnosis}</div>
-            <div><b>${t("発見済み種類", "Discovered kinds")}:</b> ${SPECIAL_EVENT_DEFS.filter((d) => (savedRecords.discovered[d.kind] ?? 0) + (specialCreated[d.kind] ?? 0) > 0).length} / ${SPECIAL_EVENT_DEFS.length}</div>
-            <div><b>合成・派生:</b> ${getFusionCount()} / ${FUSION_DEFS.length}</div>
-            <div><b>秘密操作:</b> ${Object.keys(savedRecords.secretUnlocked ?? {}).length}</div>
-            <div><b>レアピン接触:</b> ${RARE_PIN_DEFS.map((x) => `${x.label} ${(rarePinTouchCount[x.kind] ?? 0).toLocaleString()}`).join(" / ")}</div>
-            <div><b>研究メモ:</b><br>${generateResearchMemoHtml()}</div>
-            <div><b>${t("最近の奇跡", "Recent miracles")}:</b><br>${recentMiracles}</div>
-        </div>`;
+    return getResearchReportSummaryHtml({
+        levelLabel: `Lv.${level.level} ${level.title}`,
+        levelPercent: level.percent,
+        fortuneRateBoost: fortune.rateBoost,
+        fortuneLuckyKind: fortune.luckyKind,
+        totalCountLabel: t("総投下数", "Total count"),
+        finishedCount,
+        targetCount: settings.targetCount,
+        discardedLabel: t("捨て区間", "Discarded"),
+        discardedCount,
+        topBinLabel: t("最頻受け皿", "Top bin"),
+        topLabel: topIndex >= 0 ? labels[topIndex] : "-",
+        maxCount,
+        biasLabel: t("偏り診断", "Bias diagnosis"),
+        diagnosis,
+        discoveredLabel: t("発見済み種類", "Discovered kinds"),
+        discoveredKinds: SPECIAL_EVENT_DEFS.filter((d) => (savedRecords.discovered[d.kind] ?? 0) + (specialCreated[d.kind] ?? 0) > 0).length,
+        specialCount: SPECIAL_EVENT_DEFS.length,
+        fusionCount: getFusionCount(),
+        fusionTotal: FUSION_DEFS.length,
+        secretCount: Object.keys(savedRecords.secretUnlocked ?? {}).length,
+        rarePinSummary: RARE_PIN_DEFS.map((x) => `${x.label} ${(rarePinTouchCount[x.kind] ?? 0).toLocaleString()}`).join(" / "),
+        researchMemoHtml: generateResearchMemoHtml(),
+        recentMiraclesLabel: t("最近の奇跡", "Recent miracles"),
+        recentMiraclesHtml: recentMiracles,
+    });
 }
 
 function showResearchReportPopup(): void {
@@ -6793,51 +6513,19 @@ function showMiracleBookPopup(): void {
             firstFoundLabel: t("初回発見", "First found"),
         });
     }).join("");
-    showPopup("奇跡図鑑", `
-        <p style="margin-top:0;">全ての奇跡を画像つきで表示します。未発見のものは<b>シークレット枠</b>として、名前・確率・説明を伏せたまま表示します。</p>
-        <div style="margin-top:16px;border-radius:22px;background:rgba(255,255,255,.75);padding:${isMobile ? "4px 14px" : "8px 16px"};box-sizing:border-box;max-width:100%;overflow:hidden;">${rows}</div>
-    `);
+    showPopup("奇跡図鑑", getMiracleBookHtml(rows, isMobile));
 }
 
 function showUserSettingsPopup(): void {
     const discoveredKinds = getDiscoveredCount();
-    showPopup(t("ユーザー設定", "User settings"), `
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>研究員プロフィール</b></p>
-            <label style="display:block;font-weight:900;margin-bottom:6px;">ニックネーム</label>
-            <input id="user-nickname-input" value="${escapeHtml(userProfile.nickname)}" maxlength="24" style="width:100%;font-size:${isMobile ? 20 : 18}px;padding:12px 14px;border-radius:14px;border:1px solid #b8c1d1;box-sizing:border-box;" />
-            <label style="display:block;font-weight:900;margin:14px 0 6px;">遊び方</label>
-            <select id="user-play-style-select" style="width:100%;font-size:${isMobile ? 20 : 18}px;padding:12px 14px;border-radius:14px;border:1px solid #b8c1d1;box-sizing:border-box;">
-                <option value="standard" ${userProfile.playStyle === "standard" ? "selected" : ""}>標準</option>
-                <option value="viewer" ${userProfile.playStyle === "viewer" ? "selected" : ""}>演出を見る</option>
-                <option value="collector" ${userProfile.playStyle === "collector" ? "selected" : ""}>図鑑収集</option>
-                <option value="recording" ${userProfile.playStyle === "recording" ? "selected" : ""}>録画・SNS</option>
-            </select>
-            <label style="display:block;font-weight:900;margin:14px 0 6px;">好きな奇跡メモ</label>
-            <input id="user-favorite-input" value="${escapeHtml(userProfile.favoriteMiracle)}" maxlength="40" style="width:100%;font-size:${isMobile ? 20 : 18}px;padding:12px 14px;border-radius:14px;border:1px solid #b8c1d1;box-sizing:border-box;" />
-            <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-                <button id="save-user-profile-button" style="font-size:18px;font-weight:900;padding:10px 18px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);cursor:pointer;">保存して反映</button>
-                <button id="guest-name-button" style="font-size:18px;font-weight:900;padding:10px 18px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:#fff;cursor:pointer;">ゲスト名に戻す</button>
-            </div>
-        </div>
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>ユーザー状況</b></p>
-            <p>表示名: <b>${escapeHtml(userProfile.nickname)}</b></p>
-            <p>遊び方: <b>${getUserPlayStyleLabel(userProfile.playStyle)}</b></p>
-            <p>連続起動: <b>${userProfile.consecutiveDays}</b>日 / 起動回数: <b>${userProfile.openCount}</b>回</p>
-            <p>図鑑発見: <b>${discoveredKinds}</b> / ${SPECIAL_EVENT_DEFS.length} 種類</p>
-            <p>最高レア: <b>${escapeHtml(savedRecords.bestRank)}</b> ${escapeHtml(savedRecords.bestLabel)}</p>
-            <p>安全停止回数: <b>${userProfile.totalSafeStops}</b>回</p>
-        </div>
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>保存データ</b></p>
-            <p>ニックネーム、設定、図鑑、奇跡ログ、最高記録はこの端末のブラウザ内に保存します。ログインやサーバー送信は行いません。</p>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <button id="export-user-data-button" style="font-size:18px;font-weight:900;padding:10px 18px;border-radius:999px;border:1px solid rgba(87,112,51,.24);background:#fff;cursor:pointer;">データ書き出し</button>
-                <button id="reset-local-data-button" style="font-size:18px;font-weight:900;padding:10px 18px;border-radius:999px;border:1px solid rgba(185,28,28,.35);background:#fee2e2;color:#991b1b;cursor:pointer;">ローカルデータ削除</button>
-            </div>
-        </div>
-    `);
+    showPopup(t("ユーザー設定", "User settings"), getUserSettingsHtml({
+        profile: userProfile,
+        savedRecords,
+        discoveredKinds,
+        specialCount: SPECIAL_EVENT_DEFS.length,
+        isMobile,
+        playStyleLabel: getUserPlayStyleLabel(userProfile.playStyle),
+    }));
     const nicknameInput = document.getElementById("user-nickname-input") as HTMLInputElement | null;
     const playStyleSelect = document.getElementById("user-play-style-select") as HTMLSelectElement | null;
     const favoriteInput = document.getElementById("user-favorite-input") as HTMLInputElement | null;
@@ -6857,119 +6545,32 @@ function showUserSettingsPopup(): void {
 
 function showAppInfoPopup(): void {
     const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
-    showPopup(t("アプリ情報", "App info"), `
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>MiracleBallLab</b></p>
-            <p>${getAppOnlineStatusHtml()}</p>
-            <p>表示モード: <b>${standalone ? "ホーム画面から起動中" : "ブラウザで利用中"}</b></p>
-            <p>バージョン: <b>${APP_VERSION}</b></p>
-        </div>
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>このアプリでできること</b></p>
-            <ul style="line-height:1.8;margin-bottom:0;">
-                <li>玉を落として、まれに発生する特別な演出や記録を楽しめます。</li>
-                <li>一時停止・終了ボタンで、スマホでも無理なく遊びやすくしています。</li>
-                <li>設定、図鑑、最高記録、ミッション、奇跡ログをこの端末に保存できます。</li>
-                <li>研究所ホーム、奇跡アルバム、実験レポート履歴から、今日の記録をあとで振り返れます。</li>
-                <li>一度読み込んだ主要ファイルは、通信が不安定な場所でも開きやすくなります。</li>
-                <li>ユーザー設定から保存データの確認や削除ができます。</li>
-            </ul>
-        </div>
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>保存される情報</b></p>
-            <p>ニックネーム、遊び方の設定、図鑑、記録、ミッション進行状況は、この端末のブラウザ保存領域に保存されます。</p>
-            <p>アカウント作成、位置情報取得、プレイ記録の外部送信は行いません。</p>
-        </div>
-        <div class="miracle-user-card">
-            <p style="margin-top:0;"><b>通信について</b></p>
-            <p>動画演出をONにしている場合、演出用動画を読み込むために通信が発生することがあります。</p>
-            <p>通信が不安定な場合は、設定から動画演出をOFFにすると軽く遊べます。</p>
-        </div>
-    `);
+    showPopup(t("アプリ情報", "App info"), getAppInfoHtml({ appVersion: APP_VERSION, onlineStatusHtml: getAppOnlineStatusHtml(), standalone }));
 }
 
 function showRecordsPopup(): void {
-    showPopup("最高記録", `
-        <p><b>実験回数:</b> ${savedRecords.totalRuns.toLocaleString()}回</p>
-        <p><b>最大実処理数:</b> ${savedRecords.maxFinishedCount.toLocaleString()}回</p>
-        <p><b>最大指定投下数:</b> ${savedRecords.maxTargetCount.toLocaleString()}回</p>
-        <p><b>最高レア:</b> ${savedRecords.bestRank} / ${savedRecords.bestLabel}</p>
-        <p><b>最高スコア:</b> ${savedRecords.bestScore.toLocaleString()}</p>
-        <p><b>通算スコア:</b> ${savedRecords.totalScore.toLocaleString()}</p>
-        <p><b>研究員ランク:</b> Lv.${getCurrentResearchRankInfo().level} ${getCurrentResearchRankInfo().label}</p>
-        <p><b>テーマ解放:</b> ${getThemeCollection(savedRecords, getDiscoveredKindCount(), getFusionCountForRank(), getSecretCountForRank()).filter((x) => x.unlocked).length} / ${getThemeOptions().length}</p>
-        <p><b>ミッション達成種類:</b> ${Object.keys(savedRecords.missionCompleted).length} / ${missionDefs.length || buildMissionDefs().length}</p>
-        <p>保存はブラウザ内です。別端末や別ブラウザでは共有されません。</p>
-        <p style="opacity:.75;">消したい場合はブラウザのサイトデータ削除でリセットできます。</p>
-    `);
+    const rank = getCurrentResearchRankInfo();
+    const unlockedThemes = getThemeCollection(savedRecords, getDiscoveredKindCount(), getFusionCountForRank(), getSecretCountForRank()).filter((x) => x.unlocked).length;
+    showPopup("最高記録", getRecordsHtml({
+        savedRecords,
+        rankLevel: rank.level,
+        rankLabel: rank.label,
+        unlockedThemes,
+        themeCount: getThemeOptions().length,
+        missionCount: Object.keys(savedRecords.missionCompleted).length,
+        missionTotal: missionDefs.length || buildMissionDefs().length,
+    }));
 }
 
 function showAboutPopup(): void {
-    showPopup("ミラクルボールラボについて", `
-        <p><b>ミラクルボールラボ</b>は、玉が盤面を落ち、<b>START / 役物 / PREMIUM</b> を通過した瞬間だけ抽選するパチンコ風シミュレーションです。</p>
-        <p>落ちていく玉を眺めながら、まれに起きる奇跡を集めて、自分だけの研究記録を増やしていく遊びです。研究所ホーム、奇跡アルバム、実験レポート履歴、デイリー研究、研究員ランクから進行状況を確認できます。</p>
-        <p><b>低スペックモード:</b> スマホや古い端末で重い場合は、動画・揺れ・背景・派手な演出をまとめて軽くできます。</p>
-        <p>玉を作った瞬間には基本的にレア抽選しません。役物センサーを通過した玉だけが当たり・激アツ・奇跡演出の抽選対象になります。</p>
-        <p>通常玉にはたまに<b>個体差</b>が付きます。重い玉、跳ね玉、小粒玉、のんびり玉、早足玉、回転玉、うす玉などがあり、同じ通常玉でも少し違う落ち方をします。</p>
-        <ul style="text-align:left;line-height:1.7;">${getNormalTraitSummaryHtml()}</ul>
-        <p><b>終了ボタン</b>は、スマホで閉じる前に物理エンジン・描画・タイマーを止めるための安全停止です。ブラウザの仕様上タブ自体を必ず閉じることはできませんが、処理を止めてメモリや発熱を抑えやすくします。</p>
-        <p><b>奇跡予兆</b>は、本当に奇跡が出るとは限らない前触れ演出です。ピンの光・画面の違和感・実況ログで「来るかも」という雰囲気を出します。</p>
-        <p><b>レアピン</b>は、赤ピン・青ピン・黒ピン・虹ピンなどの特殊なピンです。玉を弾く、寄せる、低確率で変質させるなど、盤面に少しだけ事件を起こします。</p>
-        <p>通常玉だけでなく、金玉、虹玉、巨大玉、図形、王、銀のUFO、青い炎、流れ星、ラッキーセブン、桃色ハート、時空の裂け目、黒い太陽、研究所爆発、そして極秘の最上位奇跡など、たくさんのレア玉がまれに出ます。最上位は<b>1兆分の1</b>級です。</p>
-        <p>さらに<b>10億分の1</b>レベルで、<b>poseidon mode / zeusu mode / hadesu mode / heart mode / nekochan mode / 人生名言ボイス</b>が発生します。mode系は出た瞬間から実験終了まで盤面全体の世界観が変わり続けます。</p>
-        <p>両端は<b>捨て区間</b>です。ここに入った玉も処理済みとして数えますが、中央の受け皿ランキングには入れません。</p>
-        <p>100,000回ごとに達成演出が出ます。指定回数に到達したあと、画面に残っている玉も最後に回収してから実験完了にします。</p>
-        <p>奇跡ログ、今日の運勢・奇跡率、研究レベル、奇跡合成・派生、スクリーンショット保存、秘密操作を追加しています。</p>
-        <p>実験中は、画面下に研究員の<b>実況ログ</b>が本当にたまに横から流れます。出過ぎると邪魔なので、かなり控えめです。</p>
-        <p>まれに<b>盤面変異イベント</b>が発生し、横重力、粘る時間、上昇気流、小さな重力穴、ピン一斉振動などで盤面が短時間だけ変化します。</p>
-        <p>特定の奇跡が決まった順番で続くと<b>奇跡同士の連鎖</b>が発生し、専用の連鎖演出とスコアが入ります。実験完了時には短いエンディング演出を挟んで結果画面に進みます。</p>
-        <p>背景はデフォルトで favicon.png をスマホ・PCどちらでも実行画面いっぱいに表示します。ピンの初期色は金色です。画面揺れはデフォルトOFFです。</p>
-        <p>奇跡図鑑と発生演出には、全種類でアプリ内生成のオリジナルSVG画像を使います。発生時は該当画像と発生名を大きく表示します。</p>
-        <p><b>ブラックモード</b>をONにすると、設定欄・ボタン・盤面背景を黒基調に切り替えます。デフォルトはOFFです。</p>
-        <p><b>補足:</b> 超高速にすると物理演算と画面描画が速く進むため、レア演出が一瞬で流れて見えない可能性がかなり高くなります。レア演出を見たいときは通常か高速がおすすめです。SR/SSRで同じ奇跡演出が実行中に再発生した場合は、2回目以降さらに短く閉じます。</p>
-        <p><b>ユーザー機能:</b> ニックネーム、遊び方、好きな奇跡メモ、連続起動日数、設定復元、データ書き出し、ローカルデータ削除を追加しています。</p>
-        <div style="margin:18px 0;padding:14px;border-radius:18px;background:rgba(15,23,42,.08);border:1px solid rgba(15,23,42,.12);">
-            <p style="margin-top:0;"><b>スマホの動画音声:</b> iPhoneでは、ブラウザの仕様で最初のタップ前に音声付き動画を再生できないことがあります。先に下のボタンを1回押しておくと、動画演出の音声が出やすくなります。</p>
-            <button id="mobile-audio-unlock-from-about" style="font-size:${isMobile ? 20 : 18}px;font-weight:1000;padding:13px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.65);background:linear-gradient(180deg,#111827,#020617);color:white;box-shadow:0 10px 26px rgba(0,0,0,.24);cursor:pointer;">音声を有効にする</button>
-            <p style="margin-bottom:0;opacity:.78;font-size:${isMobile ? 15 : 14}px;line-height:1.7;">マナーモードONや本体音量0の場合は、Web側から強制的に音を出すことはできません。マナーモードOFF、音量UPで確認してください。</p>
-        </div>
-        <p><b>AIからの補足:</b> これは遊びながら確率の偏りを見るシミュレーションです。厳密な科学実験ではなく、乱数はブラウザの <code>Math.random()</code> を使っています。統計っぽく見たい場合は投下数を多めにして、動作が重いときはシンプルON、同時に出す玉数を少なめにしてください。</p>
-    `);
+    showPopup("ミラクルボールラボについて", getAboutHtml({ normalTraitSummaryHtml: getNormalTraitSummaryHtml(), isMobile }));
     document.getElementById("mobile-audio-unlock-from-about")?.addEventListener("click", async () => {
         await unlockMobileAudio(true);
     });
 }
 
 function showButtonHelpPopup(): void {
-    showPopup("ボタン説明", `
-        <p><b>実行:</b> 現在の設定で実験を開始します。開始前は待機中です。</p>
-        <p><b>超低速 / 低速 / 通常 / 高速 / 超高速:</b> 玉の動く速度を変えます。超低速と低速は観察向け、超高速は処理は速いですがレア演出を見逃しやすくなります。</p>
-        <p><b>ストップ / 再開:</b> 実験を一時停止、または再開します。PC版は盤面左下にも一時停止ボタンを追加しています。奇跡演出中でも一時停止を優先できます。スマホ下部にも一時停止ボタンがあります。</p>
-        <p><b>リセット:</b> 設定を読み直して、実験を最初から待機状態に戻します。</p>
-        <p><b>終了:</b> スマホで閉じる前に物理エンジン・描画・演出タイマーを止めます。発熱や裏側で動き続ける不安がある場合に使います。</p>
-        <p><b>シンプル:</b> 演出を減らして軽くします。重い場合や大量回数を試す場合に便利です。</p>
-        <p><b>演出ゆっくり:</b> 奇跡演出だけを少し長く見せます。デフォルトはOFFです。同じSR/SSRの短縮演出は優先されます。</p>
-        <p><b>演出:</b> 奇跡演出、画面効果、エンディング演出をまとめてON/OFFします。デフォルトはOFFです。</p>
-        <p><b>演出モード:</b> 控えめ、通常、派手、録画向けから演出量を選べます。</p>
-        <p><b>直近の奇跡:</b> 画面右下に直近3件の奇跡履歴を表示します。デフォルトはOFFです。</p>
-        <p><b>個体差:</b> 通常玉の重い玉、跳ね玉、小粒玉などの個体差をON/OFFします。デフォルトはONです。</p>
-        <p><b>盤面変異:</b> 横重力、上昇気流、小さな重力穴などのイベントをON/OFFします。デフォルトはONです。</p>
-        <p><b>スマホ簡易:</b> スマホで直近奇跡表示や効果表示を控えめにして、盤面を見やすくします。</p>
-        <p><b>音:</b> Tone.js を使って、開始・一時停止・スキル・秘密操作・レア玉ごとに違う短い効果音を鳴らします。GOD/EX級は低音とノイズを重ねて強めにしています。ブラウザ仕様上、最初にボタン操作が必要です。iPhoneで動画音声が出ない場合は「この実験について」内の「音声を有効にする」を1回押してください。</p>
-        <p><b>衝撃波 / 磁石 / 時止め:</b> 実験中に使える操作スキルです。衝撃波は玉を散らし、磁石は上位受け皿へ吸わせ、時止めは短時間だけ盤面を静止させます。</p>
-        <p><b>ミッション:</b> 実験中の条件達成でスコア報酬を獲得します。</p>
-        <p><b>今日の運勢:</b> 日付ごとの奇跡率、注目奇跡、ラッキー受け皿を表示します。奇跡率はレア抽選に少しだけ反映されます。</p>
-        <p><b>奇跡合成:</b> 特定の奇跡同士を観測すると、派生奇跡が研究記録として解放されます。さらに実験中に特定の順番で奇跡が続くと、奇跡連鎖演出が発生します。</p>
-        <p><b>実況ログ:</b> 画面下に研究員の短い実況がたまに流れます。常に流れるものではなく、観測のアクセント用です。</p>
-        <p><b>秘密:</b> 裏コマンドの発見状況を表示します。キーボード入力、ロゴ連打、一時停止連打、スキルの順番操作などを実績風に集められます。</p>
-        <p><b>録画・SNS:</b> 投稿文コピー、現在画面のスクリーンショット保存、縦長シェアカード保存ができます。奇跡のGIF保存はリプレイから行います。</p>
-        <p><b>紙吹雪:</b> 達成時やレア演出時の紙吹雪をON/OFFします。</p>
-        <p><b>Pixi背景:</b> Pixi.jsを使った背景演出をON/OFFします。見た目は楽しいですが、PCやスマホによっては重くなります。</p>
-        <p><b>設定反映:</b> 投下数、同時に出す玉数、受け皿数、ピン段数などを反映してリセットします。</p>
-        <p><b>結果コピー / CSV保存:</b> 実験結果をコピー、またはCSVファイルとして保存します。</p>
-        <p><b>ピンをタップ/クリック:</b> 近くのピンを揺らして、詰まり気味の玉を少し動かせます。</p>
-        <p><b>SR/SSR演出:</b> 実行中に同じSR/SSR演出が再発生した場合は、2回目以降さらに短く閉じます。</p>
-    `);
+    showPopup("ボタン説明", getButtonHelpHtml());
 }
 
 // ======================================================
@@ -7711,92 +7312,20 @@ function setMiracleOverlayAnimationPaused(paused: boolean): void {
         });
 }
 
-function cleanupRemoteMiracleBadUrls(): void {
-    const now = Date.now();
-
-    remoteMiracleBadUrls.forEach((failedAt, url) => {
-        if (now - failedAt > REMOTE_MIRACLE_BAD_URL_CACHE_MS) {
-            remoteMiracleBadUrls.delete(url);
-        }
-    });
-}
-
 function markRemoteMiracleAssetBad(asset: RemoteMiracleAsset): void {
-    const now = Date.now();
-
-    for (const source of getRemoteMiracleAssetSources(asset)) {
-        remoteMiracleBadUrls.set(source.url, now);
-    }
+    remoteMiracleBadUrlCache.markBad(asset);
 }
 
-function getUsableRemoteMiracleAssetSources(asset: RemoteMiracleAsset, ignoreBadCache = false): RemoteMiracleAssetSource[] {
-    cleanupRemoteMiracleBadUrls();
-
-    if (ignoreBadCache) return getRemoteMiracleAssetSources(asset);
-
-    return getRemoteMiracleAssetSources(asset).filter((source) => {
-        return !remoteMiracleBadUrls.has(source.url);
-    });
+function getUsableRemoteMiracleAssetSources(asset: RemoteMiracleAsset, ignoreBadCache = false) {
+    return remoteMiracleBadUrlCache.getUsableSources(asset, ignoreBadCache);
 }
 
 function isRemoteMiracleAssetUsable(asset: RemoteMiracleAsset): boolean {
-    return getUsableRemoteMiracleAssetSources(asset).length > 0;
-}
-
-function saveRemoteMiracleManifestBackup(manifest: RemoteMiracleManifest): void {
-    try {
-        localStorage.setItem(REMOTE_MIRACLE_MANIFEST_BACKUP_STORAGE_KEY, JSON.stringify(manifest));
-    } catch {
-        // オフライン再生の補助情報なので、保存失敗しても通常動作を優先します。
-    }
-}
-
-function loadRemoteMiracleManifestBackup(): RemoteMiracleAsset[] {
-    try {
-        const raw = localStorage.getItem(REMOTE_MIRACLE_MANIFEST_BACKUP_STORAGE_KEY);
-        if (!raw) return [];
-        return normalizeRemoteMiracleAssetsFromManifest(JSON.parse(raw) as RemoteMiracleManifest);
-    } catch {
-        return [];
-    }
+    return remoteMiracleBadUrlCache.isUsable(asset);
 }
 
 async function loadRemoteMiracleAssets(force = false): Promise<RemoteMiracleAsset[]> {
-    const now = Date.now();
-
-    if (!force && remoteMiracleAssets.length > 0 && now - remoteMiracleAssetsLoadedAt < REMOTE_MIRACLE_MANIFEST_CACHE_MS) {
-        return remoteMiracleAssets;
-    }
-
-    if (!force && remoteMiracleAssetsLoading) {
-        return remoteMiracleAssetsLoading;
-    }
-
-    remoteMiracleAssetsLoading = fetch(MIRACLE_MANIFEST_URL, { cache: "no-cache" })
-        .then(async (res) => {
-            if (!res.ok) throw new Error(`manifest fetch failed: ${res.status}`);
-            const manifest = (await res.json()) as RemoteMiracleManifest;
-
-            remoteMiracleAssets = normalizeRemoteMiracleAssetsFromManifest(manifest);
-            remoteMiracleAssetsLoadedAt = Date.now();
-            saveRemoteMiracleManifestBackup({ ...manifest, assets: remoteMiracleAssets });
-            return remoteMiracleAssets;
-        })
-        .catch((error) => {
-            console.warn("[Miracle R2] manifest load failed", error);
-            const backupAssets = loadRemoteMiracleManifestBackup();
-            if (backupAssets.length > 0) {
-                remoteMiracleAssets = backupAssets;
-                remoteMiracleAssetsLoadedAt = Date.now();
-                return remoteMiracleAssets;
-            }
-            return remoteMiracleAssets;
-        })
-        .finally(() => {
-            remoteMiracleAssetsLoading = null;
-        });
-
-    return remoteMiracleAssetsLoading;
+    return remoteMiracleAssetLoader.load(force);
 }
 
 function stopRemoteMiracleVideo(): void {
@@ -7864,9 +7393,7 @@ function resumeRemoteMiracleVideo(): void {
 
 
 function isIOSLikeDevice(): boolean {
-    const ua = navigator.userAgent || "";
-    const platform = navigator.platform || "";
-    return /iPad|iPhone|iPod/.test(ua) || (platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    return isIOSLikeDeviceBase(navigator);
 }
 
 function hideMobileVideoSoundRetryButton(): void {
@@ -7876,24 +7403,7 @@ function hideMobileVideoSoundRetryButton(): void {
 }
 
 function prepareRemoteVideoForSound(video: HTMLVideoElement, volume = 0.45): void {
-    const normalizedVolume = soundEnabled ? clamp(volume, 0, 1) : 0;
-    video.autoplay = false;
-    video.playsInline = true;
-    video.setAttribute("playsinline", "true");
-    video.setAttribute("webkit-playsinline", "true");
-    video.controls = false;
-
-    if (soundEnabled && (!isMobile || mobileAudioUnlocked)) {
-        video.muted = false;
-        video.defaultMuted = false;
-        video.removeAttribute("muted");
-        video.volume = normalizedVolume;
-    } else {
-        video.muted = true;
-        video.defaultMuted = true;
-        video.setAttribute("muted", "");
-        video.volume = 0;
-    }
+    prepareRemoteVideoForSoundBase(video, { soundEnabled, isMobile, mobileAudioUnlocked, volume });
 }
 
 async function unlockMobileAudio(showNotice = false): Promise<boolean> {
@@ -8011,15 +7521,7 @@ function showMobileVideoSoundRetryButton(video: HTMLVideoElement | null, volume 
 }
 
 function getFreshRemoteVideoSourceUrl(url: string, asset: RemoteMiracleAsset): string {
-    if (!url || url.startsWith("blob:") || url.startsWith("data:")) return url;
-    try {
-        const u = new URL(url, window.location.href);
-        u.searchParams.set("mbl_video", `${asset.id || "asset"}_${remoteMiracleAssetsLoadedAt || Date.now()}`);
-        return u.toString();
-    } catch {
-        const sep = url.includes("?") ? "&" : "?";
-        return `${url}${sep}mbl_video=${encodeURIComponent(String(asset.id || Date.now()))}`;
-    }
+    return getFreshRemoteVideoSourceUrlBase(url, asset, remoteMiracleAssetLoader.getLoadedAt());
 }
 
 function applyRemoteMiracleVideoSoundState(): void {
@@ -8427,23 +7929,16 @@ function togglePause(): void {
 // ======================================================
 
 function createWallsAndFloor(): Matter.Body[] {
-    const leftWall = Bodies.rectangle(geometry.wallWidth / 2, geometry.height / 2, geometry.wallWidth, geometry.height, { isStatic: true, render: { fillStyle: "rgba(36, 41, 54, 0.92)" } });
-    const rightWall = Bodies.rectangle(geometry.width - geometry.wallWidth / 2, geometry.height / 2, geometry.wallWidth, geometry.height, { isStatic: true, render: { fillStyle: "rgba(36, 41, 54, 0.92)" } });
-    const ground = Bodies.rectangle(geometry.width / 2, geometry.height - geometry.groundHeight / 2, geometry.width - geometry.wallWidth * 2, geometry.groundHeight, { isStatic: true, render: { fillStyle: "rgba(36, 41, 54, 0.92)" } });
-    return [leftWall, rightWall, ground];
+    return createWallsAndFloorBase(geometry);
 }
 
 
-function rollRarePin(): RarePinDef | null {
-    if (settings.simpleMode) return null;
-    for (const def of RARE_PIN_DEFS) {
-        if (appRandom() < def.rate) return def;
-    }
-    return null;
+function rollRarePin() {
+    return rollRarePinBase({ simpleMode: settings.simpleMode, rarePinDefs: RARE_PIN_DEFS, random: appRandom });
 }
 
-function getRarePinDef(kind: RarePinKind | undefined): RarePinDef | null {
-    return RARE_PIN_DEFS.find((x) => x.kind === kind) ?? null;
+function getRarePinDef(kind: RarePinKind | undefined) {
+    return getRarePinDefBase(kind, RARE_PIN_DEFS);
 }
 
 function maybeTriggerMiracleOmen(force = false): void {
@@ -8521,13 +8016,10 @@ scheduleViewportStabilize(false);
     researchProgressPanel.style.display = "none";
     updateStopButton();
     updateInfo();
-    resultOverlay.innerHTML = `
-        <div style="max-width:820px;width:min(820px,94vw);padding:${isMobile ? "28px 18px" : "38px"};border-radius:30px;background:rgba(15,23,42,.82);box-shadow:0 28px 90px rgba(0,0,0,.50);text-align:center;">
-            <div style="font-size:clamp(34px,7vw,72px);font-weight:1000;color:#fff;">安全停止しました</div>
-            <div style="margin-top:16px;font-size:clamp(17px,3vw,28px);line-height:1.7;color:#e5e7eb;">物理エンジン、描画、演出タイマーを停止しました。<br>スマホではこの後ブラウザの戻るボタンやタブを閉じる操作で終了してください。</div>
-            <div style="margin-top:20px;font-size:clamp(15px,2.4vw,22px);line-height:1.7;color:#cbd5e1;text-align:left;background:rgba(255,255,255,.08);padding:16px;border-radius:18px;">${generateResearchMemoHtml()}</div>
-            <div style="margin-top:22px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="safe-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(255,255,255,.35);cursor:pointer;font-weight:900;background:rgba(255,255,255,.16);color:#fff;">閉じる</button></div>
-        </div>`;
+    resultOverlay.innerHTML = getSafeStopResultHtml({
+        isMobile,
+        researchMemoHtml: generateResearchMemoHtml(),
+    });
     resultOverlay.style.display = "flex";
     document.getElementById("safe-close-result-button")!.onclick = () => closeFinalResult();
     showSoftToast(t("安全停止しました", "Safely stopped"));
@@ -8542,150 +8034,50 @@ function getPachinkoPinOffset(pattern: string, row: number, col: number, rowCoun
 }
 
 function createPachinkoNailGate(cx: number, cy: number, spread: number, angleOpen: number, length: number): Matter.Body[] {
-    const fillStyle = 'rgba(120,130,152,0.96)';
-    const strokeStyle = 'rgba(255,255,255,0.82)';
-    const left = Bodies.rectangle(cx - spread / 2, cy, Math.max(5 * geometry.scale, 4), length, { isStatic: true, angle: -angleOpen, render: { fillStyle, strokeStyle, lineWidth: Math.max(1.2, 1.5 * geometry.scale) } as any });
-    const right = Bodies.rectangle(cx + spread / 2, cy, Math.max(5 * geometry.scale, 4), length, { isStatic: true, angle: angleOpen, render: { fillStyle, strokeStyle, lineWidth: Math.max(1.2, 1.5 * geometry.scale) } as any });
-    (left as any).plugin = { isPin: true, baseX: left.position.x, baseY: left.position.y, wiggleFrames: 0, nailDecor: true };
-    (right as any).plugin = { isPin: true, baseX: right.position.x, baseY: right.position.y, wiggleFrames: 0, nailDecor: true };
-    return [left, right];
+    return createPachinkoNailGateBase({ cx, cy, spread, angleOpen, length, geometry });
 }
 
 function createPins(): Matter.Body[] {
-    const pins: Matter.Body[] = [];
-    const pinStartY = clamp(70 * geometry.scale, 40, 120);
-    const pinEndY = geometry.groundTop - geometry.dividerHeight - clamp(36 * geometry.scale, 20, 70);
-    const spacingY = settings.pinRows > 1 ? (pinEndY - pinStartY) / (settings.pinRows - 1) : 60 * geometry.scale;
-    const pattern = currentPachinkoNailPattern || 'standard';
-
-    for (let row = 0; row < settings.pinRows; row++) {
-        const y = pinStartY + row * spacingY;
-        const baseEven = row % 2 === 0;
-        const baseColCount = baseEven ? geometry.totalBinCount : Math.max(geometry.totalBinCount - 1, 1);
-        for (let col = 0; col < baseColCount; col++) {
-            const actualCol = baseEven ? col : col + 1;
-            const baseX = baseEven
-                ? geometry.binLeft + geometry.binWidth / 2 + actualCol * geometry.binWidth
-                : geometry.binLeft + actualCol * geometry.binWidth;
-            const pos = getPachinkoPinOffset(pattern, row, col, settings.pinRows, baseColCount, baseX, y);
-            const rarePin = rollRarePin();
-            const pin = Bodies.circle(pos.x, pos.y, geometry.pinRadius, {
-                isStatic: true,
-                render: {
-                    fillStyle: rarePin?.fillStyle ?? 'rgba(196,154,58,.98)',
-                    strokeStyle: rarePin?.strokeStyle ?? 'rgba(255,246,190,.98)',
-                    lineWidth: Math.max(1.4, (rarePin ? 3.2 : 2.4) * geometry.scale),
-                } as any,
-            });
-            (pin as any).plugin = { isPin: true, baseX: pos.x, baseY: pos.y, wiggleFrames: 0, rarePinKind: rarePin?.kind, rarePinLabel: rarePin?.label };
-            pins.push(pin);
-        }
-    }
-
-    const nailGateCount = 4 + Math.floor(appRandom() * 5);
-    for (let i = 0; i < nailGateCount; i++) {
-        const y = pinStartY + ((i + 1) / (nailGateCount + 1)) * (pinEndY - pinStartY);
-        const sway = Math.sin(i * 1.7 + pattern.length * 0.31);
-        const x = geometry.width / 2 + sway * geometry.binWidth * (1.1 + (i % 3) * 0.45);
-        const spread = clamp(geometry.binWidth * (0.8 + (i % 3) * 0.2), 26 * geometry.scale, 74 * geometry.scale);
-        const angle = (0.28 + ((i + pattern.length) % 4) * 0.08) * (i % 2 === 0 ? 1 : -1);
-        const length = clamp(geometry.binWidth * (0.32 + (i % 2) * 0.10), 22 * geometry.scale, 46 * geometry.scale);
-        pins.push(...createPachinkoNailGate(x, y, spread, angle, length));
-    }
-    return pins;
-}
-
-function createDividers(): Matter.Body[] {
-    const dividers: Matter.Body[] = [];
-    for (let i = 1; i < geometry.totalBinCount; i++) {
-        const x = geometry.binLeft + geometry.binWidth * i;
-        dividers.push(Bodies.rectangle(x, geometry.dividerY, geometry.dividerWidth, geometry.dividerHeight, { isStatic: true, render: { fillStyle: "rgba(196, 101, 101, 0.94)" } }));
-    }
-    return dividers;
-}
-
-function createPachinkoYakumonoSensors(): Matter.Body[] {
-    return PACHINKO_YAKUMONO_DEFS.map((def) => {
-        const width = clamp(geometry.width * def.widthRatio, 82 * geometry.scale, 260 * geometry.scale);
-        const height = clamp(def.height * geometry.scale, 12, 32);
-        const body = Bodies.rectangle(geometry.width * def.xRatio, geometry.height * def.yRatio, width, height, {
-            isStatic: true,
-            isSensor: true,
-            render: {
-                fillStyle: "rgba(255,255,255,0.01)",
-                strokeStyle: "rgba(255,255,255,0.01)",
-                lineWidth: 1,
-            } as any,
-        });
-        (body as any).plugin = { isYakumono: true, yakumonoKind: def.kind, yakumonoLabel: def.label, oddsScale: def.oddsScale, score: def.score, color: def.color };
-        return body;
+    return createPinsBase({
+        geometry,
+        pinRows: settings.pinRows,
+        pattern: currentPachinkoNailPattern || "standard",
+        rollRarePin,
+        getPachinkoPinOffset,
+        random: appRandom,
     });
 }
 
+function createDividers(): Matter.Body[] {
+    return createDividersBase(geometry);
+}
+
+function createPachinkoYakumonoSensors(): Matter.Body[] {
+    return createPachinkoYakumonoSensorsBase({ geometry, defs: PACHINKO_YAKUMONO_DEFS });
+}
+
 function getPachinkoYakumonoDef(kind: PachinkoYakumonoKind): PachinkoYakumonoDef {
-    return PACHINKO_YAKUMONO_DEFS.find((x) => x.kind === kind) ?? PACHINKO_YAKUMONO_DEFS[0];
+    return getPachinkoYakumonoDefBase(kind, PACHINKO_YAKUMONO_DEFS);
 }
 
 function createDropPlugin(kind: DropKind, x: number, y: number, radius: number, extras: Record<string, unknown> = {}): Record<string, unknown> {
-    return {
-        isDrop: true,
-        kind,
-        stuckFrames: 0,
-        lastX: x,
-        lastY: y,
-        lifeFrames: 0,
-        bornAt: performance.now(),
-        hardExpireMs: kind === "giant" ? 9000 : kind === "shape" ? 16000 : 15000,
-        originalRadius: radius,
-        passedYakumonoIds: {},
-        ...extras,
-    };
+    return createDropPluginBase(kind, x, y, radius, extras);
 }
 
 function createRandomShapeBody(x: number, y: number, radius: number, renderOptions: any): Matter.Body {
-    const commonOptions: any = { restitution: 0.92, friction: 0.001, frictionStatic: 0, frictionAir: 0.002, density: 0.0011, render: renderOptions };
-    const choice = Math.floor(appRandom() * 9);
-    let body: Matter.Body;
-    let shapeName = "";
-    if (choice === 0) { shapeName = "角丸四角形"; body = Bodies.rectangle(x, y, radius * 1.7, radius * 1.7, { ...commonOptions, chamfer: { radius: radius * 0.25 } }); }
-    else if (choice === 1) { shapeName = "角丸長方形"; body = Bodies.rectangle(x, y, radius * 2.4, radius * 1.1, { ...commonOptions, chamfer: { radius: radius * 0.22 } }); }
-    else if (choice === 2) { shapeName = "三角形"; body = Bodies.polygon(x, y, 3, radius * 1.35, commonOptions); }
-    else if (choice === 3) { shapeName = "五角形"; body = Bodies.polygon(x, y, 5, radius * 1.35, commonOptions); }
-    else if (choice === 4) { shapeName = "六角形"; body = Bodies.polygon(x, y, 6, radius * 1.35, commonOptions); }
-    else if (choice === 5) { shapeName = "八角形"; body = Bodies.polygon(x, y, 8, radius * 1.35, commonOptions); }
-    else if (choice === 6) { shapeName = "台形"; body = Bodies.trapezoid(x, y, radius * 2.2, radius * 1.5, 0.35, commonOptions); }
-    else if (choice === 7) { shapeName = "短い棒"; body = Bodies.rectangle(x, y, radius * 2.5, radius * 0.9, { ...commonOptions, chamfer: { radius: radius * 0.2 } }); }
-    else { shapeName = "多角形"; body = Bodies.polygon(x, y, 7, radius * 1.45, commonOptions); }
-
-    (body as any).plugin = createDropPlugin("shape", x, y, radius, { shapeName });
-    return body;
+    return createRandomShapeBodyBase({ x, y, radius, renderOptions, random: appRandom });
 }
 
 function createHeartBody(x: number, y: number, radius: number, renderOptions: any): Matter.Body {
-    const options: any = { restitution: 0.96, friction: 0.001, frictionStatic: 0, frictionAir: 0.002, density: 0.0012, render: renderOptions };
-    const left = Bodies.circle(x - radius * 0.48, y - radius * 0.25, radius * 0.62, options);
-    const right = Bodies.circle(x + radius * 0.48, y - radius * 0.25, radius * 0.62, options);
-    const bottom = Bodies.polygon(x, y + radius * 0.25, 3, radius * 1.25, options);
-    Body.rotate(bottom, Math.PI);
-    const heart = Body.create({ parts: [left, right, bottom], restitution: 0.96, friction: 0.001, frictionStatic: 0, frictionAir: 0.002, density: 0.0012, render: renderOptions });
-    (heart as any).plugin = createDropPlugin("heart", x, y, radius, { symbol: "♥", shapeName: "桃色ハート" });
-    return heart;
+    return createHeartBodyBase(x, y, radius, renderOptions);
 }
 
 function createSymbolBody(x: number, y: number, radius: number, kind: DropKind, fillStyle: string, symbol: string, label: string): Matter.Body {
-    const body = Bodies.circle(x, y, radius, { restitution: 0.98, friction: 0.001, frictionStatic: 0, frictionAir: 0.002, density: 0.0013, render: { fillStyle, strokeStyle: "#ffffff", lineWidth: 4 * geometry.scale } as any });
-    (body as any).plugin = createDropPlugin(kind, x, y, radius, { symbol, shapeName: label });
-    return body;
+    return createSymbolBodyBase({ x, y, radius, kind, fillStyle, symbol, label, geometry });
 }
 
 function createTinyFragment(x: number, y: number, baseRadius: number, color: string): Matter.Body {
-    const radius = Math.max(2, baseRadius / 10);
-    const sides = 3 + Math.floor(appRandom() * 5);
-    const body = Bodies.polygon(x, y, sides, radius, { restitution: 0.9, friction: 0.001, frictionStatic: 0, frictionAir: 0.01, density: 0.0008, render: { fillStyle: color, strokeStyle: "rgba(255,255,255,0.95)", lineWidth: 1 } as any });
-    (body as any).plugin = { isDecoration: true, kind: "fragment" };
-    Body.setVelocity(body, { x: (appRandom() - 0.5) * 14 * geometry.scale, y: -8 * geometry.scale - appRandom() * 8 * geometry.scale });
-    Body.setAngularVelocity(body, (appRandom() - 0.5) * 0.7);
-    return body;
+    return createTinyFragmentBase({ x, y, baseRadius, color, geometry, random: appRandom });
 }
 
 function explodeStuckDrop(body: Matter.Body): void {
@@ -9640,15 +9032,12 @@ function showEndingThenFinalResult(): void {
             : "通常観測として、静かに研究記録を保存しました。";
     maybeShowCommentary(`実況「${title}」`, true);
     fireConfetti(hasGodChain ? "cosmic" : best ? "miracle" : "normal");
-    resultOverlay.innerHTML = `
-        <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 36%, rgba(255,255,255,.18), rgba(15,23,42,.82) 54%, rgba(0,0,0,.96));"></div>
-        <div style="position:relative;max-width:900px;width:min(900px,94vw);padding:${isMobile ? "28px 18px" : "40px 48px"};border-radius:34px;background:rgba(15,23,42,.66);box-shadow:0 30px 90px rgba(0,0,0,.52);text-align:center;animation:ending-fade 2.4s ease-out forwards;">
-            <style>@keyframes ending-fade{0%{opacity:0;transform:translateY(18px) scale(.98)}18%{opacity:1;transform:translateY(0) scale(1)}82%{opacity:1}100%{opacity:0;transform:translateY(-8px) scale(.99)}}</style>
-            <div style="font-size:clamp(22px,4vw,38px);font-weight:1000;color:#fde68a;letter-spacing:.08em;">ENDING</div>
-            <div style="margin-top:10px;font-size:clamp(38px,8vw,82px);font-weight:1000;color:#fff;text-shadow:0 8px 30px rgba(0,0,0,.66);">${title}</div>
-            <div style="margin-top:16px;font-size:clamp(18px,3vw,30px);line-height:1.7;color:#e5e7eb;">${line}</div>
-            <div style="margin-top:18px;font-size:clamp(16px,2.6vw,24px);color:#cbd5e1;">${finishedCount.toLocaleString()}回の落下を確認しました。</div>
-        </div>`;
+    resultOverlay.innerHTML = getEndingResultHtml({
+        isMobile,
+        title,
+        line,
+        finishedCount,
+    });
     resultOverlay.style.display = "flex";
     window.setTimeout(() => showFinalResult(), 2500);
 }
@@ -9674,23 +9063,31 @@ function showFinalResult(): void {
     const runSummaryText = bossResult
         ? `${browserName} / ボス戦 ${bossResult.cleared ? "討伐成功" : "討伐失敗"} / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((endTime ?? Date.now()) - startTime)}`
         : `${browserName} / 指定${settings.targetCount.toLocaleString()}回 / 実処理${finishedCount.toLocaleString()}回 / ${formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime)}`;
-    resultOverlay.innerHTML = `
-        <div style="position:relative;max-width:920px;width:min(920px,94vw);max-height:88dvh;overflow:auto;padding:28px;border-radius:26px;background:rgba(5,8,18,.58);box-shadow:0 24px 80px rgba(0,0,0,.42);">
-            <button id="close-result-button" aria-label="閉じる" style="position:absolute;right:14px;top:14px;width:46px;height:46px;border-radius:999px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.18);color:#fff;font-size:28px;font-weight:900;line-height:1;cursor:pointer;">×</button>
-            <div style="font-size:clamp(38px,8vw,78px);font-weight:900;margin-bottom:18px;">実験完了</div>
-            <div style="font-size:clamp(22px,4vw,40px);margin-bottom:18px;">${runSummaryText}</div>
-            <div style="font-size:clamp(20px,3vw,34px);margin-bottom:18px;">スコア <b>${runScore.toLocaleString()}</b> / ミッション ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length} / 奇跡コンボ最高 ${bestComboThisRun}</div>
-            ${dailyCompleted.length > 0 ? `<div style="margin:0 auto 18px;max-width:760px;padding:14px;border-radius:18px;background:rgba(34,197,94,.16);border:1px solid rgba(134,239,172,.35);font-size:clamp(16px,2.4vw,24px);">デイリー研究達成: ${dailyCompleted.map(escapeHtml).join(" / ")}</div>` : ""}
-            <div style="margin:0 auto 18px;max-width:760px;padding:14px;border-radius:18px;background:rgba(250,204,21,.16);border:1px solid rgba(250,204,21,.35);font-size:clamp(16px,2.4vw,26px);line-height:1.55;">奇跡ガチャP <b>+${totalGachaPointAward.toLocaleString()}P</b> / 所持 <b>${getGachaPoint().toLocaleString()}P</b><br><span style="opacity:.80;">実験完了 +${finishGachaPoint.toLocaleString()}P${dailyGachaPoint > 0 ? ` / デイリー +${dailyGachaPoint.toLocaleString()}P` : ""}</span></div>
-            ${getBossResultHtml(bossResult)}
-            <div style="margin:0 auto 18px;max-width:760px;padding:16px;border-radius:20px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);font-size:clamp(17px,2.6vw,28px);line-height:1.55;text-align:left;"><b>今回の研究評価: ${evaluation.grade}</b><br>観測タイプ: ${evaluation.type}<br>奇跡濃度: ${evaluation.density}%<br><span style="opacity:.82;">${evaluation.note}</span><br><span style="opacity:.82;">研究レポート #${currentReport.runNo} を奇跡アルバムに保存しました。</span></div>
-            <div style="font-size:clamp(18px,3vw,34px);line-height:1.55;">${rankingHtml}</div>
-            <div style="margin-top:20px;font-size:clamp(16px,2vw,26px);line-height:1.5;opacity:.95;">確率モードは <b>${getProbabilityModeLabel()}</b> です。一番レアは <b>1兆分の1</b> の極秘イベント。出たら奇跡どころか、画面が伝説になります。</div>
-            <div style="margin-top:24px;font-size:clamp(16px,2vw,28px);opacity:.9;">発見済み種類: ${(SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length).toLocaleString()} / ${SPECIAL_EVENT_DEFS.length}　捨て区画: ${discardedCount.toLocaleString()}</div>
-            <div style="margin-top:18px;font-size:clamp(16px,2vw,26px);opacity:.95;text-align:left;background:rgba(255,255,255,.08);padding:16px;border-radius:18px;"><b>研究メモ自動生成</b><br>${generateResearchMemoHtml()}</div>
-            <div style="margin-top:18px;font-size:clamp(16px,2vw,26px);opacity:.95;">${getResearchReportHtml()}</div>
-            <div style="margin-top:24px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap;"><button id="copy-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">結果コピー</button><button id="download-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">CSV保存</button><button id="share-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);box-shadow:0 5px 14px rgba(90,96,180,.16);">録画・SNS</button><button id="bottom-close-result-button" style="font-size:20px;padding:11px 20px;border-radius:14px;border:1px solid rgba(70,80,110,.28);cursor:pointer;font-weight:800;background:linear-gradient(180deg,#f3f8e8 0%,#dceec2 100%);box-shadow:0 5px 14px rgba(87,112,51,.16);">閉じる</button></div>
-        </div>`;
+    resultOverlay.innerHTML = getFinalResultHtml({
+        runSummaryText,
+        runScore,
+        missionClearedCount: Object.values(missionProgress).filter(Boolean).length,
+        missionTotalCount: missionDefs.length,
+        bestComboThisRun,
+        dailyCompletedHtml: dailyCompleted.length > 0 ? `<div style="margin:0 auto 18px;max-width:760px;padding:14px;border-radius:18px;background:rgba(34,197,94,.16);border:1px solid rgba(134,239,172,.35);font-size:clamp(16px,2.4vw,24px);">デイリー研究達成: ${dailyCompleted.map(escapeHtml).join(" / ")}</div>` : "",
+        totalGachaPointAward,
+        currentGachaPoint: getGachaPoint(),
+        finishGachaPoint,
+        dailyGachaPoint,
+        bossResultHtml: getBossResultHtml(bossResult),
+        evaluationGrade: evaluation.grade,
+        evaluationType: evaluation.type,
+        evaluationDensity: evaluation.density,
+        evaluationNote: evaluation.note,
+        reportRunNo: currentReport.runNo,
+        rankingHtml,
+        probabilityModeLabel: getProbabilityModeLabel(),
+        discoveredCount: SPECIAL_EVENT_DEFS.filter((def) => (savedRecords.discovered[def.kind] ?? 0) + (specialCreated[def.kind] ?? 0) > 0).length,
+        specialEventCount: SPECIAL_EVENT_DEFS.length,
+        discardedCount,
+        researchMemoHtml: generateResearchMemoHtml(),
+        researchReportHtml: getResearchReportHtml(),
+    });
     resultOverlay.style.display = "flex";
     document.getElementById("copy-result-button")!.onclick = () => copyResultCsv();
     document.getElementById("download-result-button")!.onclick = () => downloadResultCsv();

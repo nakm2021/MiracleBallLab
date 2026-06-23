@@ -98,3 +98,94 @@ export function getThemeBookHtml(entries: ThemeCollectionEntry[], isEnglish: boo
         ${rows}
     `;
 }
+
+export function getLabHomeHtml(params: {
+    dailyTitle: string;
+    seasonTitle: string;
+    seasonRateBoost: number;
+    rankLevel: number;
+    rankLabel: string;
+    discoveredKinds: number;
+    totalRuns: number;
+    gachaPoint: number;
+    latestReportText: string;
+    shopPurchasedCount: number;
+    reportLimit: number;
+    pointBoosterOn: boolean;
+    isMobile: boolean;
+    userGuideHtml: string;
+}): string {
+    return `
+        <div style="display:grid;gap:18px;">
+            <div class="miracle-user-card miracle-home-hero">
+                <div style="font-size:clamp(28px,6vw,54px);font-weight:1000;line-height:1.1;">MiracleBallLab</div>
+                <div style="margin-top:14px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">玉を落として、まれに起きる奇跡を集めよう</div>
+                <div style="margin-top:16px;line-height:1.85;">今日の研究テーマ：<b>${escapeHtml(params.dailyTitle)}</b><br>開催中：<b>${escapeHtml(params.seasonTitle)}</b> / 奇跡率 <b>x${params.seasonRateBoost.toFixed(2)}</b><br>研究員ランク：<b>Lv.${params.rankLevel} ${escapeHtml(params.rankLabel)}</b> / 図鑑：<b>${params.discoveredKinds}</b>種類 / 実験：<b>${params.totalRuns.toLocaleString()}</b>回 / 奇跡ガチャP：<b>${params.gachaPoint.toLocaleString()}</b>P</div>
+            </div>
+            <div style="display:grid;grid-template-columns:${params.isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:14px;">
+                <div class="miracle-user-card"><b>今日やること</b><br><span style="opacity:.82;line-height:1.7;">デイリー研究を確認して、研究レポートを1件作成しましょう。</span></div>
+                <div class="miracle-user-card"><b>最近の記録</b><br><span style="opacity:.82;line-height:1.7;">${escapeHtml(params.latestReportText)}</span></div>
+                <div class="miracle-user-card"><b>研究所設備</b><br><span style="opacity:.82;line-height:1.7;">ショップ設備 ${params.shopPurchasedCount}件 / レポート上限 ${params.reportLimit}件 / 完了P増幅 ${params.pointBoosterOn ? "ON" : "OFF"}</span></div>
+            </div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:2px 0 2px;">
+                <button data-home-action="start" class="miracle-home-button miracle-home-primary">実験を開始</button>
+                <button data-home-action="map" class="miracle-home-button miracle-home-primary">研究所マップ</button>
+                <button data-home-action="presets" class="miracle-home-button">プリセット</button>
+                <button data-home-action="shop" class="miracle-home-button">ショップ</button>
+                <button data-home-action="season" class="miracle-home-button">シーズン</button>
+                <button data-home-action="craft" class="miracle-home-button">クラフト</button>
+                <button data-home-action="boss" class="miracle-home-button">ボス実験</button>
+                <button data-home-action="gacha" class="miracle-home-button">奇跡ガチャ</button>
+                <button data-home-action="daily" class="miracle-home-button">デイリー研究</button>
+                <button data-home-action="album" class="miracle-home-button">奇跡アルバム</button>
+                <button data-home-action="archive" class="miracle-home-button">研究アーカイブ</button>
+                <button data-home-action="book" class="miracle-home-button">奇跡図鑑</button>
+                <button data-home-action="guide" class="miracle-home-button">遊び方</button>
+            </div>
+            ${params.userGuideHtml}
+        </div>
+    `;
+}
+
+export function getResearchReportSummaryHtml(params: {
+    levelLabel: string;
+    levelPercent: number;
+    fortuneRateBoost: number;
+    fortuneLuckyKind: string;
+    totalCountLabel: string;
+    finishedCount: number;
+    targetCount: number;
+    discardedLabel: string;
+    discardedCount: number;
+    topBinLabel: string;
+    topLabel: string;
+    maxCount: number;
+    biasLabel: string;
+    diagnosis: string;
+    discoveredLabel: string;
+    discoveredKinds: number;
+    specialCount: number;
+    fusionCount: number;
+    fusionTotal: number;
+    secretCount: number;
+    rarePinSummary: string;
+    researchMemoHtml: string;
+    recentMiraclesLabel: string;
+    recentMiraclesHtml: string;
+}): string {
+    return `
+        <div style="display:grid;gap:10px;">
+            <div><b>研究レベル:</b> ${escapeHtml(params.levelLabel)} (${params.levelPercent.toFixed(1)}%)</div>
+            <div><b>今日の奇跡率:</b> x${params.fortuneRateBoost.toFixed(2)} / 注目: ${escapeHtml(params.fortuneLuckyKind)}</div>
+            <div><b>${escapeHtml(params.totalCountLabel)}:</b> ${params.finishedCount.toLocaleString()} / ${params.targetCount.toLocaleString()}</div>
+            <div><b>${escapeHtml(params.discardedLabel)}:</b> ${params.discardedCount.toLocaleString()}</div>
+            <div><b>${escapeHtml(params.topBinLabel)}:</b> ${escapeHtml(params.topLabel)} (${params.maxCount.toLocaleString()})</div>
+            <div><b>${escapeHtml(params.biasLabel)}:</b> ${escapeHtml(params.diagnosis)}</div>
+            <div><b>${escapeHtml(params.discoveredLabel)}:</b> ${params.discoveredKinds} / ${params.specialCount}</div>
+            <div><b>合成・派生:</b> ${params.fusionCount} / ${params.fusionTotal}</div>
+            <div><b>秘密操作:</b> ${params.secretCount}</div>
+            <div><b>レアピン接触:</b> ${escapeHtml(params.rarePinSummary)}</div>
+            <div><b>研究メモ:</b><br>${params.researchMemoHtml}</div>
+            <div><b>${escapeHtml(params.recentMiraclesLabel)}:</b><br>${params.recentMiraclesHtml}</div>
+        </div>`;
+}
