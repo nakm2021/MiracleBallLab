@@ -11,7 +11,7 @@ export function applyUserPreferences(params: {
     createDefaultLabelText: (count: number) => string;
 }): {
     settings: Settings;
-    userPreferences: UserPreferences | null | undefined;
+    userPreferences: UserPreferences;
     speedLabelText?: string;
     currentTheme?: ThemeMode;
     themeAutoMode?: ThemeAutoMode;
@@ -21,7 +21,7 @@ export function applyUserPreferences(params: {
 } {
     const { prefs, storage, storageKey } = params;
     if (!prefs || typeof prefs !== "object") {
-        return { settings: params.settings, userPreferences: prefs };
+        return { settings: params.settings, userPreferences: { version: 1 } };
     }
 
     let settings = { ...params.settings, ...prefs };

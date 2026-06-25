@@ -24,11 +24,13 @@ import { awardTicketsForRank, loadMiracleTicketState, saveMiracleTicketState, sp
 import { FAMILIAR_EXPEDITION_PLANS, claimFamiliarExpedition, getFamiliarExpeditionProgress, loadFamiliarExpeditionState, startFamiliarExpedition, type FamiliarExpeditionState } from "./miracle/familiarExpedition";
 import { SECRET_RESEARCH_NOTES, loadSecretResearchNoteState, markSecretResearchNotesRead, unlockSecretResearchNote, type SecretResearchNoteState } from "./miracle/secretResearchNote";
 import { BASE_SPECIAL_EVENT_DEFS, FUSION_DEFS, MIRACLE_CHAIN_DEFS, NORMAL_BALL_TRAITS, PACHINKO_YAKUMONO_DEFS, RARE_PIN_DEFS, SPECIAL_EVENT_DEFS } from "./miracle/eventCatalog";
-import { BOSS_EXPERIMENT_DEFS, getBossAssetUrl, getBossDef, getBossExperimentPopupHtml, getBossResultHtml, type BossExperimentDef } from "./miracle/bossExperiment";
-import { calculateBossDamage, createBossExperimentRecord, getBossAttackInterval, getBossDropDamage, getBossElapsedMs as getBossElapsedMsBase, getBossPhase, getBossRemainingMs as getBossRemainingMsBase, getBossRewardParts, getBossYakumonoDamage, prependBossRecord } from "./miracle/bossService";
+import { getBossResultHtml } from "./miracle/bossExperiment";
+import { createBossExperimentController, type BossExperimentController } from "./miracle/bossExperimentController";
 import { RARE_BOARD_CATASTROPHE_DEFS, type RareBoardCatastropheDef, type RareBoardCatastropheKind } from "./miracle/rareBoardCatastrophe";
-import { EVENT_SEASONS, EXPERIMENT_PRESETS, MIRACLE_CRAFT_RECIPES, RESEARCH_SHOP_ITEMS, type EventSeasonDef, type EventSeasonMissionDef, type EventSeasonMissionMetric, type ExperimentPresetDef, type MiracleCraftRecipeDef, type ShopItemDef } from "./miracle/researchFeatures";
-import { canBuyShopItem as canBuyShopItemBase, canCraftRecipe as canCraftRecipeBase, getCraftMaterialStatus as getCraftMaterialStatusBase, getRewardParts, getShopCostLabel as getShopCostLabelBase } from "./miracle/commerceService";
+import { EXPERIMENT_PRESETS, type ExperimentPresetDef } from "./miracle/researchFeatures";
+import { buildDailyFortune, calculateMiracleRateScale, getPassiveMiracleBoost as getPassiveMiracleBoostBase, getProbabilityScale as getProbabilityScaleBase, rollSpecialEvent as rollSpecialEventBase } from "./miracle/probabilityService";
+import { getGachaPointRewardForRank } from "./miracle/rewardService";
+import { createResearchCommerceController, type ResearchCommerceController } from "./miracle/researchCommerceController";
 import { APP_VERSION, BASE_HEIGHT, BASE_WIDTH, BLACK_SUN_RATE, COMMENTARY_DISPLAY_MS, COMMENTARY_MIN_INTERVAL_MS, COSMIC_EGG_RATE, CROWN_RATE, FINAL_SWEEP_DELAY_MS, FIRST_RUN_GUIDE_STORAGE_KEY, GIANT_EVENT_INTERVAL, GOLD_RATE, HEART_RATE, LOCAL_GOD_AUDIO_FILES, LOCAL_RARE_AUDIO_FILES, MAGNET_DURATION_MS, MILESTONE_INTERVAL, MIRACLE_ASSET_BASE_URL, MIRACLE_CHAIN_WINDOW_MS, MIRACLE_MANIFEST_URL, MIRACLE_OMEN_DISPLAY_MS, MIRACLE_OMEN_MIN_INTERVAL_MS, RAINBOW_RATE, RANDOM_BUCKET_COUNT, RECORD_STORAGE_KEY, REMOTE_MIRACLE_BAD_URL_CACHE_MS, REMOTE_MIRACLE_MANIFEST_CACHE_MS, REMOTE_MIRACLE_VIDEO_DISPLAY_MS, SCORE_STORAGE_BONUS_INTERVAL, SECRET_KEY_MAX_LENGTH, SECRET_KEY_SEQUENCES, SHAPE_RATE, SHOOTING_STAR_RATE, SMALL_MIRACLE_MIN_INTERVAL_MS, STUCK_EXPLODE_FRAMES, STUCK_NUDGE_FRAMES, SWORD_IMPACT_RATE, TIME_STOP_DURATION_MS, USER_PREFERENCES_STORAGE_KEY, USER_PROFILE_STORAGE_KEY, type RareSoundFlavor } from "./miracle/constants";
 import { getSpecialIconColors } from "./miracle/drawing";
 import { MAGIC_CIRCLE_DEFS, classifyMagicCircle, type MagicCircleDef } from "./miracle/magicCircles";
@@ -48,7 +50,6 @@ import { applyUnifiedMetallicButtonStyle as applyUnifiedMetallicButtonStyleBase,
 import { BROKEN_RESEARCH_NOTE_LINES } from "./miracle/flavorText";
 import { getUserGuideHtml } from "./miracle/helpContent";
 import { chooseTimeBallSkin as chooseTimeBallSkinBase, drawTimeBallSkinIcon, getCurrentTimeBallTheme, getTimeBallSkinFillStyle, getTimeBallSkinLabel as getTimeBallSkinLabelBase, getTimeBallThemeLabel as getTimeBallThemeLabelBase, type TimeBallSkinLabels, type TimeBallThemeLabels } from "./miracle/timeBallSkins";
-import { drawBossEnemyFrame, drawBossHudFrame, type BossRenderOptions, type BossRenderState } from "./miracle/bossRendering";
 import { draw3DBallShadingFrame, drawBoardDepthOverlayFrame, drawLuxuryBoardForegroundFrame, drawMobileRuntimeStableFrame as drawMobileRuntimeStableFrameBase, drawNormalTraitMarksFrame, drawRealisticPinsFrame, drawSpecialGlowsFrame } from "./miracle/ballRendering";
 import { drawMagicCircleTraceFrame } from "./miracle/magicCircleRendering";
 import { drawDiscardBinLabelFrame, drawPachinkoMachineFrame, drawSpecialIconFrame } from "./miracle/pachinkoRendering";
@@ -58,13 +59,10 @@ import { drawTapRipplesFrame } from "./miracle/tapRippleRendering";
 import { drawRareBoardCatastropheFrame } from "./miracle/rareBoardCatastropheRendering";
 import { getResearchArchiveHtml, getResearchReportDetailHtml } from "./miracle/researchArchivePresentation";
 import { createResearchReportEntry as createResearchReportEntryBase, prependResearchReport } from "./miracle/researchReportService";
-import { getGachaResultHtml, getGachaRewardBookHtml, getGachaSpinHtml, getMiracleGachaHtml } from "./miracle/gachaPresentation";
-import { pickGachaRewardTheme as pickGachaRewardThemeBase, pickMiracleGachaDef as pickMiracleGachaDefBase } from "./miracle/gachaService";
 import { getFamiliarExpeditionHtml, getFamiliarPopupHtml, getMiracleTicketHtml, getSecretResearchNoteHtml } from "./miracle/familiarPresentation";
 import { getMiracleAlbumHtml, getMiracleLogHtml } from "./miracle/miracleAlbumPresentation";
 import { getResearchWorldMapHtml } from "./miracle/researchWorldMapPresentation";
 import { getDailyMissionHtml, getExperimentPresetHtml, getLabHomeHtml, getResearchRankHtml, getResearchReportSummaryHtml, getThemeBookHtml } from "./miracle/labPresentation";
-import { getEventSeasonHtml, getMiracleCraftHtml, getResearchShopHtml } from "./miracle/researchCommercePresentation";
 import { getAboutHtml, getButtonHelpHtml } from "./miracle/aboutPresentation";
 import { getAppInfoHtml, getMiracleBookHtml, getRecordsHtml, getUserSettingsHtml } from "./miracle/userPresentation";
 import { getDailyFortuneHtml, getFusionHtml, getMissionHtml, getReplayHtml, getShareHtml } from "./miracle/activityPresentation";
@@ -114,10 +112,6 @@ import type {
     TutorialMissionDef,
     TapRipple,
     ResearchReportEntry,
-    GachaRewardEntry,
-    ShopPurchaseEntry,
-    SeasonRewardEntry,
-    CraftEntry,
     BossExperimentRecord,
     FamiliarKind,
     FamiliarMode,
@@ -125,6 +119,94 @@ import type {
 } from "./miracle/types";
 
 let offlineLabController: OfflineLabController | null = null;
+let researchCommerceController: ResearchCommerceController | null = null;
+let bossExperimentController: BossExperimentController | null = null;
+
+function getResearchCommerceController(): ResearchCommerceController {
+    if (!researchCommerceController) {
+        researchCommerceController = createResearchCommerceController({
+            getRecords: () => savedRecords,
+            saveRecords,
+            getTickets: () => miracleTicketState,
+            setTickets: (state) => { miracleTicketState = state; },
+            createId,
+            random: appRandom,
+            isMobile,
+            showPopup,
+            closePopup: closeHelpPopup,
+            showToast: showSoftToast,
+            showMilestone,
+            updateTicketButton: (normal) => {
+                if (miracleTicketButton) miracleTicketButton.textContent = t(`奇跡チケット ${normal}`, `Tickets ${normal}`);
+            },
+            getThemeOptions: () => getThemeOptions().map((option) => option.value),
+            getThemeDisplayName,
+            markThemeUnlocked,
+            hashTextToNumber,
+            formatProbability,
+            applyExperimentPreset,
+            addScore: (amount, reason) => addScore(amount, reason),
+            revealGachaResult: (best, probabilityText, feelingText) => {
+                settings.effectsEnabled = true;
+                adminForceNextMiracleEffect = true;
+                triggerRareBoardCatastrophe(best);
+                showMiracle(best.kind, best.symbol, probabilityText, feelingText);
+            },
+            playGachaVideo: (best) => { void playGachaRemoteMiracleVideo(best); },
+        });
+    }
+    return researchCommerceController;
+}
+
+function getBossExperimentController(): BossExperimentController {
+    if (!bossExperimentController) {
+        bossExperimentController = createBossExperimentController({
+            getRecords: () => savedRecords,
+            getStartTime: () => startTime,
+            getRunScore: () => runScore,
+            getFinishedCount: () => finishedCount,
+            getRuntimeState: () => ({ isStarted, isFinished, isPaused, isMiraclePaused }),
+            getGeometry: () => geometry,
+            getBlackModeEnabled: () => settings.blackModeEnabled,
+            getRankScore,
+            getThemeDisplayName,
+            findSpecialDef,
+            createId,
+            random: appRandom,
+            showPopup,
+            closePopup: closeHelpPopup,
+            showToast: showSoftToast,
+            showMilestone,
+            addFloatingText,
+            addScore,
+            triggerPhaseEffect: (phase) => triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], phase === 2 ? "gravity" : "supernova"),
+            celebrateVictory: () => {
+                fireConfetti("cosmic", true);
+                triggerScreenFlash("cosmic");
+            },
+            triggerTimeoutEffect: () => triggerScreenFlash("black"),
+            finishRun: () => finishActiveBossRun(),
+            triggerCameraShake,
+            spawnIntruders: spawnExternalIntruderBalls,
+            triggerOmen: () => maybeTriggerMiracleOmen(true),
+            showCommentary: (message) => maybeShowCommentary(message, true),
+            addGachaPoint: (point, reason) => { addGachaPoint(point, reason, false); },
+            markThemeUnlocked,
+            prepareBossSettings: (boss) => {
+                settings.targetCount = boss.targetCount;
+                settings.activeLimit = boss.activeLimit;
+                settings.effectsEnabled = true;
+                settings.boardAnomalyEnabled = true;
+                settings.showRecentMiracles = true;
+                targetInput.value = String(settings.targetCount);
+                activeBallInput.value = String(settings.activeLimit);
+            },
+            startBossRun: () => startExperiment("boss"),
+            uiFont: ROUNDED_UI_FONT,
+        });
+    }
+    return bossExperimentController;
+}
 
 function getOfflineLabController(): OfflineLabController {
     if (!offlineLabController) {
@@ -203,8 +285,6 @@ const uiFontPx = isMobile ? 25 : 20;
 const uiButtonFontPx = isMobile ? 26 : 20;
 const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
 const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
-const MIRACLE_GACHA_ONCE_COST = 100000;
-const MIRACLE_GACHA_TEN_COST = 900000;
 const SETTINGS_UI_ZOOM_STORAGE_KEY = "miracle_settings_ui_zoom_v1";
 const SETTINGS_UI_ZOOM_DEFAULT_MIN_MIGRATION_KEY = "miracle_settings_ui_zoom_default_min_migrated_v1";
 const COMMENTARY_DEFAULT_OFF_MIGRATION_KEY = "miracle_commentary_default_off_migrated_v1";
@@ -423,18 +503,6 @@ let familiarMessage = "";
 let familiarMessageUntil = 0;
 let familiarPulseUntil = 0;
 let familiarSaveTimer: number | undefined;
-
-let selectedBossExperimentId: string | null = null;
-let activeBossExperiment: BossExperimentDef | null = null;
-const bossImageCache: Record<string, HTMLImageElement> = {};
-let bossHp = 0;
-let bossMaxHp = 0;
-let bossDamageTotal = 0;
-let bossPhase = 1;
-let bossLastAttackAt = 0;
-let bossDamageFlashUntil = 0;
-let bossClearedThisRun = false;
-let bossTimedOutThisRun = false;
 
 function initAdminLogApi(): void {
     adminLogApi = createAdminLogApi({
@@ -2257,44 +2325,15 @@ function saveRecords(): void {
 }
 
 function getGachaPoint(): number {
-    return Math.max(0, Math.floor(savedRecords.gachaPoint ?? 0));
-}
-
-function setGachaPoint(point: number): void {
-    savedRecords.gachaPoint = Math.max(0, Math.floor(point));
+    return getResearchCommerceController().getGachaPoint();
 }
 
 function addGachaPoint(point: number, reason: string, showToast = true): number {
-    const safePoint = Math.max(0, Math.floor(point));
-    if (safePoint <= 0) return getGachaPoint();
-    setGachaPoint(getGachaPoint() + safePoint);
-    saveRecords();
-    if (showToast) showSoftToast(`奇跡ガチャP +${safePoint.toLocaleString()}：${reason}`);
-    return getGachaPoint();
-}
-
-function spendGachaPoint(point: number): boolean {
-    const safePoint = Math.max(0, Math.floor(point));
-    if (getGachaPoint() < safePoint) return false;
-    setGachaPoint(getGachaPoint() - safePoint);
-    saveRecords();
-    return true;
-}
-
-function getGachaPointRewardForRank(rank: string): number {
-    const score = getRankScore(rank);
-    if (rank === "GOD" || rank === "EX" || score >= getRankScore("GOD")) return 10;
-    if (score >= getRankScore("SSR")) return 3;
-    if (score >= getRankScore("SR")) return 1;
-    return 0;
+    return getResearchCommerceController().addGachaPoint(point, reason, showToast);
 }
 
 function awardExperimentFinishGachaPoint(): number {
-    let point = 1;
-    if (finishedCount >= 1000) point += 1;
-    if (isShopItemPurchased("gacha-point-booster")) point += 1;
-    addGachaPoint(point, finishedCount >= 1000 ? "実験完了 + 1000玉以上投下" : "実験完了", false);
-    return point;
+    return getResearchCommerceController().awardExperimentFinishGachaPoint(finishedCount);
 }
 
 function createId(prefix: string): string {
@@ -2304,231 +2343,28 @@ function createId(prefix: string): string {
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function recordGachaReward(entry: GachaRewardEntry): void {
-    savedRecords.gachaRewards = [entry, ...((savedRecords.gachaRewards ?? []).filter((x) => x.id !== entry.id))].slice(0, 80);
-    saveRecords();
-}
-
-function getGachaRewardHistory(): GachaRewardEntry[] {
-    return savedRecords.gachaRewards ?? [];
-}
-
 function isShopItemPurchased(id: string): boolean {
-    return !!(savedRecords.shopPurchased ?? {})[id];
+    return getResearchCommerceController().isShopItemPurchased(id);
 }
 
 function getResearchReportLimit(): number {
-    return isShopItemPurchased("archive-expansion") ? 60 : 30;
-}
-
-function getShopCostLabel(item: ShopItemDef): string {
-    return getShopCostLabelBase(item);
-}
-
-function canBuyShopItem(item: ShopItemDef): { ok: boolean; reason: string } {
-    return canBuyShopItemBase({
-        item,
-        purchased: isShopItemPurchased(item.id),
-        gachaPoint: getGachaPoint(),
-        tickets: miracleTicketState,
-    });
-}
-
-function recordShopPurchase(item: ShopItemDef, effectLabel: string): void {
-    savedRecords.shopPurchased = savedRecords.shopPurchased ?? {};
-    if (!item.repeatable) savedRecords.shopPurchased[item.id] = Date.now();
-    const entry: ShopPurchaseEntry = {
-        id: createId("shop"),
-        itemId: item.id,
-        label: item.label,
-        purchasedAt: Date.now(),
-        costLabel: getShopCostLabel(item),
-        effectLabel,
-    };
-    savedRecords.shopPurchases = [entry, ...((savedRecords.shopPurchases ?? []).filter((x) => x.id !== entry.id))].slice(0, 80);
-    saveRecords();
-}
-
-function grantShopTicketBundle(normal: number, rare: number, divine: number, label: string): void {
-    miracleTicketState.normal += normal;
-    miracleTicketState.rare += rare;
-    miracleTicketState.divine += divine;
-    miracleTicketState.totalEarned += normal + rare + divine;
-    miracleTicketState.history = [{
-        id: createId("ticket"),
-        at: Date.now(),
-        label,
-        amount: normal + rare + divine,
-        kind: divine ? "divine" : rare ? "rare" : "normal",
-        reason: "研究所ショップ",
-    }, ...miracleTicketState.history].slice(0, 50);
-    saveMiracleTicketState(miracleTicketState);
-}
-
-function applyShopItemEffect(item: ShopItemDef): string {
-    if (item.theme) {
-        markThemeUnlocked(item.theme);
-        return `テーマ「${getThemeDisplayName(item.theme)}」を解放`;
-    }
-    if (item.id === "ticket-bundle") {
-        grantShopTicketBundle(5, 1, 0, item.label);
-        return "通常チケット+5 / レアチケット+1";
-    }
-    if (item.id === "recording-studio") {
-        const preset = EXPERIMENT_PRESETS.find((x) => x.id === "showcase");
-        if (preset) applyExperimentPreset(preset);
-        return "鑑賞・録画プリセットを反映";
-    }
-    if (item.id === "archive-expansion") return "研究レポート保存上限 60件";
-    if (item.id === "gacha-point-booster") return "実験完了時の奇跡ガチャP +1";
-    return "研究所設備を更新";
+    return getResearchCommerceController().getResearchReportLimit();
 }
 
 function buyResearchShopItem(itemId: string): void {
-    const item = RESEARCH_SHOP_ITEMS.find((x) => x.id === itemId);
-    if (!item) return;
-    const availability = canBuyShopItem(item);
-    if (!availability.ok) {
-        showSoftToast(`${item.label}: ${availability.reason}`);
-        return;
-    }
-    if (!spendGachaPoint(item.costPoint)) {
-        showSoftToast("奇跡ガチャPが足りません");
-        return;
-    }
-    const ticketCost = item.costTickets ?? {};
-    if (ticketCost.normal || ticketCost.rare || ticketCost.divine) {
-        const ticketResult = spendMiracleTickets(miracleTicketState, ticketCost);
-        miracleTicketState = ticketResult.state;
-        if (!ticketResult.ok) {
-            addGachaPoint(item.costPoint, "ショップ購入失敗の返却", false);
-            showSoftToast(ticketResult.message);
-            return;
-        }
-    }
-    const effectLabel = applyShopItemEffect(item);
-    recordShopPurchase(item, effectLabel);
-    if (miracleTicketButton) miracleTicketButton.textContent = t(`奇跡チケット ${miracleTicketState.normal}`, `Tickets ${miracleTicketState.normal}`);
-    showSoftToast(`${item.label}を購入: ${effectLabel}`);
-    showResearchShopPopup();
+    getResearchCommerceController().buyResearchShopItem(itemId);
 }
 
-function getCurrentEventSeason(date = new Date()): EventSeasonDef {
-    const day = Math.floor(date.getTime() / (24 * 60 * 60 * 1000));
-    const index = Math.abs(Math.floor(day / 7)) % EVENT_SEASONS.length;
-    return EVENT_SEASONS[index] ?? EVENT_SEASONS[0];
-}
-
-function getSeasonMissionValue(metric: EventSeasonMissionMetric): number {
-    if (metric === "run") return savedRecords.totalRuns ?? 0;
-    if (metric === "discovered") return getDiscoveredKindCount();
-    if (metric === "gacha") return (savedRecords.gachaRewards ?? []).length;
-    if (metric === "craft") return Object.keys(savedRecords.crafted ?? {}).length;
-    return savedRecords.totalScore ?? 0;
-}
-
-function getSeasonClaimKey(season: EventSeasonDef, mission: EventSeasonMissionDef): string {
-    return `${season.id}:${mission.id}`;
+function getCurrentEventSeason(date = new Date()) {
+    return getResearchCommerceController().getCurrentEventSeason(date);
 }
 
 function claimSeasonMissionReward(seasonId: string, missionId: string): void {
-    const season = EVENT_SEASONS.find((x) => x.id === seasonId);
-    const mission = season?.missions.find((x) => x.id === missionId);
-    if (!season || !mission) return;
-    const key = getSeasonClaimKey(season, mission);
-    savedRecords.seasonRewardClaimed = savedRecords.seasonRewardClaimed ?? {};
-    if (savedRecords.seasonRewardClaimed[key]) {
-        showSoftToast("このシーズン報酬は受け取り済みです");
-        return;
-    }
-    const value = getSeasonMissionValue(mission.metric);
-    if (value < mission.target) {
-        showSoftToast(`${mission.label}: まだ条件未達成です`);
-        return;
-    }
-    if (mission.rewardPoint > 0) addGachaPoint(mission.rewardPoint, `シーズン:${mission.label}`, false);
-    if (mission.rewardTheme) markThemeUnlocked(mission.rewardTheme);
-    if (mission.rewardTickets) {
-        grantShopTicketBundle(mission.rewardTickets.normal ?? 0, mission.rewardTickets.rare ?? 0, mission.rewardTickets.divine ?? 0, `シーズン:${mission.label}`);
-    }
-    const rewardParts = getRewardParts({
-        point: mission.rewardPoint,
-        themeLabel: mission.rewardTheme ? getThemeDisplayName(mission.rewardTheme) : undefined,
-        tickets: mission.rewardTickets,
-    });
-    const entry: SeasonRewardEntry = {
-        id: createId("season"),
-        seasonId: season.id,
-        missionId: mission.id,
-        label: mission.label,
-        claimedAt: Date.now(),
-        rewardLabel: rewardParts.join(" / "),
-    };
-    savedRecords.seasonRewardClaimed[key] = Date.now();
-    savedRecords.seasonRewards = [entry, ...((savedRecords.seasonRewards ?? []).filter((x) => x.id !== entry.id))].slice(0, 80);
-    saveRecords();
-    showSoftToast(`シーズン報酬: ${entry.rewardLabel}`);
-    showEventSeasonPopup();
-}
-
-function isCraftUnlocked(recipeId: string): boolean {
-    return !!(savedRecords.crafted ?? {})[recipeId];
-}
-
-function getCraftMaterialStatus(recipe: MiracleCraftRecipeDef): { ready: boolean; label: string } {
-    return getCraftMaterialStatusBase({
-        recipe,
-        specialDefs: SPECIAL_EVENT_DEFS,
-        discovered: savedRecords.discovered,
-    });
-}
-
-function canCraftRecipe(recipe: MiracleCraftRecipeDef): { ok: boolean; reason: string } {
-    const material = getCraftMaterialStatus(recipe);
-    return canCraftRecipeBase({
-        recipe,
-        unlocked: isCraftUnlocked(recipe.id),
-        materialReady: material.ready,
-        gachaPoint: getGachaPoint(),
-    });
+    getResearchCommerceController().claimSeasonMissionReward(seasonId, missionId);
 }
 
 function craftMiracleRecipe(recipeId: string): void {
-    const recipe = MIRACLE_CRAFT_RECIPES.find((x) => x.id === recipeId);
-    if (!recipe) return;
-    const availability = canCraftRecipe(recipe);
-    if (!availability.ok) {
-        showSoftToast(`${recipe.label}: ${availability.reason}`);
-        return;
-    }
-    if (!spendGachaPoint(recipe.costPoint)) {
-        showSoftToast("奇跡ガチャPが足りません");
-        return;
-    }
-    if (recipe.rewardPoint) addGachaPoint(recipe.rewardPoint, `クラフト:${recipe.label}`, false);
-    if (recipe.rewardTheme) markThemeUnlocked(recipe.rewardTheme);
-    if (recipe.rewardTickets) {
-        grantShopTicketBundle(recipe.rewardTickets.normal ?? 0, recipe.rewardTickets.rare ?? 0, recipe.rewardTickets.divine ?? 0, `クラフト:${recipe.label}`);
-    }
-    const rewardParts = getRewardParts({
-        point: recipe.rewardPoint,
-        themeLabel: recipe.rewardTheme ? getThemeDisplayName(recipe.rewardTheme) : undefined,
-        tickets: recipe.rewardTickets,
-    });
-    const entry: CraftEntry = {
-        id: createId("craft"),
-        recipeId: recipe.id,
-        label: recipe.label,
-        craftedAt: Date.now(),
-        rewardLabel: rewardParts.join(" / "),
-    };
-    savedRecords.crafted = savedRecords.crafted ?? {};
-    savedRecords.crafted[recipe.id] = Date.now();
-    savedRecords.craftHistory = [entry, ...((savedRecords.craftHistory ?? []).filter((x) => x.id !== entry.id))].slice(0, 80);
-    addScore(12000 + recipe.rewardPoint * 400, `CRAFT ${recipe.label}`);
-    saveRecords();
-    showMilestone(`奇跡クラフト: ${recipe.label}`);
-    showMiracleCraftPopup();
+    getResearchCommerceController().craftMiracleRecipe(recipeId);
 }
 
 
@@ -2861,16 +2697,16 @@ function showExperimentPresetPopup(): void {
 }
 
 function getProbabilityScale(): number {
-    if (settings.probabilityMode === "festival") return 5;
-    if (settings.probabilityMode === "hard") return 0.35;
-    if (settings.probabilityMode === "hell") return 0.08;
-    return 1;
+    return getProbabilityScaleBase(settings.probabilityMode);
 }
 
 function getPassiveMiracleBoost(): number {
-    if (!isStarted || isFinished) return 1;
-    const elapsedSec = Math.max(0, (Date.now() - startTime) / 1000);
-    return clamp(1 + Math.floor(elapsedSec / 20) * 0.06, 1, 6);
+    return getPassiveMiracleBoostBase({
+        isStarted,
+        isFinished,
+        startedAt: startTime,
+        now: Date.now(),
+    });
 }
 
 function getCurrentTimeScale(): number {
@@ -3795,7 +3631,7 @@ function updateTutorialMissions(forceExpand = false): void {
     if (isMobile && !tutorialMissionExpanded) {
         renderTutorialMissionBadge(clearCount, defs.length);
     } else {
-        renderTutorialMissionDetail(rows, clearCount, defs.length);
+        renderTutorialMissionDetail(rows.join(""), clearCount, defs.length);
     }
     tutorialMissionPanel.style.display = settings.mobileCompactMode && clearCount >= defs.length ? "none" : "block";
     tutorialMissionPanelVisible = tutorialMissionPanel.style.display !== "none";
@@ -4207,14 +4043,14 @@ function rollSpecialEventWithScale(extraScale = 1): SpecialEventDef | null {
     const fortune = currentDailyFortune ?? getDailyFortune();
     currentDailyFortune = fortune;
     const season = getCurrentEventSeason();
-    const scale = getProbabilityScale() * getPassiveMiracleBoost() * fortune.rateBoost * season.rateBoost * extraScale;
-    let threshold = 0;
-    const roll = appRandom();
-    for (const def of SPECIAL_EVENT_DEFS) {
-        threshold += def.rate * scale;
-        if (roll < threshold) return def;
-    }
-    return null;
+    const scale = calculateMiracleRateScale({
+        probabilityMode: settings.probabilityMode,
+        passiveBoost: getPassiveMiracleBoost(),
+        dailyBoost: fortune.rateBoost,
+        seasonBoost: season.rateBoost,
+        extraScale,
+    });
+    return rollSpecialEventBase(SPECIAL_EVENT_DEFS, scale, appRandom());
 }
 
 function rollSpecialEvent(): SpecialEventDef | null {
@@ -4228,28 +4064,13 @@ function buildWeirdMiracleText(def: SpecialEventDef): string {
 
 
 function getDailyFortune(): DailyFortune {
-    const dateKey = getTodayKey();
-    const seed = hashTextToNumber(`${dateKey}:miracle-ball-lab`);
-    const titles = ["大吉", "中吉", "小吉", "研究日和", "乱数注意", "捨て区間警報", "奇跡濃度高め"];
-    const advices = [
-        "通常速度で眺めると、演出を見逃しにくい日です。",
-        "投下数を少し増やすと、研究ログが育ちやすい日です。",
-        "捨て区間に入りやすい気配があります。ピンを軽く揺らすとよさそうです。",
-        "録画・SNSカード向けの見栄えが出やすい日です。",
-        "同じSR/SSRが続くと演出が短縮されるので、長時間放置に向いています。",
-    ];
-    const luckyDefs = SPECIAL_EVENT_DEFS.length > 0 ? SPECIAL_EVENT_DEFS : BASE_SPECIAL_EVENT_DEFS;
-    const lucky = luckyDefs[seed % luckyDefs.length];
-    const rateBoost = 1 + ((seed >>> 5) % 17) / 100;
-    return {
-        dateKey,
-        title: titles[seed % titles.length] ?? "研究日和",
-        rateBoost,
-        luckyKind: lucky?.label ?? "王",
-        luckyBin: (seed % Math.max(1, settings.binCount)) + 1,
-        advice: advices[(seed >>> 9) % advices.length] ?? advices[0],
-        seed,
-    };
+    return buildDailyFortune({
+        dateKey: getTodayKey(),
+        binCount: settings.binCount,
+        specialDefs: SPECIAL_EVENT_DEFS,
+        fallbackDefs: BASE_SPECIAL_EVENT_DEFS,
+        hashTextToNumber,
+    });
 }
 
 function getResearchExp(): number {
@@ -4949,15 +4770,6 @@ function showUserGuidePopup(): void {
     showPopup("遊び方", getUserGuideHtml());
 }
 
-function pickMiracleGachaDef(): SpecialEventDef {
-    return pickMiracleGachaDefBase({
-        specialDefs: SPECIAL_EVENT_DEFS,
-        fallbackDefs: BASE_SPECIAL_EVENT_DEFS,
-        getRankScore,
-        random: appRandom,
-    });
-}
-
 async function playGachaRemoteMiracleVideo(def: SpecialEventDef): Promise<void> {
     if (settings.simpleMode) return;
     try {
@@ -5331,261 +5143,47 @@ async function toggleTiltExperimentMode(): Promise<void> {
 }
 
 function showMiracleGachaPopup(): void {
-    const point = getGachaPoint();
-    showPopup("奇跡ガチャ", getMiracleGachaHtml({
-        point,
-        onceCost: MIRACLE_GACHA_ONCE_COST,
-        tenCost: MIRACLE_GACHA_TEN_COST,
-        recentRewards: getGachaRewardHistory(),
-    }));
-
-    document.getElementById("miracle-gacha-history-button")?.addEventListener("click", () => showGachaRewardBookPopup());
-
-    const run = (count: 1 | 10) => {
-        const cost = count === 10 ? MIRACLE_GACHA_TEN_COST : MIRACLE_GACHA_ONCE_COST;
-        if (!spendGachaPoint(cost)) {
-            showSoftToast(`奇跡ガチャPが足りません。必要: ${cost.toLocaleString()}P / 所持: ${getGachaPoint().toLocaleString()}P`);
-            showMiracleGachaPopup();
-            return;
-        }
-
-        showPopup("奇跡ガチャ抽選中", getGachaSpinHtml(count, cost));
-
-        window.setTimeout(() => {
-            const defs = Array.from({ length: count }, () => pickMiracleGachaDef());
-            const rewards = defs.map((def, index) => grantGachaReward(def, index + 1));
-            const best = defs.slice().sort((a, b) => getRankScore(b.rank) - getRankScore(a.rank))[0] ?? defs[0]!;
-            const probabilityText = `[${best.rank}] ${formatProbability(best.denominator)}`;
-            const feelingText = count === 10 ? "10連ガチャ研究装置が最高反応を観測しました。" : "ガチャ研究装置が未知の奇跡を観測しました。";
-            if (count === 10) {
-                const summary = defs.map((def, index) => `${index + 1}. ${def.label} [${def.rank}]`).join(" / ");
-                showSoftToast(`10連結果: ${summary}`);
-            } else {
-                showSoftToast(`ガチャ結果: ${best.label} [${best.rank}] / ${rewards[0]?.rewardLabel ?? "演出カード"}`);
-            }
-            closeHelpPopup();
-            settings.effectsEnabled = true;
-            adminForceNextMiracleEffect = true;
-            triggerRareBoardCatastrophe(best);
-            showMiracle(best.kind, best.symbol, probabilityText, feelingText);
-            void playGachaRemoteMiracleVideo(best);
-            window.setTimeout(() => showGachaResultPopup(rewards, best), 1450);
-        }, 1950);
-    };
-
-    document.getElementById("miracle-gacha-once-button")?.addEventListener("click", () => run(1));
-    document.getElementById("miracle-gacha-ten-button")?.addEventListener("click", () => run(10));
-}
-
-function pickGachaRewardTheme(def: SpecialEventDef, index: number): ThemeMode | undefined {
-    return pickGachaRewardThemeBase({
-        def,
-        index,
-        now: Date.now(),
-        themes: getThemeOptions().map((x) => x.value),
-        getRankScore,
-        hashTextToNumber,
-    });
-}
-
-function grantGachaReward(def: SpecialEventDef, count: number): GachaRewardEntry {
-    const ticketResult = awardTicketsForRank(miracleTicketState, def.rank, `ガチャ:${def.label}`);
-    miracleTicketState = ticketResult.state;
-    const theme = pickGachaRewardTheme(def, count);
-    if (theme) markThemeUnlocked(theme);
-    const rewardParts = [
-        "演出カード",
-        theme ? `テーマ:${getThemeDisplayName(theme)}` : "",
-        ticketResult.reward.normal ? `通常チケット+${ticketResult.reward.normal}` : "",
-        ticketResult.reward.rare ? `レアチケット+${ticketResult.reward.rare}` : "",
-        ticketResult.reward.divine ? `神域チケット+${ticketResult.reward.divine}` : "",
-    ].filter(Boolean);
-    const entry: GachaRewardEntry = {
-        id: createId("gacha"),
-        createdAt: Date.now(),
-        label: def.label,
-        rank: def.rank,
-        kind: def.kind,
-        count,
-        rewardLabel: rewardParts.join(" / "),
-        theme,
-        ticketNormal: ticketResult.reward.normal,
-        ticketRare: ticketResult.reward.rare,
-        ticketDivine: ticketResult.reward.divine,
-    };
-    recordGachaReward(entry);
-    if (miracleTicketButton) miracleTicketButton.textContent = t(`奇跡チケット ${miracleTicketState.normal}`, `Tickets ${miracleTicketState.normal}`);
-    return entry;
-}
-
-function showGachaResultPopup(rewards: GachaRewardEntry[], best: SpecialEventDef): void {
-    showPopup("ガチャ結果", getGachaResultHtml(rewards, best, (kind) => SPECIAL_EVENT_DEFS.find((x) => x.kind === kind), isMobile));
-    document.getElementById("gacha-result-history-button")?.addEventListener("click", () => showGachaRewardBookPopup());
-    document.getElementById("gacha-result-again-button")?.addEventListener("click", () => showMiracleGachaPopup());
+    getResearchCommerceController().showMiracleGachaPopup();
 }
 
 function showGachaRewardBookPopup(): void {
-    const rewards = getGachaRewardHistory();
-    showPopup("ガチャ履歴", getGachaRewardBookHtml(rewards));
-}
-
-function getShopCategoryLabel(category: ShopItemDef["category"]): string {
-    if (category === "facility") return "設備";
-    if (category === "theme") return "テーマ";
-    if (category === "ticket") return "交換";
-    return "プリセット";
+    getResearchCommerceController().showGachaRewardBookPopup();
 }
 
 function showResearchShopPopup(): void {
-    const purchasedCount = Object.keys(savedRecords.shopPurchased ?? {}).length;
-    const items = RESEARCH_SHOP_ITEMS.map((item) => {
-        const availability = canBuyShopItem(item);
-        const purchased = isShopItemPurchased(item.id);
-        const status = purchased && !item.repeatable ? "購入済み" : availability.reason;
-        return { item, purchased, available: availability.ok, status, categoryLabel: getShopCategoryLabel(item.category), costLabel: getShopCostLabel(item) };
-    });
-    showPopup("研究所ショップ", getResearchShopHtml({
-        purchasedCount,
-        gachaPoint: getGachaPoint(),
-        ticketNormal: miracleTicketState.normal,
-        ticketRare: miracleTicketState.rare,
-        ticketDivine: miracleTicketState.divine,
-        reportLimit: getResearchReportLimit(),
-        pointBoosterOn: isShopItemPurchased("gacha-point-booster"),
-        items,
-        purchaseHistory: savedRecords.shopPurchases ?? [],
-    }));
+    getResearchCommerceController().showResearchShopPopup();
 }
 
 function showEventSeasonPopup(): void {
-    const season = getCurrentEventSeason();
-    const missions = season.missions.map((mission) => {
-        const value = Math.min(getSeasonMissionValue(mission.metric), mission.target);
-        const percent = mission.target > 0 ? Math.min(100, (value / mission.target) * 100) : 0;
-        const key = getSeasonClaimKey(season, mission);
-        const claimed = !!(savedRecords.seasonRewardClaimed ?? {})[key];
-        const ready = value >= mission.target;
-        const rewardParts = [
-            mission.rewardPoint ? `P+${mission.rewardPoint}` : "",
-            mission.rewardTheme ? `テーマ:${getThemeDisplayName(mission.rewardTheme)}` : "",
-            mission.rewardTickets?.normal ? `通常券+${mission.rewardTickets.normal}` : "",
-            mission.rewardTickets?.rare ? `レア券+${mission.rewardTickets.rare}` : "",
-            mission.rewardTickets?.divine ? `神域券+${mission.rewardTickets.divine}` : "",
-        ].filter(Boolean).join(" / ");
-        return { mission, value, percent, claimed, ready, rewardLabel: rewardParts };
-    });
-    showPopup("イベントシーズン", getEventSeasonHtml({
-        season,
-        themeLabel: getThemeDisplayName(season.theme),
-        missions,
-        history: savedRecords.seasonRewards ?? [],
-    }));
+    getResearchCommerceController().showEventSeasonPopup();
 }
 
 function showMiracleCraftPopup(): void {
-    const recipes = MIRACLE_CRAFT_RECIPES.map((recipe) => {
-        const material = getCraftMaterialStatus(recipe);
-        const availability = canCraftRecipe(recipe);
-        const unlocked = isCraftUnlocked(recipe.id);
-        const rewardParts = [
-            recipe.rewardPoint ? `P+${recipe.rewardPoint}` : "",
-            recipe.rewardTheme ? `テーマ:${getThemeDisplayName(recipe.rewardTheme)}` : "",
-            recipe.rewardTickets?.normal ? `通常券+${recipe.rewardTickets.normal}` : "",
-            recipe.rewardTickets?.rare ? `レア券+${recipe.rewardTickets.rare}` : "",
-            recipe.rewardTickets?.divine ? `神域券+${recipe.rewardTickets.divine}` : "",
-        ].filter(Boolean).join(" / ");
-        return { recipe, materialLabel: material.label, materialReady: material.ready, available: availability.ok, status: availability.reason, unlocked, rewardLabel: rewardParts };
-    });
-    showPopup("奇跡クラフト", getMiracleCraftHtml({
-        gachaPoint: getGachaPoint(),
-        recipes,
-        history: savedRecords.craftHistory ?? [],
-    }));
-}
-
-function getBossImage(boss: BossExperimentDef): HTMLImageElement | null {
-    const cached = bossImageCache[boss.id];
-    if (cached) return cached;
-    const img = new Image();
-    img.decoding = "async";
-    img.loading = "eager";
-    img.src = getBossAssetUrl(boss);
-    bossImageCache[boss.id] = img;
-    return img;
+    getResearchCommerceController().showMiracleCraftPopup();
 }
 
 function showBossExperimentPopup(): void {
-    showPopup("ボス実験モード", getBossExperimentPopupHtml({
-        bosses: BOSS_EXPERIMENT_DEFS,
-        cleared: savedRecords.bossCleared ?? {},
-        records: savedRecords.bossRecords ?? [],
-    }));
+    getBossExperimentController().showPopup();
 }
 
 function startBossExperiment(bossId: string): void {
-    const boss = getBossDef(bossId);
-    if (!boss) return;
-    selectedBossExperimentId = boss.id;
-    settings.targetCount = boss.targetCount;
-    settings.activeLimit = boss.activeLimit;
-    settings.effectsEnabled = true;
-    settings.boardAnomalyEnabled = true;
-    settings.showRecentMiracles = true;
-    targetInput.value = String(settings.targetCount);
-    activeBallInput.value = String(settings.activeLimit);
-    closeHelpPopup();
-    showSoftToast(`${boss.name} 討伐実験を開始します`);
-    startExperiment("boss");
+    getBossExperimentController().start(bossId);
 }
 
 function activateBossForRun(): void {
-    activeBossExperiment = getBossDef(selectedBossExperimentId);
-    if (activeBossExperiment) getBossImage(activeBossExperiment);
-    bossMaxHp = activeBossExperiment?.hp ?? 0;
-    bossHp = bossMaxHp;
-    bossDamageTotal = 0;
-    bossPhase = 1;
-    bossLastAttackAt = 0;
-    bossDamageFlashUntil = 0;
-    bossClearedThisRun = false;
-    bossTimedOutThisRun = false;
+    getBossExperimentController().activateForRun();
 }
 
 function getBossElapsedMs(now = Date.now()): number {
-    return getBossElapsedMsBase(activeBossExperiment, startTime, now);
+    return getBossExperimentController().getElapsedMs(now);
 }
 
 function getBossRemainingMs(now = Date.now()): number {
-    return getBossRemainingMsBase(activeBossExperiment, startTime, now);
+    return getBossExperimentController().getRemainingMs(now);
 }
 
-function damageBoss(amount: number, reason: string, x = geometry.width / 2, y = geometry.height * 0.20): void {
-    if (!activeBossExperiment || bossHp <= 0 || !isStarted || isFinished) return;
-    const damage = calculateBossDamage(amount, bossMaxHp);
-    if (damage <= 0) return;
-    bossHp = Math.max(0, bossHp - damage);
-    bossDamageTotal += damage;
-    bossDamageFlashUntil = Date.now() + 260;
-    addFloatingText(`BOSS -${damage.toLocaleString()} ${reason}`, x, y, activeBossExperiment.color);
-    addScore(Math.floor(damage * 0.2), `BOSS ${reason}`, x, y + 22 * geometry.scale);
-    const nextPhase = getBossPhase(bossHp, bossMaxHp);
-    if (nextPhase !== bossPhase) {
-        bossPhase = nextPhase;
-        triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], bossPhase === 2 ? "gravity" : "supernova");
-        showMilestone(`BOSS PHASE ${bossPhase}`);
-    }
-    if (bossHp <= 0) {
-        bossClearedThisRun = true;
-        fireConfetti("cosmic", true);
-        triggerScreenFlash("cosmic");
-        showMilestone(`${activeBossExperiment.name} 討伐成功`);
-        finishBossExperimentByVictory();
-    }
-}
-
-function finishBossExperimentByVictory(): void {
-    if (!activeBossExperiment || isFinished) return;
-    bossClearedThisRun = true;
+function finishActiveBossRun(): void {
+    if (isFinished) return;
     targetReachedTime = targetReachedTime ?? Date.now();
     endTime = Date.now();
     isFinished = true;
@@ -5595,123 +5193,37 @@ function finishBossExperimentByVictory(): void {
     updateInfo();
     tutorialMissionPanel.style.display = "none";
     researchProgressPanel.style.display = "none";
-    window.setTimeout(() => {
-        if (!isAppTerminated && resultOverlay.style.display === "none") showEndingThenFinalResult();
-    }, 220);
-}
-
-function finishBossExperimentByTimeout(): void {
-    if (!activeBossExperiment || isFinished || bossHp <= 0) return;
-    bossTimedOutThisRun = true;
-    bossClearedThisRun = false;
-    targetReachedTime = targetReachedTime ?? Date.now();
-    endTime = Date.now();
-    isFinished = true;
-    isPaused = false;
-    Runner.stop(runner);
-    updateStopButton();
-    updateInfo();
-    tutorialMissionPanel.style.display = "none";
-    researchProgressPanel.style.display = "none";
-    triggerScreenFlash("black");
-    showMilestone(`${activeBossExperiment.name} 時間切れ`);
     window.setTimeout(() => {
         if (!isAppTerminated && resultOverlay.style.display === "none") showEndingThenFinalResult();
     }, 220);
 }
 
 function maybeFinishBossExperimentByTime(): boolean {
-    if (!activeBossExperiment || isFinished || isPaused || isMiraclePaused || bossHp <= 0) return false;
-    if (getBossRemainingMs() > 0) return false;
-    finishBossExperimentByTimeout();
-    return true;
+    return getBossExperimentController().maybeFinishByTime();
 }
 
 function damageBossForYakumono(kind: PachinkoYakumonoKind, def: PachinkoYakumonoDef, drop: Matter.Body): void {
-    if (!activeBossExperiment) return;
-    damageBoss(getBossYakumonoDamage(kind, activeBossExperiment.weakness), def.label, drop.position.x, drop.position.y - 44 * geometry.scale);
+    getBossExperimentController().damageForYakumono(kind, def, drop);
 }
 
 function damageBossForDrop(kind: DropKind, binIndex: number, body: Matter.Body): void {
-    if (!activeBossExperiment || binIndex < 0) return;
-    const def = findSpecialDef(kind);
-    const damage = getBossDropDamage({ kind, def, weakness: activeBossExperiment.weakness, getRankScore });
-    if (damage <= 0) return;
-    damageBoss(damage, def?.label ?? (kind === "gold" ? "金玉" : "虹玉"), body.position.x, body.position.y);
+    getBossExperimentController().damageForDrop(kind, binIndex, body);
 }
 
 function maybeBossAttack(): void {
-    if (!activeBossExperiment || !isStarted || isFinished || isPaused || isMiraclePaused || bossHp <= 0) return;
-    const now = Date.now();
-    const interval = getBossAttackInterval(bossPhase);
-    if (now - bossLastAttackAt < interval) return;
-    bossLastAttackAt = now;
-    triggerCameraShake((10 + bossPhase * 5) * geometry.scale, 360);
-    if (bossPhase >= 2 && appRandom() < 0.55) spawnExternalIntruderBalls(4 + bossPhase * 2, "BOSS ATTACK");
-    if (bossPhase >= 3) maybeTriggerMiracleOmen(true);
-    maybeShowCommentary(`BOSS「${activeBossExperiment.name} が盤面へ干渉」`, true);
+    getBossExperimentController().maybeAttack();
 }
 
 function recordBossResult(): BossExperimentRecord | null {
-    if (!activeBossExperiment) return null;
-    const rewardParts = getBossRewardParts({
-        cleared: bossClearedThisRun,
-        rewardPoint: activeBossExperiment.rewardPoint,
-        rewardTheme: activeBossExperiment.rewardTheme,
-        getThemeDisplayName,
-    });
-    if (bossClearedThisRun) {
-        addGachaPoint(activeBossExperiment.rewardPoint, `ボス討伐:${activeBossExperiment.name}`, false);
-        if (activeBossExperiment.rewardTheme) {
-            markThemeUnlocked(activeBossExperiment.rewardTheme);
-        }
-        savedRecords.bossCleared = savedRecords.bossCleared ?? {};
-        savedRecords.bossCleared[activeBossExperiment.id] = Date.now();
-    }
-    const record = createBossExperimentRecord({
-        id: createId("boss"),
-        boss: activeBossExperiment,
-        cleared: bossClearedThisRun,
-        timedOut: bossTimedOutThisRun,
-        damage: bossDamageTotal,
-        maxHp: bossMaxHp,
-        score: runScore,
-        finishedCount,
-        createdAt: Date.now(),
-        rewardParts,
-    });
-    savedRecords.bossRecords = prependBossRecord(savedRecords.bossRecords, record);
-    return record;
+    return getBossExperimentController().recordResult();
 }
 
 function drawBossEnemy(context: CanvasRenderingContext2D, compact = false): void {
-    drawBossEnemyFrame(context, getBossRenderState(), getBossRenderOptions(), compact);
+    getBossExperimentController().drawEnemy(context, compact);
 }
 
 function drawBossHud(context: CanvasRenderingContext2D): void {
-    drawBossHudFrame(context, getBossRenderState(), getBossRenderOptions());
-}
-
-function getBossRenderState(): BossRenderState {
-    return {
-        boss: activeBossExperiment,
-        isStarted,
-        hp: bossHp,
-        maxHp: bossMaxHp,
-        phase: bossPhase,
-        lastAttackAt: bossLastAttackAt,
-        damageFlashUntil: bossDamageFlashUntil,
-        remainingMs: getBossRemainingMs(),
-    };
-}
-
-function getBossRenderOptions(): BossRenderOptions {
-    return {
-        geometry,
-        uiFont: ROUNDED_UI_FONT,
-        blackModeEnabled: settings.blackModeEnabled,
-        bossImage: activeBossExperiment ? getBossImage(activeBossExperiment) : null,
-    };
+    getBossExperimentController().drawHud(context);
 }
 
 function showResearchWorldMapPopup(): void {
@@ -6638,15 +6150,7 @@ function resetExperiment(startNow = false): void {
     if (startNow) {
         activateBossForRun();
     } else {
-        activeBossExperiment = null;
-        bossHp = 0;
-        bossMaxHp = 0;
-        bossDamageTotal = 0;
-        bossPhase = 1;
-        bossLastAttackAt = 0;
-        bossDamageFlashUntil = 0;
-        bossClearedThisRun = false;
-        bossTimedOutThisRun = false;
+        getBossExperimentController().clear(false);
     }
     isMiraclePaused = false;
     if (miraclePauseTimer !== undefined) { window.clearTimeout(miraclePauseTimer); miraclePauseTimer = undefined; }
@@ -7055,7 +6559,7 @@ function updateStopButton(): void {
 }
 
 function startExperiment(mode: "normal" | "boss" = "normal"): void {
-    if (mode !== "boss") selectedBossExperimentId = null;
+    if (mode !== "boss") getBossExperimentController().clear(true);
     if (isMobile) {
         normalizeAppViewportStyles();
         forceMobileFullViewportLayout();
@@ -8625,8 +8129,9 @@ function updateInfo(): void {
     }
     const remain = Math.max(0, settings.targetCount - finishedCount);
     const eta = speedPerSecond > 0 ? formatElapsedTime((remain / speedPerSecond) * 1000) : "-";
-    const bossRemainingText = activeBossExperiment ? formatElapsedTime(getBossRemainingMs(now)) : "";
-    const progressText = activeBossExperiment
+    const boss = getBossExperimentController().getSnapshot();
+    const bossRemainingText = boss.active ? formatElapsedTime(getBossRemainingMs(now)) : "";
+    const progressText = boss.active
         ? `${finishedCount.toLocaleString()}投下 / 残り ${bossRemainingText}`
         : `${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}`;
     const maxCount = Math.max(...binCounts, 0);
@@ -8650,12 +8155,12 @@ function updateInfo(): void {
         <div>${t("ユーザー", "User")}: <b>${escapeHtml(userProfile.nickname)}</b> / ${getUserPlayStyleLabel(userProfile.playStyle)}</div>
         <div>${t("通信", "Network")}: <b>${navigator.onLine ? t("オンライン", "Online") : t("オフライン", "Offline")}</b></div>
         <div>${t("ブラウザ", "Browser")}: <b>${browserName}</b></div>
-        <div>${activeBossExperiment ? "ボス戦" : t("実行回数", "Progress")}: <b>${progressText}</b></div>
+        <div>${boss.active ? "ボス戦" : t("実行回数", "Progress")}: <b>${progressText}</b></div>
         <div>${t("役物通過", "Gate hits")}: <b>${Object.values(pachinkoYakumonoHitCount).reduce((a, b) => a + b, 0).toLocaleString()}</b> / ${t("当選", "Jackpots")}: <b>${pachinkoJackpotCount.toLocaleString()}</b></div>
         <div>${t("画面上の玉", "Balls on screen")}: <b>${activeDropCount}</b></div>
         <div>${t("速度", "Speed")}: <b>${getSpeedDisplayLabel()}</b></div>
         <div>${t("確率モード", "Probability mode")}: <b>${isEnglish ? ({normal:"Normal",festival:"Festival",hard:"Hard",hell:"Hell"} as any)[settings.probabilityMode] : getProbabilityModeLabel()}</b></div>
-        <div>${t("状態", "Status")}: <b>${!isStarted ? t("待機中", "Idle") : isFinished ? t("完了", "Finished") : activeBossExperiment ? "討伐中" : isMiraclePaused ? t("奇跡で停止中", "Paused by miracle") : isPaused ? t("停止中", "Paused") : targetReachedTime ? t("残り玉回収中", "Collecting remaining balls") : t("実行中", "Running")}</b></div>
+        <div>${t("状態", "Status")}: <b>${!isStarted ? t("待機中", "Idle") : isFinished ? t("完了", "Finished") : boss.active ? "討伐中" : isMiraclePaused ? t("奇跡で停止中", "Paused by miracle") : isPaused ? t("停止中", "Paused") : targetReachedTime ? t("残り玉回収中", "Collecting remaining balls") : t("実行中", "Running")}</b></div>
         <div>${t("経過時間", "Elapsed")}: <b>${formatElapsedTime(elapsedMs)}</b></div>
         <div>${t("処理速度", "Throughput")}: <b>${Math.floor(speedPerSecond).toLocaleString()}</b> ${t("回/秒", "/sec")}</div>
         <div>${t("残り時間目安", "ETA")}: <b>${eta}</b></div>
@@ -8668,7 +8173,7 @@ function updateInfo(): void {
         <div>合成・派生: <b>${getFusionCount()}</b> / ${FUSION_DEFS.length}</div>
         <div>${t("奇跡ログ件数", "Miracle logs")}: <b>${miracleLogs.length}</b></div>
         <div>${t("スコア", "Score")}: <b>${runScore.toLocaleString()}</b></div>
-        ${activeBossExperiment ? `<div>ボス: <b>${escapeHtml(activeBossExperiment.name)}</b> 残り <b>${bossRemainingText}</b> / HP <b>${bossHp.toLocaleString()}</b> / ${bossMaxHp.toLocaleString()} PHASE ${bossPhase}</div>` : ""}
+        ${boss.active ? `<div>ボス: <b>${escapeHtml(boss.active.name)}</b> 残り <b>${bossRemainingText}</b> / HP <b>${boss.hp.toLocaleString()}</b> / ${boss.maxHp.toLocaleString()} PHASE ${boss.phase}</div>` : ""}
         <div>${t("ミッション", "Missions")}: <b>${missionDoneCount}</b> / ${missionDefs.length}</div>
         <div>${t("スキル", "Skills")}: <b>衝${skillState.shockwave} / 磁${skillState.magnet} / 時${skillState.timeStop}</b></div>\n        <div>${t("使い魔", "Familiar")}: <b>${getCurrentFamiliarDef().emoji} Lv.${familiarState.level}</b> / ${getFamiliarModeLabel(familiarState.mode)} / ${settings.familiarEnabled ? "ON" : "OFF"}</div>\n        <div>${t("奇跡ブースト", "Miracle boost")}: <b>x${getPassiveMiracleBoost().toFixed(2)}</b></div>
         <div>${t("縦動画", "Vertical")}: <b>${isVerticalVideoMode ? "ON" : "OFF"}</b></div>
@@ -8690,6 +8195,7 @@ function updateRandomGraph(): void {
 }
 
 function buildResultCsv(): string {
+    const boss = getBossExperimentController().getSnapshot();
     return buildResultCsvBase({
         browserName,
         device: isMobile ? "mobile" : "desktop",
@@ -8702,14 +8208,14 @@ function buildResultCsv(): string {
         discardedCount,
         runScore,
         boss: {
-            id: activeBossExperiment?.id ?? "",
-            name: activeBossExperiment?.name ?? "",
-            damage: bossDamageTotal,
-            hpRemaining: bossHp,
-            cleared: bossClearedThisRun,
-            timedOut: bossTimedOutThisRun,
-            timeLimitSec: activeBossExperiment?.timeLimitSec ?? "",
-            elapsedSec: activeBossExperiment ? Math.round(getBossElapsedMs((endTime ?? Date.now())) / 1000) : "",
+            id: boss.active?.id ?? "",
+            name: boss.active?.name ?? "",
+            damage: boss.damage,
+            hpRemaining: boss.hp,
+            cleared: boss.cleared,
+            timedOut: boss.timedOut,
+            timeLimitSec: boss.active?.timeLimitSec ?? "",
+            elapsedSec: boss.active ? Math.round(getBossElapsedMs((endTime ?? Date.now())) / 1000) : "",
         },
         bestComboThisRun,
         missionsCleared: Object.values(missionProgress).filter(Boolean).length,
@@ -9176,7 +8682,7 @@ Events.on(engine, "afterUpdate", () => {
     updateResearchProgressPanel();
     gameArea.style.filter = !isMobileStableRuntime() && anomalyUntil ? (anomalyHidePins ? "brightness(.84) contrast(1.1)" : "brightness(.95)") : "";
     if (!isStarted || isFinished || isMiraclePaused) return;
-    const isBossRun = !!activeBossExperiment;
+    const isBossRun = !!getBossExperimentController().getSnapshot().active;
     if (maybeFinishBossExperimentByTime()) return;
 
     const removeTargets: Matter.Body[] = [];

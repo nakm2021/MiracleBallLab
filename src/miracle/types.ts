@@ -216,6 +216,7 @@ export type BossExperimentRecord = {
 };
 
 export type SavedRecords = {
+    schemaVersion: number;
     totalRuns: number;
     maxFinishedCount: number;
     maxTargetCount: number;

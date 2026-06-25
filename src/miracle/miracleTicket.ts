@@ -109,7 +109,8 @@ export function spendMiracleTickets(state: MiracleTicketState, cost: Partial<Rec
     next.rare -= rare;
     next.divine -= divine;
     next.totalSpent += normal + rare + divine;
-    next.history = [{ id: createId(), at: Date.now(), label: "チケット使用", amount: normal + rare + divine, kind: divine ? "divine" : rare ? "rare" : "normal", reason: "研究ブースト" }, ...next.history].slice(0, 50);
+    const kind: TicketKind = divine ? "divine" : rare ? "rare" : "normal";
+    next.history = [{ id: createId(), at: Date.now(), label: "チケット使用", amount: normal + rare + divine, kind, reason: "研究ブースト" }, ...next.history].slice(0, 50);
     saveMiracleTicketState(next);
     return { ok: true, state: next, message: "チケットを使用しました" };
 }

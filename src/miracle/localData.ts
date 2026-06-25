@@ -1,72 +1,16 @@
 import { RECORD_STORAGE_KEY, USER_PREFERENCES_STORAGE_KEY, USER_PROFILE_STORAGE_KEY } from "./constants";
 import type { SavedRecords, UserPlayStyle, UserPreferences, UserProfile } from "./types";
+import { normalizeSavedRecords } from "./saveMigration";
 
 export function loadSavedRecords(): SavedRecords {
     try {
         const raw = localStorage.getItem(RECORD_STORAGE_KEY);
-        if (raw) {
-            const data = JSON.parse(raw) as Partial<SavedRecords>;
-            return {
-                totalRuns: data.totalRuns ?? 0,
-                maxFinishedCount: data.maxFinishedCount ?? 0,
-                maxTargetCount: data.maxTargetCount ?? 0,
-                bestRank: data.bestRank ?? "-",
-                bestLabel: data.bestLabel ?? "-",
-                discovered: data.discovered ?? {},
-                discoveredFirstAt: data.discoveredFirstAt ?? {},
-                bestScore: data.bestScore ?? 0,
-                totalScore: data.totalScore ?? 0,
-                missionCompleted: data.missionCompleted ?? {},
-                miracleLogs: Array.isArray(data.miracleLogs) ? data.miracleLogs.slice(0, 80) : [],
-                fusions: data.fusions ?? {},
-                secretUnlocked: data.secretUnlocked ?? {},
-                dailyMissionCompleted: data.dailyMissionCompleted ?? {},
-                unlockedThemes: data.unlockedThemes ?? {},
-                researchReports: Array.isArray(data.researchReports) ? data.researchReports.slice(0, 80) : [],
-                gachaPoint: Math.max(0, Math.floor(Number(data.gachaPoint) || 0)),
-                gachaRewards: Array.isArray(data.gachaRewards) ? data.gachaRewards.slice(0, 80) : [],
-                shopPurchased: data.shopPurchased ?? {},
-                shopPurchases: Array.isArray(data.shopPurchases) ? data.shopPurchases.slice(0, 80) : [],
-                seasonRewardClaimed: data.seasonRewardClaimed ?? {},
-                seasonRewards: Array.isArray(data.seasonRewards) ? data.seasonRewards.slice(0, 80) : [],
-                crafted: data.crafted ?? {},
-                craftHistory: Array.isArray(data.craftHistory) ? data.craftHistory.slice(0, 80) : [],
-                bossRecords: Array.isArray(data.bossRecords) ? data.bossRecords.slice(0, 80) : [],
-                bossCleared: data.bossCleared ?? {},
-            };
-        }
+        if (raw) return normalizeSavedRecords(JSON.parse(raw));
     }
     catch {
         // 保存データが壊れていてもゲームは止めない
     }
-    return {
-        totalRuns: 0,
-        maxFinishedCount: 0,
-        maxTargetCount: 0,
-        bestRank: "-",
-        bestLabel: "-",
-        discovered: {},
-        discoveredFirstAt: {},
-        bestScore: 0,
-        totalScore: 0,
-        missionCompleted: {},
-        miracleLogs: [],
-        fusions: {},
-        secretUnlocked: {},
-        dailyMissionCompleted: {},
-        unlockedThemes: {},
-        researchReports: [],
-        gachaPoint: 0,
-        gachaRewards: [],
-        shopPurchased: {},
-        shopPurchases: [],
-        seasonRewardClaimed: {},
-        seasonRewards: [],
-        crafted: {},
-        craftHistory: [],
-        bossRecords: [],
-        bossCleared: {},
-    };
+    return normalizeSavedRecords(null);
 }
 
 export function createDefaultUserProfile(): UserProfile {
@@ -117,7 +61,7 @@ export function loadUserPreferences(): UserPreferences {
 
 export function saveSavedRecords(records: SavedRecords): void {
     try {
-        localStorage.setItem(RECORD_STORAGE_KEY, JSON.stringify(records));
+        localStorage.setItem(RECORD_STORAGE_KEY, JSON.stringify(normalizeSavedRecords(records)));
     } catch {
         // localStorage不可の環境では無視
     }
