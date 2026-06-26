@@ -33,6 +33,7 @@ import { createShareReplayController, type ShareReplayController } from "./mirac
 import { buildResearchMemoHtml as buildResearchMemoHtmlBase, evaluateResearchRun, type ResearchEvaluation } from "./miracle/researchEvaluationService";
 import { createResultActionController, type ResultActionController } from "./miracle/resultActionController";
 import { getUiAccentPaletteByKind } from "./miracle/uiAccentService";
+import { unlockLabWallFormulas } from "./miracle/labWallFormulaService";
 import { APP_VERSION, BASE_HEIGHT, BASE_WIDTH, BLACK_SUN_RATE, COMMENTARY_DISPLAY_MS, COMMENTARY_MIN_INTERVAL_MS, COSMIC_EGG_RATE, CROWN_RATE, FINAL_SWEEP_DELAY_MS, FIRST_RUN_GUIDE_STORAGE_KEY, GIANT_EVENT_INTERVAL, GOLD_RATE, HEART_RATE, LOCAL_GOD_AUDIO_FILES, LOCAL_RARE_AUDIO_FILES, MAGNET_DURATION_MS, MILESTONE_INTERVAL, MIRACLE_ASSET_BASE_URL, MIRACLE_CHAIN_WINDOW_MS, MIRACLE_MANIFEST_URL, MIRACLE_OMEN_DISPLAY_MS, MIRACLE_OMEN_MIN_INTERVAL_MS, RAINBOW_RATE, RANDOM_BUCKET_COUNT, RECORD_STORAGE_KEY, REMOTE_MIRACLE_BAD_URL_CACHE_MS, REMOTE_MIRACLE_MANIFEST_CACHE_MS, REMOTE_MIRACLE_VIDEO_DISPLAY_MS, SCORE_STORAGE_BONUS_INTERVAL, SECRET_KEY_MAX_LENGTH, SECRET_KEY_SEQUENCES, SHAPE_RATE, SHOOTING_STAR_RATE, SMALL_MIRACLE_MIN_INTERVAL_MS, STUCK_EXPLODE_FRAMES, STUCK_NUDGE_FRAMES, SWORD_IMPACT_RATE, TIME_STOP_DURATION_MS, USER_PREFERENCES_STORAGE_KEY, USER_PROFILE_STORAGE_KEY, type RareSoundFlavor } from "./miracle/constants";
 import { getSpecialIconColors } from "./miracle/drawing";
 import { MAGIC_CIRCLE_DEFS, classifyMagicCircle, type MagicCircleDef } from "./miracle/magicCircles";
@@ -5123,6 +5124,7 @@ function showLabHome(): void {
         shopPurchasedCount: Object.keys(savedRecords.shopPurchased ?? {}).length,
         reportLimit: getResearchReportLimit(),
         pointBoosterOn: isShopItemPurchased("gacha-point-booster"),
+        labWallFormulas: savedRecords.labWallFormulas ?? [],
         isMobile,
         userGuideHtml: getUserGuideHtml(),
     });
@@ -8073,6 +8075,12 @@ function showEndingThenFinalResult(): void {
 function showFinalResult(): void {
     recordAdminEvent({ type: "run_finish", at: Date.now(), count: finishedCount, targetCount: settings.targetCount, detail: `score ${runScore}` });
     savedRecords.totalRuns++;
+    const wallFormulaUnlock = unlockLabWallFormulas({ records: savedRecords, now: Date.now() });
+    savedRecords = wallFormulaUnlock.records;
+    if (wallFormulaUnlock.unlocked.length > 0) {
+        const latest = wallFormulaUnlock.unlocked[wallFormulaUnlock.unlocked.length - 1];
+        showSoftToast(`研究所の壁に数式が出現: ${latest?.formula ?? "???"}`);
+    }
     unlockNote("first-run", false);
     savedRecords.maxFinishedCount = Math.max(savedRecords.maxFinishedCount, finishedCount);
     savedRecords.maxTargetCount = Math.max(savedRecords.maxTargetCount, settings.targetCount);

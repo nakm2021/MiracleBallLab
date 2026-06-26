@@ -1,4 +1,4 @@
-import type { DailyMissionDef } from "./types";
+import type { DailyMissionDef, LabWallFormulaEntry } from "./types";
 import type { ResearchRankInfo, ThemeCollectionEntry } from "./types";
 import type { ExperimentPresetDef } from "./researchFeatures";
 import { escapeHtml } from "./utils";
@@ -112,9 +112,25 @@ export function getLabHomeHtml(params: {
     shopPurchasedCount: number;
     reportLimit: number;
     pointBoosterOn: boolean;
+    labWallFormulas: LabWallFormulaEntry[];
     isMobile: boolean;
     userGuideHtml: string;
 }): string {
+    const wallHtml = params.labWallFormulas.length > 0
+        ? `
+            <div class="miracle-user-card" style="position:relative;overflow:hidden;border-color:rgba(124,58,237,.34);background:linear-gradient(135deg,rgba(30,27,75,.92),rgba(76,29,149,.72),rgba(15,23,42,.94));color:#f8fafc;">
+                <div style="position:absolute;inset:auto -30px -42px auto;font-size:120px;opacity:.08;transform:rotate(-12deg);">∑</div>
+                <div style="font-weight:1000;color:#ddd6fe;letter-spacing:.08em;">研究所の壁</div>
+                <div style="margin-top:8px;font-family:'Times New Roman','Noto Serif JP',serif;font-size:clamp(22px,4vw,38px);font-weight:900;text-shadow:0 0 18px rgba(221,214,254,.32);">${escapeHtml(params.labWallFormulas[0]?.formula ?? "")}</div>
+                <div style="margin-top:8px;font-weight:900;">${escapeHtml(params.labWallFormulas[0]?.title ?? "")}</div>
+                <div style="margin-top:6px;line-height:1.7;opacity:.86;">${escapeHtml(params.labWallFormulas[0]?.note ?? "")}</div>
+                <div style="margin-top:8px;font-size:.9em;opacity:.72;">壁の数式 ${params.labWallFormulas.length} / 実験 ${params.labWallFormulas[0]?.runCount.toLocaleString() ?? "-"} 回目に出現</div>
+            </div>`
+        : `
+            <div class="miracle-user-card" style="border-style:dashed;opacity:.82;">
+                <b>研究所の壁</b><br>
+                <span style="opacity:.78;line-height:1.7;">まだ白い壁です。何回か実験を終えると、知らない数式が浮かぶかもしれません。</span>
+            </div>`;
     return `
         <div style="display:grid;gap:18px;">
             <div class="miracle-user-card miracle-home-hero">
@@ -122,6 +138,7 @@ export function getLabHomeHtml(params: {
                 <div style="margin-top:14px;font-size:clamp(16px,3vw,24px);font-weight:900;opacity:.88;">玉を落として、まれに起きる奇跡を集めよう</div>
                 <div style="margin-top:16px;line-height:1.85;">今日の研究テーマ：<b>${escapeHtml(params.dailyTitle)}</b><br>開催中：<b>${escapeHtml(params.seasonTitle)}</b> / 奇跡率 <b>x${params.seasonRateBoost.toFixed(2)}</b><br>研究員ランク：<b>Lv.${params.rankLevel} ${escapeHtml(params.rankLabel)}</b> / 図鑑：<b>${params.discoveredKinds}</b>種類 / 実験：<b>${params.totalRuns.toLocaleString()}</b>回 / 奇跡ガチャP：<b>${params.gachaPoint.toLocaleString()}</b>P</div>
             </div>
+            ${wallHtml}
             <div style="display:grid;grid-template-columns:${params.isMobile ? "1fr" : "repeat(3,minmax(0,1fr))"};gap:14px;">
                 <div class="miracle-user-card"><b>今日やること</b><br><span style="opacity:.82;line-height:1.7;">デイリー研究を確認して、研究レポートを1件作成しましょう。</span></div>
                 <div class="miracle-user-card"><b>最近の記録</b><br><span style="opacity:.82;line-height:1.7;">${escapeHtml(params.latestReportText)}</span></div>

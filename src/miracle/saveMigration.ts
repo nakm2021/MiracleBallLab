@@ -1,6 +1,6 @@
 import type { SavedRecords } from "./types";
 
-export const CURRENT_SAVE_SCHEMA_VERSION = 2;
+export const CURRENT_SAVE_SCHEMA_VERSION = 3;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -34,6 +34,14 @@ function migrateV1ToV2(data: UnknownRecord): UnknownRecord {
     };
 }
 
+function migrateV2ToV3(data: UnknownRecord): UnknownRecord {
+    return {
+        ...data,
+        schemaVersion: 3,
+        labWallFormulas: data.labWallFormulas ?? [],
+    };
+}
+
 export function migrateSavedRecords(value: unknown): UnknownRecord {
     let data = asObject(value);
     let version = Math.max(0, Math.floor(Number(data.schemaVersion) || 0));
@@ -41,7 +49,11 @@ export function migrateSavedRecords(value: unknown): UnknownRecord {
         data = migrateV0ToV1(data);
         version = 1;
     }
-    if (version < 2) data = migrateV1ToV2(data);
+    if (version < 2) {
+        data = migrateV1ToV2(data);
+        version = 2;
+    }
+    if (version < 3) data = migrateV2ToV3(data);
     return { ...data, schemaVersion: CURRENT_SAVE_SCHEMA_VERSION };
 }
 
@@ -88,5 +100,6 @@ export function normalizeSavedRecords(value: unknown): SavedRecords {
         craftHistory: Array.isArray(data.craftHistory) ? data.craftHistory.slice(0, 80) : [],
         bossRecords: Array.isArray(data.bossRecords) ? data.bossRecords.slice(0, 80) : [],
         bossCleared: numberMap(data.bossCleared),
+        labWallFormulas: Array.isArray(data.labWallFormulas) ? data.labWallFormulas.slice(0, 80) : [],
     };
 }

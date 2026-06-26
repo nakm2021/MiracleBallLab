@@ -16,18 +16,20 @@ describe("saveMigration", () => {
         expect(migrated.gachaRewards).toEqual([]);
         expect(migrated.bossRecords).toEqual([]);
         expect(migrated.discoveredFirstAt).toEqual({});
+        expect(migrated.labWallFormulas).toEqual([]);
     });
 
-    it("v1セーブへv2のボス・レポート領域を補う", () => {
+    it("v1セーブへv2/v3のボス・レポート・壁数式領域を補う", () => {
         const migrated = migrateSavedRecords({
             schemaVersion: 1,
             gachaPoint: 12,
             researchReports: [{ id: "report-1" }],
         });
-        expect(migrated.schemaVersion).toBe(2);
+        expect(migrated.schemaVersion).toBe(CURRENT_SAVE_SCHEMA_VERSION);
         expect(migrated.gachaPoint).toBe(12);
         expect(migrated.researchReports).toEqual([{ id: "report-1" }]);
         expect(migrated.bossCleared).toEqual({});
+        expect(migrated.labWallFormulas).toEqual([]);
     });
 
     it("壊れた数値を安全化し、履歴上限を80件に揃える", () => {

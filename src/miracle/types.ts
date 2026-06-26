@@ -215,6 +215,15 @@ export type BossExperimentRecord = {
     rewardLabel: string;
 };
 
+export type LabWallFormulaEntry = {
+    id: string;
+    formula: string;
+    title: string;
+    note: string;
+    unlockedAt: number;
+    runCount: number;
+};
+
 export type SavedRecords = {
     schemaVersion: number;
     totalRuns: number;
@@ -243,6 +252,7 @@ export type SavedRecords = {
     craftHistory?: CraftEntry[];
     bossRecords?: BossExperimentRecord[];
     bossCleared?: Record<string, number>;
+    labWallFormulas?: LabWallFormulaEntry[];
 };
 
 export type MissionDef = {
