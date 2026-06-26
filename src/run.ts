@@ -2,8 +2,6 @@ import Matter, { Events } from "matter-js";
 import anime from "animejs";
 import tippy from "tippy.js";
 import "tippy.js/dist/tippy.css";
-import GIF from "gif.js";
-import gifWorkerUrl from "gif.js/dist/gif.worker.js?url";
 import confetti from "canvas-confetti";
 import rough from "roughjs/bundled/rough.esm";
 import { Howl } from "howler";
@@ -31,6 +29,10 @@ import { EXPERIMENT_PRESETS, type ExperimentPresetDef } from "./miracle/research
 import { buildDailyFortune, calculateMiracleRateScale, getPassiveMiracleBoost as getPassiveMiracleBoostBase, getProbabilityScale as getProbabilityScaleBase, rollSpecialEvent as rollSpecialEventBase } from "./miracle/probabilityService";
 import { getGachaPointRewardForRank } from "./miracle/rewardService";
 import { createResearchCommerceController, type ResearchCommerceController } from "./miracle/researchCommerceController";
+import { createShareReplayController, type ShareReplayController } from "./miracle/shareReplayController";
+import { buildResearchMemoHtml as buildResearchMemoHtmlBase, evaluateResearchRun, type ResearchEvaluation } from "./miracle/researchEvaluationService";
+import { createResultActionController, type ResultActionController } from "./miracle/resultActionController";
+import { getUiAccentPaletteByKind } from "./miracle/uiAccentService";
 import { APP_VERSION, BASE_HEIGHT, BASE_WIDTH, BLACK_SUN_RATE, COMMENTARY_DISPLAY_MS, COMMENTARY_MIN_INTERVAL_MS, COSMIC_EGG_RATE, CROWN_RATE, FINAL_SWEEP_DELAY_MS, FIRST_RUN_GUIDE_STORAGE_KEY, GIANT_EVENT_INTERVAL, GOLD_RATE, HEART_RATE, LOCAL_GOD_AUDIO_FILES, LOCAL_RARE_AUDIO_FILES, MAGNET_DURATION_MS, MILESTONE_INTERVAL, MIRACLE_ASSET_BASE_URL, MIRACLE_CHAIN_WINDOW_MS, MIRACLE_MANIFEST_URL, MIRACLE_OMEN_DISPLAY_MS, MIRACLE_OMEN_MIN_INTERVAL_MS, RAINBOW_RATE, RANDOM_BUCKET_COUNT, RECORD_STORAGE_KEY, REMOTE_MIRACLE_BAD_URL_CACHE_MS, REMOTE_MIRACLE_MANIFEST_CACHE_MS, REMOTE_MIRACLE_VIDEO_DISPLAY_MS, SCORE_STORAGE_BONUS_INTERVAL, SECRET_KEY_MAX_LENGTH, SECRET_KEY_SEQUENCES, SHAPE_RATE, SHOOTING_STAR_RATE, SMALL_MIRACLE_MIN_INTERVAL_MS, STUCK_EXPLODE_FRAMES, STUCK_NUDGE_FRAMES, SWORD_IMPACT_RATE, TIME_STOP_DURATION_MS, USER_PREFERENCES_STORAGE_KEY, USER_PROFILE_STORAGE_KEY, type RareSoundFlavor } from "./miracle/constants";
 import { getSpecialIconColors } from "./miracle/drawing";
 import { MAGIC_CIRCLE_DEFS, classifyMagicCircle, type MagicCircleDef } from "./miracle/magicCircles";
@@ -65,7 +67,7 @@ import { getResearchWorldMapHtml } from "./miracle/researchWorldMapPresentation"
 import { getDailyMissionHtml, getExperimentPresetHtml, getLabHomeHtml, getResearchRankHtml, getResearchReportSummaryHtml, getThemeBookHtml } from "./miracle/labPresentation";
 import { getAboutHtml, getButtonHelpHtml } from "./miracle/aboutPresentation";
 import { getAppInfoHtml, getMiracleBookHtml, getRecordsHtml, getUserSettingsHtml } from "./miracle/userPresentation";
-import { getDailyFortuneHtml, getFusionHtml, getMissionHtml, getReplayHtml, getShareHtml } from "./miracle/activityPresentation";
+import { getDailyFortuneHtml, getFusionHtml, getMissionHtml } from "./miracle/activityPresentation";
 import { getSecretHtml, getSecretUnlockHtml, SECRET_DEFS } from "./miracle/secretPresentation";
 import { getAdminGateHtml, getAdminMiracleButtonHtml, getAdminPanelHtml, getAdminRemoteVideoEmptyHtml, getAdminRemoteVideoListHtml, getAdminRemoteVideoLoadingHtml, getAdminRemoteVideoRowHtml, getAnagoTempuraSecretHtml, getEmergencyRuntimeLogOverlayHtml, getRuntimeGuardLogHtml } from "./miracle/adminPresentation";
 import { getEndingResultHtml, getFinalResultHtml, getSafeStopResultHtml } from "./miracle/resultPresentation";
@@ -83,7 +85,6 @@ import type {
     MiracleLogEntry,
     FusionDef,
     DailyFortune,
-    MiracleClip,
     RemoteMiracleAsset,
     ThemeMode,
     ThemeAutoMode,
@@ -121,6 +122,8 @@ import type {
 let offlineLabController: OfflineLabController | null = null;
 let researchCommerceController: ResearchCommerceController | null = null;
 let bossExperimentController: BossExperimentController | null = null;
+let shareReplayController: ShareReplayController | null = null;
+let resultActionController: ResultActionController | null = null;
 
 function getResearchCommerceController(): ResearchCommerceController {
     if (!researchCommerceController) {
@@ -206,6 +209,50 @@ function getBossExperimentController(): BossExperimentController {
         });
     }
     return bossExperimentController;
+}
+
+function getShareReplayController(): ShareReplayController {
+    if (!shareReplayController) {
+        shareReplayController = createShareReplayController({
+            canvas,
+            helpOverlay,
+            getGeometry: () => geometry,
+            getSummary: () => ({
+                runScore,
+                finishedCount,
+                targetCount: settings.targetCount,
+                discoveredCount: getDiscoveredCount(),
+                specialEventCount: SPECIAL_EVENT_DEFS.length,
+                savedRecords,
+                researchLevel: getResearchLevelInfo().level,
+                fusionCount: getFusionCount(),
+                fusionTotalCount: FUSION_DEFS.length,
+                fortuneRateBoost: (currentDailyFortune ?? getDailyFortune()).rateBoost,
+                bestComboThisRun,
+                missionClearedCount: Object.values(missionProgress).filter(Boolean).length,
+                missionTotalCount: missionDefs.length,
+            }),
+            random: appRandom,
+            isMobile,
+            t,
+            formatProbability,
+            showPopup,
+            showMilestone,
+        });
+    }
+    return shareReplayController;
+}
+
+function getResultActionController(): ResultActionController {
+    if (!resultActionController) {
+        resultActionController = createResultActionController({
+            resultOverlay,
+            buildResultCsv,
+            showMilestone,
+            now: Date.now,
+        });
+    }
+    return resultActionController;
 }
 
 function getOfflineLabController(): OfflineLabController {
@@ -448,9 +495,6 @@ let pauseTapHistory: number[] = [];
 let mobileSettingsOpenCount = 0;
 let skillComboBuffer: SkillKind[] = [];
 let repeatedMiracleRunCounts: Record<string, number> = {};
-let miracleClips: MiracleClip[] = [];
-let replayFrameBuffer: string[] = [];
-let replayCaptureTick = 0;
 let currentSubtitleText = "";
 let subtitleTimer: number | undefined;
 let comboTimer: number | undefined;
@@ -539,7 +583,6 @@ let pixiApp: Application | null = null;
 let pixiParticles: Graphics[] = [];
 let animeReady = false;
 let tippyReady = false;
-let gifReady = false;
 let mobileDockRunButton: HTMLButtonElement | null = null;
 let mobileDockPauseButton: HTMLButtonElement | null = null;
 let mobileDockSettingsButton: HTMLButtonElement | null = null;
@@ -2299,8 +2342,7 @@ async function ensureTippyReady(): Promise<boolean> {
 }
 
 async function ensureGifReady(): Promise<boolean> {
-    gifReady = true;
-    return true;
+    return getShareReplayController().warmupGif();
 }
 
 function initButtonTooltips(): void {
@@ -3154,21 +3196,6 @@ function applyWorldModeBodyStyles(): void {
     }
 }
 
-function getUiAccentPaletteByKind(kind: DropKind | null): { panel: string; section: string; fieldBg: string; fieldText: string; border: string; badge: string; badgeText: string; title: string; subtitle: string } | null {
-    if (!kind) return null;
-    const map: Record<string, { panel: string; section: string; fieldBg: string; fieldText: string; border: string; badge: string; badgeText: string; title: string; subtitle: string }> = {
-        poseidonMode: { panel: 'linear-gradient(180deg, rgba(232,246,255,.97) 0%, rgba(192,229,255,.90) 100%)', section: 'linear-gradient(180deg, rgba(235,248,255,.95) 0%, rgba(205,233,255,.88) 100%)', fieldBg: '#f2fbff', fieldText: '#07203c', border: '#79c8ff', badge: 'linear-gradient(180deg,#d7f1ff 0%,#7dc8ff 100%)', badgeText: '#05264b', title: '#08315e', subtitle: '#13548b' },
-        zeusuMode: { panel: 'linear-gradient(180deg, rgba(255,250,222,.97) 0%, rgba(255,239,176,.90) 100%)', section: 'linear-gradient(180deg, rgba(255,251,228,.95) 0%, rgba(255,238,183,.88) 100%)', fieldBg: '#fffbea', fieldText: '#453100', border: '#ffe75a', badge: 'linear-gradient(180deg,#fff3b0 0%,#ffd54a 100%)', badgeText: '#3e2f00', title: '#513b00', subtitle: '#876300' },
-        hadesuMode: { panel: 'linear-gradient(180deg, rgba(26,10,10,.96) 0%, rgba(44,8,8,.92) 100%)', section: 'linear-gradient(180deg, rgba(30,8,8,.95) 0%, rgba(16,4,4,.92) 100%)', fieldBg: '#210808', fieldText: '#ffe7e7', border: '#ff7d7d', badge: 'linear-gradient(180deg,#3b0b0b 0%,#6f1414 100%)', badgeText: '#fff3f3', title: '#fff3f3', subtitle: '#ffb0b0' },
-        heartMode: { panel: 'linear-gradient(180deg, rgba(255,240,248,.97) 0%, rgba(255,215,232,.90) 100%)', section: 'linear-gradient(180deg, rgba(255,242,249,.95) 0%, rgba(255,221,239,.88) 100%)', fieldBg: '#fff6fb', fieldText: '#5c173c', border: '#ff70ba', badge: 'linear-gradient(180deg,#ffd7ec 0%,#ff8cc3 100%)', badgeText: '#5c173c', title: '#8a1d55', subtitle: '#b92c72' },
-        nekochanMode: { panel: 'linear-gradient(180deg, rgba(255,246,234,.97) 0%, rgba(255,228,198,.90) 100%)', section: 'linear-gradient(180deg, rgba(255,247,238,.95) 0%, rgba(255,229,205,.88) 100%)', fieldBg: '#fff8f1', fieldText: '#4a2a11', border: '#ffbf76', badge: 'linear-gradient(180deg,#ffe6c8 0%,#ffb56e 100%)', badgeText: '#4a2a11', title: '#5d3515', subtitle: '#8f5729' },
-        crown: { panel: 'linear-gradient(180deg, rgba(255,247,224,.97) 0%, rgba(255,232,165,.90) 100%)', section: 'linear-gradient(180deg, rgba(255,249,230,.95) 0%, rgba(255,235,178,.88) 100%)', fieldBg: '#fffbee', fieldText: '#413000', border: '#ffd54a', badge: 'linear-gradient(180deg,#fff0a9 0%,#ffd54a 100%)', badgeText: '#3e2f00', title: '#5a4300', subtitle: '#8a6700' },
-        blackSun: { panel: 'linear-gradient(180deg, rgba(16,0,6,.96) 0%, rgba(32,0,12,.92) 100%)', section: 'linear-gradient(180deg, rgba(25,0,10,.95) 0%, rgba(15,0,6,.92) 100%)', fieldBg: '#19030b', fieldText: '#ffeef2', border: '#ff4775', badge: 'linear-gradient(180deg,#5a0018 0%,#aa1238 100%)', badgeText: '#fff5f7', title: '#fff3f5', subtitle: '#ff9db7' },
-        cosmicEgg: { panel: 'linear-gradient(180deg, rgba(237,247,255,.97) 0%, rgba(200,240,255,.90) 100%)', section: 'linear-gradient(180deg, rgba(240,249,255,.95) 0%, rgba(208,244,255,.88) 100%)', fieldBg: '#f2fcff', fieldText: '#06273a', border: '#65e7ff', badge: 'linear-gradient(180deg,#d9f9ff 0%,#72e9ff 100%)', badgeText: '#08314a', title: '#0c3a5a', subtitle: '#16689a' },
-    };
-    return map[kind] ?? null;
-}
-
 function getCurrentUiAccentKind(): DropKind | null {
     if (activeUiAccentKind) return activeUiAccentKind;
     if (activeWorldMode === 'poseidon') return 'poseidonMode';
@@ -3769,19 +3796,20 @@ function drawTapRipples(context: CanvasRenderingContext2D): void {
     });
 }
 
-function getResearchEvaluation(): { grade: string; type: string; density: number; note: string } {
-    const specialCount = Object.values(specialCreated).reduce((a, b) => a + b, 0);
-    const chainCount = Object.keys(unlockedChainRunIds).length;
-    const discardRate = finishedCount > 0 ? discardedCount / finishedCount : 0;
-    const centerIndex = Math.floor(settings.binCount / 2);
-    const centerCount = binCounts[centerIndex] ?? 0;
-    const centerRate = finishedCount > 0 ? centerCount / finishedCount : 0;
-    const density = Math.round(clamp(specialCount * 16 + chainCount * 24 + bestComboThisRun * 7 + smallMiracleCount * 3 + (lastOmenText ? 10 : 0), 0, 100));
-    const score = runScore + specialCount * 9000 + chainCount * 18000 + density * 350 - discardRate * 12000;
-    const grade = score > 120000 ? "S" : score > 70000 ? "A" : score > 35000 ? "B" : score > 12000 ? "C" : "D";
-    const type = specialCount > 0 ? "奇跡観測型" : discardRate <= 0.06 ? "安定研究型" : centerRate >= 0.22 ? "中央集中型" : smallMiracleCount >= 2 ? "予兆多発型" : "基礎観測型";
-    const note = grade === "S" ? "研究所の記録に残るかなり濃い実験です。" : grade === "A" ? "見せ場のある良い観測回です。" : grade === "B" ? "小さな変化を拾えた研究回です。" : grade === "C" ? "次回の奇跡に向けた土台作りの回です。" : "静かな基礎データとして保存されました。";
-    return { grade, type, density, note };
+function getResearchEvaluation(): ResearchEvaluation {
+    return evaluateResearchRun({
+        specialCreated,
+        chainCount: Object.keys(unlockedChainRunIds).length,
+        finishedCount,
+        discardedCount,
+        binCount: settings.binCount,
+        binCounts,
+        bestComboThisRun,
+        smallMiracleCount,
+        hasOmen: !!lastOmenText,
+        runScore,
+        clamp,
+    });
 }
 
 function checkMissionProgress(): void {
@@ -3868,98 +3896,6 @@ function useSkill(kind: SkillKind): void {
     updateInfo();
 }
 
-async function shareToSns(): Promise<void> {
-    const discovered = getDiscoveredCount();
-    const clipCount = miracleClips.length;
-    const shareText = `ミラクルボールラボ
-スコア: ${runScore.toLocaleString()}
-処理数: ${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}
-最高レア: ${savedRecords.bestRank} ${savedRecords.bestLabel}
-発見済み: ${discovered}/${SPECIAL_EVENT_DEFS.length}
-奇跡クリップ: ${clipCount}件
-#MiracleBallLabo #ミラクルボールラボ`;
-    try {
-        await navigator.clipboard.writeText(shareText);
-        showMilestone("SNS投稿文をコピーしました");
-    } catch {
-        showPopup("SNSシェア", `<pre style="white-space:pre-wrap;font-family:inherit;">${shareText}</pre>`);
-        return;
-    }
-    if (navigator.share) {
-        try {
-            await navigator.share({ text: shareText, title: "MiracleBallLabo" });
-        } catch {
-            // 共有ダイアログのキャンセルは無視
-        }
-    }
-}
-
-function saveShareCard(): void {
-    const width = 1080;
-    const height = 1920;
-    const shareCanvas = document.createElement("canvas");
-    shareCanvas.width = width;
-    shareCanvas.height = height;
-    const ctx = shareCanvas.getContext("2d");
-    if (!ctx) return;
-
-    const bg = ctx.createLinearGradient(0, 0, 0, height);
-    bg.addColorStop(0, "#0f172a");
-    bg.addColorStop(1, "#1e293b");
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.fillStyle = "rgba(255,255,255,.08)";
-    ctx.fillRect(60, 120, width - 120, 720);
-    ctx.fillRect(60, 880, width - 120, 820);
-
-    ctx.fillStyle = "#f8fafc";
-    ctx.font = '900 64px "Segoe UI", "Noto Sans JP", sans-serif';
-    ctx.fillText("MiracleBallLabo", 100, 210);
-    ctx.font = '700 34px "Segoe UI", "Noto Sans JP", sans-serif';
-    ctx.fillStyle = "#cbd5e1";
-    ctx.fillText("ミラクルボールラボ 実験シェアカード", 100, 270);
-
-    const previewW = width - 200;
-    const previewH = 480;
-    try {
-        ctx.drawImage(canvas, 100, 320, previewW, previewH);
-    } catch {
-        ctx.fillStyle = "#0b1220";
-        ctx.fillRect(100, 320, previewW, previewH);
-    }
-
-    const lines = [
-        `スコア ${runScore.toLocaleString()}`,
-        `処理 ${finishedCount.toLocaleString()} / ${settings.targetCount.toLocaleString()}`,
-        `最高レア ${savedRecords.bestRank} ${savedRecords.bestLabel}`,
-        `発見済み ${getDiscoveredCount()} / ${SPECIAL_EVENT_DEFS.length}`,
-        `研究Lv ${getResearchLevelInfo().level} / 合成 ${getFusionCount()} / ${FUSION_DEFS.length}`,
-        `今日の奇跡率 x${(currentDailyFortune ?? getDailyFortune()).rateBoost.toFixed(2)}`,
-        `奇跡コンボ最高 ${bestComboThisRun}`,
-        `ミッション達成 ${Object.values(missionProgress).filter(Boolean).length} / ${missionDefs.length}`,
-    ];
-    ctx.fillStyle = "#f8fafc";
-    ctx.font = '900 48px "Segoe UI", "Noto Sans JP", sans-serif';
-    ctx.fillText("RESULT", 100, 960);
-    ctx.font = '700 42px "Segoe UI", "Noto Sans JP", sans-serif';
-    lines.forEach((line, idx) => ctx.fillText(line, 100, 1050 + idx * 90));
-    ctx.fillStyle = "#93c5fd";
-    ctx.font = '700 30px "Segoe UI", "Noto Sans JP", sans-serif';
-    ctx.fillText("#MiracleBallLabo #ミラクルボールラボ", 100, 1760);
-
-    shareCanvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `miracle-ball-share-${Date.now()}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showMilestone("SNSカードを保存しました");
-    }, "image/png");
-}
-
 function showMissionPopup(): void {
     showPopup("ミッション", getMissionHtml({
         missions: missionDefs,
@@ -3969,43 +3905,8 @@ function showMissionPopup(): void {
     }));
 }
 
-
-function saveCurrentScreenshot(): void {
-    const shotCanvas = document.createElement("canvas");
-    shotCanvas.width = Math.max(1, canvas.width);
-    shotCanvas.height = Math.max(1, canvas.height);
-    const ctx = shotCanvas.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = "#0b0d14";
-    ctx.fillRect(0, 0, shotCanvas.width, shotCanvas.height);
-    try {
-        ctx.drawImage(canvas, 0, 0);
-    } catch {
-        showPopup("スクリーンショット", "<p>現在の画面保存に失敗しました。</p>");
-        return;
-    }
-    shotCanvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `miracle-ball-screenshot-${Date.now()}.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-        showMilestone("スクリーンショットを保存しました");
-    }, "image/png");
-}
-
 function showSharePopup(): void {
-    showPopup("録画・SNS", getShareHtml());
-    const copyBtn = document.getElementById("sns-copy-button") as HTMLButtonElement | null;
-    const shotBtn = document.getElementById("screenshot-save-button") as HTMLButtonElement | null;
-    const cardBtn = document.getElementById("sns-card-button") as HTMLButtonElement | null;
-    if (copyBtn) copyBtn.onclick = () => { void shareToSns(); };
-    if (shotBtn) shotBtn.onclick = () => saveCurrentScreenshot();
-    if (cardBtn) cardBtn.onclick = () => saveShareCard();
+    getShareReplayController().showSharePopup();
 }
 
 function recordSpecialDiscovery(def: SpecialEventDef): void {
@@ -4642,128 +4543,11 @@ function updateMiracleCombo(): void {
 }
 
 function saveMiracleClip(def: SpecialEventDef, subtitle: string): void {
-    const frames = replayFrameBuffer.slice(-18);
-    miracleClips.unshift({
-        id: `${Date.now()}-${Math.floor(appRandom() * 100000)}`,
-        label: def.label,
-        rank: def.rank,
-        denominator: def.denominator,
-        finishedCount,
-        createdAt: Date.now(),
-        subtitle,
-        frames,
-    });
-    miracleClips = miracleClips.slice(0, 24);
-}
-
-function replayClipById(id: string): void {
-    const clip = miracleClips.find((x) => x.id === id);
-    if (!clip || clip.frames.length === 0) {
-        showPopup(t("リプレイ", "Replay"), `<p>${t("再生できるクリップがありません。", "No replay clip is available.")}</p>`);
-        return;
-    }
-    const body = `
-        <div style="display:flex;flex-direction:column;gap:14px;">
-            <div style="font-weight:900;font-size:${isMobile ? "24px" : "20px"};">${clip.label} [${clip.rank}] ${formatProbability(clip.denominator)}</div>
-            <img id="replay-image" src="${clip.frames[0]}" style="width:100%;border-radius:20px;border:1px solid rgba(70,80,110,.16);background:#111;object-fit:contain;" />
-            <div style="opacity:.8;">${clip.subtitle}</div>
-            <div style="display:flex;justify-content:center;">
-                <button id="replay-gif-save-button" style="font-size:${isMobile ? "18px" : "16px"};padding:10px 18px;border-radius:999px;border:1px solid rgba(100,90,180,.28);background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);font-weight:900;cursor:pointer;">${t("GIF保存", "Save GIF")}</button>
-            </div>
-        </div>`;
-    showPopup(`${t("リプレイ", "Replay")}: ${clip.label}`, body);
-    const gifButton = document.getElementById("replay-gif-save-button") as HTMLButtonElement | null;
-    if (gifButton) gifButton.onclick = () => { void exportClipAsGif(id); };
-    const img = document.getElementById("replay-image") as HTMLImageElement | null;
-    if (!img) return;
-    let index = 0;
-    const timer = window.setInterval(() => {
-        if (helpOverlay.style.display === "none") {
-            window.clearInterval(timer);
-            return;
-        }
-        index = (index + 1) % clip.frames.length;
-        img.src = clip.frames[index];
-    }, 140);
-}
-
-async function exportClipAsGif(id: string): Promise<void> {
-    const clip = miracleClips.find((x) => x.id === id);
-    if (!clip || clip.frames.length === 0) {
-        showPopup(t("GIF保存", "Save GIF"), `<p>${t("保存できるフレームがありません。", "No frames available to export.")}</p>`);
-        return;
-    }
-    const ok = await ensureGifReady();
-    if (!ok) {
-        showPopup(t("GIF保存", "Save GIF"), `<p>${t("gif.js の読み込みに失敗しました。", "Failed to load gif.js.")}</p>`);
-        return;
-    }
-
-    const previous = helpOverlay.style.display !== "none" ? helpOverlay.innerHTML : "";
-    showPopup(t("GIF保存中", "Rendering GIF"), `<p>${t("GIFを書き出しています。少しお待ちください。", "Rendering the GIF. Please wait a moment.")}</p><div id="gif-progress" style="margin-top:12px;font-weight:900;">0%</div>`);
-
-    try {
-        const images = await Promise.all(clip.frames.map((src) => new Promise<HTMLImageElement>((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error("frame load failed"));
-            img.src = src;
-        })));
-        const width = images[0]?.naturalWidth || geometry.width;
-        const height = images[0]?.naturalHeight || geometry.height;
-        const gif = new (GIF as any)({
-            workers: 2,
-            quality: 10,
-            width,
-            height,
-            workerScript: gifWorkerUrl,
-            background: "#0b0d14",
-        });
-        for (const image of images) {
-            gif.addFrame(image, { delay: 140 });
-        }
-        gif.on("progress", (value: number) => {
-            const progress = document.getElementById("gif-progress");
-            if (progress) progress.textContent = `${Math.round(value * 100)}%`;
-        });
-        gif.on("finished", (blob: Blob) => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            const safeLabel = clip.label.replace(/[\/:*?"<>|]/g, "_");
-            a.href = url;
-            a.download = `${safeLabel}_${clip.rank}_${clip.finishedCount}.gif`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-            showPopup(t("GIF保存完了", "GIF saved"), `<p>${t("GIFを保存しました。", "The GIF has been saved.")}</p>`);
-        });
-        gif.render();
-    } catch {
-        if (previous) helpOverlay.innerHTML = previous;
-        showPopup(t("GIF保存", "Save GIF"), `<p>${t("GIF保存に失敗しました。もう一度お試しください。", "GIF export failed. Please try again.")}</p>`);
-    }
+    getShareReplayController().saveMiracleClip(def, subtitle);
 }
 
 function showReplayPopup(): void {
-    if (miracleClips.length === 0) {
-        showPopup(t("リプレイ", "Replay"), `<p>${t("まだ奇跡クリップがありません。", "No miracle clips yet.")}</p>`);
-        return;
-    }
-    const rows = getReplayHtml({
-        clips: miracleClips,
-        isMobile,
-        playLabel: t("再生", "Play"),
-        gifLabel: t("GIF保存", "Save GIF"),
-        formatProbability,
-    });
-    showPopup(t("奇跡クリップ保存", "Miracle clips"), rows);
-    helpOverlay.querySelectorAll("[data-replay-id]").forEach((el) => {
-        (el as HTMLButtonElement).onclick = () => replayClipById((el as HTMLButtonElement).dataset.replayId || "");
-    });
-    helpOverlay.querySelectorAll("[data-gif-id]").forEach((el) => {
-        (el as HTMLButtonElement).onclick = () => { void exportClipAsGif((el as HTMLButtonElement).dataset.gifId || ""); };
-    });
+    getShareReplayController().showReplayPopup();
 }
 
 function showUserGuidePopup(): void {
@@ -7252,25 +7036,23 @@ function maybeTriggerMiracleOmen(force = false): void {
     updateTutorialMissions();
 }
 
-function generateResearchMemoText(): string {
-    const elapsed = formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime);
-    const sum = binCounts.reduce((a, b) => a + b, 0) || 1;
-    const maxCount = Math.max(...binCounts, 0);
-    const minCount = Math.min(...binCounts);
-    const topIndex = binCounts.indexOf(maxCount);
-    const discardRate = finishedCount > 0 ? (discardedCount / finishedCount) * 100 : 0;
-    const imbalance = ((maxCount - minCount) / sum) * 100;
-    const best = miracleLogs[0];
-    const discoveredCount = SPECIAL_EVENT_DEFS.filter((d) => (savedRecords.discovered[d.kind] ?? 0) + (specialCreated[d.kind] ?? 0) > 0).length;
-    const rarePinSummary = RARE_PIN_DEFS.map((x) => `${x.label}${rarePinTouchCount[x.kind] ?? 0}`).join(" / ");
-    const mood = imbalance > 18 ? "大きな偏りがあり、盤面がかなり主張した回でした。" : imbalance > 10 ? "少し偏りがあり、中央か端に流れが寄った回でした。" : "分布は比較的落ち着いており、安定した観測になりました。";
-    const miracleLine = best ? `今回もっとも印象的だった奇跡は「${best.label}」です。` : "今回は大きな奇跡は出ませんでしたが、通常観測として記録する価値があります。";
-    const omenLine = lastOmenText ? `途中で「${lastOmenText}」という予兆が観測されました。` : "今回は目立った奇跡予兆は観測されませんでした。";
-    return `今回の研究では ${finishedCount.toLocaleString()} 個のボールを処理しました。所要時間は ${elapsed}、捨て区間は ${discardedCount.toLocaleString()} 個（${discardRate.toFixed(2)}%）です。もっとも多かった受け皿は「${topIndex >= 0 ? labels[topIndex] : "-"}」で ${maxCount.toLocaleString()} 回でした。${mood}\n${miracleLine}\n${omenLine}\nレアピン接触記録は ${rarePinSummary} です。役物通過は START:${pachinkoYakumonoHitCount.start} / 役物:${pachinkoYakumonoHitCount.center} / PREMIUM:${pachinkoYakumonoHitCount.premium}、当選は ${pachinkoJackpotCount} 回です。奇跡図鑑は ${discoveredCount} / ${SPECIAL_EVENT_DEFS.length} 種類まで解放されています。`;
-}
-
 function generateResearchMemoHtml(): string {
-    return escapeHtml(generateResearchMemoText()).replace(/\n/g, "<br>");
+    return buildResearchMemoHtmlBase({
+        elapsed: formatElapsedTime((targetReachedTime ?? endTime ?? Date.now()) - startTime),
+        finishedCount,
+        discardedCount,
+        labels,
+        binCounts,
+        bestMiracle: miracleLogs[0],
+        lastOmenText,
+        rarePinSummary: RARE_PIN_DEFS.map((x) => `${x.label}${rarePinTouchCount[x.kind] ?? 0}`).join(" / "),
+        pachinkoStartHits: pachinkoYakumonoHitCount.start,
+        pachinkoCenterHits: pachinkoYakumonoHitCount.center,
+        pachinkoPremiumHits: pachinkoYakumonoHitCount.premium,
+        pachinkoJackpotCount,
+        discoveredCount: SPECIAL_EVENT_DEFS.filter((d) => (savedRecords.discovered[d.kind] ?? 0) + (specialCreated[d.kind] ?? 0) > 0).length,
+        specialEventCount: SPECIAL_EVENT_DEFS.length,
+    });
 }
 
 function terminateExperimentSafely(): void {
@@ -8252,33 +8034,15 @@ function buildResultCsv(): string {
 }
 
 async function copyResultCsv(): Promise<void> {
-    const csv = buildResultCsv();
-    try { await navigator.clipboard.writeText(csv); showMilestone("結果CSVをコピーしました"); }
-    catch {
-        const textarea = document.createElement("textarea");
-        textarea.value = csv;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-        showMilestone("結果CSVをコピーしました");
-    }
+    await getResultActionController().copyResultCsv();
 }
 
 function downloadResultCsv(): void {
-    const blob = new Blob(["\uFEFF" + buildResultCsv()], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `matter-random-result-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showMilestone("CSVを保存しました");
+    getResultActionController().downloadResultCsv();
 }
 
 function closeFinalResult(): void {
-    resultOverlay.style.display = "none";
-    resultOverlay.innerHTML = "";
+    getResultActionController().closeFinalResult();
 }
 
 function showEndingThenFinalResult(): void {
@@ -8552,13 +8316,7 @@ Events.on(render, "afterRender", () => {
         if (item.life <= 0) floatingTexts.splice(i, 1);
     }
     if (isStarted && !isPaused && !isMiraclePaused && !isMobile) {
-        replayCaptureTick++;
-        if (replayCaptureTick % 5 === 0) {
-            try {
-                replayFrameBuffer.push(canvas.toDataURL("image/jpeg", 0.42));
-                if (replayFrameBuffer.length > 24) replayFrameBuffer.shift();
-            } catch {}
-        }
+        getShareReplayController().captureReplayFrame();
     }
     drawBossHud(context);
     context.restore();
