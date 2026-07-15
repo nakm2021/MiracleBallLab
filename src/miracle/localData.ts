@@ -6,8 +6,7 @@ export function loadSavedRecords(): SavedRecords {
     try {
         const raw = localStorage.getItem(RECORD_STORAGE_KEY);
         if (raw) return normalizeSavedRecords(JSON.parse(raw));
-    }
-    catch {
+    } catch {
         // 保存データが壊れていてもゲームは止めない
     }
     return normalizeSavedRecords(null);
@@ -35,9 +34,19 @@ export function loadUserProfile(): UserProfile {
             const data = JSON.parse(raw) as Partial<UserProfile>;
             const base = createDefaultUserProfile();
             return {
-                nickname: typeof data.nickname === "string" && data.nickname.trim() ? data.nickname.trim().slice(0, 24) : base.nickname,
-                playStyle: (["standard", "viewer", "collector", "recording"] as UserPlayStyle[]).includes(data.playStyle as UserPlayStyle) ? data.playStyle as UserPlayStyle : base.playStyle,
-                favoriteMiracle: typeof data.favoriteMiracle === "string" && data.favoriteMiracle.trim() ? data.favoriteMiracle.trim().slice(0, 40) : base.favoriteMiracle,
+                nickname:
+                    typeof data.nickname === "string" && data.nickname.trim()
+                        ? data.nickname.trim().slice(0, 24)
+                        : base.nickname,
+                playStyle: (["standard", "viewer", "collector", "recording"] as UserPlayStyle[]).includes(
+                    data.playStyle as UserPlayStyle,
+                )
+                    ? (data.playStyle as UserPlayStyle)
+                    : base.playStyle,
+                favoriteMiracle:
+                    typeof data.favoriteMiracle === "string" && data.favoriteMiracle.trim()
+                        ? data.favoriteMiracle.trim().slice(0, 40)
+                        : base.favoriteMiracle,
                 createdAt: typeof data.createdAt === "number" ? data.createdAt : base.createdAt,
                 lastOpenedAt: typeof data.lastOpenedAt === "number" ? data.lastOpenedAt : base.lastOpenedAt,
                 openCount: typeof data.openCount === "number" ? data.openCount : base.openCount,
@@ -58,7 +67,6 @@ export function loadUserPreferences(): UserPreferences {
     return { version: 1 };
 }
 
-
 export function saveSavedRecords(records: SavedRecords): void {
     try {
         localStorage.setItem(RECORD_STORAGE_KEY, JSON.stringify(normalizeSavedRecords(records)));
@@ -68,5 +76,7 @@ export function saveSavedRecords(records: SavedRecords): void {
 }
 
 export function saveUserProfileData(profile: UserProfile): void {
-    try { localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile)); } catch {}
+    try {
+        localStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    } catch {}
 }

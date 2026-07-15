@@ -10,7 +10,9 @@ function setup() {
         getRecords: () => records,
         saveRecords: vi.fn(),
         getTickets: () => tickets,
-        setTickets: (state) => { tickets = state; },
+        setTickets: (state) => {
+            tickets = state;
+        },
         createId: (prefix) => `${prefix}-1`,
         random: () => 0.5,
         now: () => 1234,

@@ -43,10 +43,10 @@ export function getUnlockedLabWallFormulaDefs(totalRuns: number): LabWallFormula
     return LAB_WALL_FORMULA_DEFS.filter((def) => totalRuns >= def.requiredRuns);
 }
 
-export function unlockLabWallFormulas(params: {
+export function unlockLabWallFormulas(params: { records: SavedRecords; now: number }): {
     records: SavedRecords;
-    now: number;
-}): { records: SavedRecords; unlocked: LabWallFormulaEntry[] } {
+    unlocked: LabWallFormulaEntry[];
+} {
     const existing = new Set((params.records.labWallFormulas ?? []).map((entry) => entry.id));
     const unlocked = getUnlockedLabWallFormulaDefs(params.records.totalRuns)
         .filter((def) => !existing.has(def.id))
@@ -64,10 +64,7 @@ export function unlockLabWallFormulas(params: {
     return {
         records: {
             ...params.records,
-            labWallFormulas: [
-                ...unlocked.slice().reverse(),
-                ...(params.records.labWallFormulas ?? []),
-            ].slice(0, 80),
+            labWallFormulas: [...unlocked.slice().reverse(), ...(params.records.labWallFormulas ?? [])].slice(0, 80),
         },
         unlocked,
     };

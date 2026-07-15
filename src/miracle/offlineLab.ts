@@ -49,62 +49,74 @@ export function createOfflineLabController(context: OfflineLabContext): OfflineL
         isHelpOverlayClosed,
     } = context;
 
+    async function getOfflineVideoAssetsForUi(force = false): Promise<RemoteMiracleAsset[]> {
+        const assets = await loadRemoteMiracleAssets(force);
+        return assets.filter((asset) => asset.kind === "video");
+    }
 
-async function getOfflineVideoAssetsForUi(force = false): Promise<RemoteMiracleAsset[]> {
-    const assets = await loadRemoteMiracleAssets(force);
-    return assets.filter((asset) => asset.kind === "video");
-}
-
-
-async function showOfflineVideoDownloadPopup(mode: OfflineVideoDownloadMode = "recommended"): Promise<void> {
-    showPopup("オフライン動画保存", `
+    async function showOfflineVideoDownloadPopup(mode: OfflineVideoDownloadMode = "recommended"): Promise<void> {
+        showPopup(
+            "オフライン動画保存",
+            `
         ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;background:linear-gradient(135deg,rgba(15,23,42,.92),rgba(49,46,129,.82));color:#fff;">
             <p style="margin:0;font-weight:1000;font-size:${isMobile ? "22px" : "20px"};">奇跡データを調査中...</p>
             <p style="margin:8px 0 0;opacity:.82;line-height:1.7;">研究所の保管庫を開き、保存できる動画演出と必要容量を計算しています。</p>
         </div>
-    `);
+    `,
+        );
 
-    const videos = await getOfflineVideoAssetsForUi(true);
+        const videos = await getOfflineVideoAssetsForUi(true);
 
-    if (videos.length === 0) {
-        showPopup("オフライン動画保存", `
+        if (videos.length === 0) {
+            showPopup(
+                "オフライン動画保存",
+                `
             ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                 <p style="margin:0;font-weight:900;">保存対象の動画が見つかりませんでした。</p>
                 <p style="margin:8px 0 0;opacity:.72;">manifest.json に <code>kind: "video"</code> の素材があるか確認してください。</p>
             </div>
-        `);
-        return;
-    }
+        `,
+            );
+            return;
+        }
 
-    const basePlan = await buildOfflineMiracleVideoPlan(videos, getRemoteMiracleAssetSources);
-    const plan = filterOfflineMiracleDownloadPlan(basePlan, mode);
-    const summary = await getOfflineMiracleSummary();
-    const rank = getOfflineMiracleResearchRank(summary.cachedBytes);
+        const basePlan = await buildOfflineMiracleVideoPlan(videos, getRemoteMiracleAssetSources);
+        const plan = filterOfflineMiracleDownloadPlan(basePlan, mode);
+        const summary = await getOfflineMiracleSummary();
+        const rank = getOfflineMiracleResearchRank(summary.cachedBytes);
 
-    if (!plan.supported) {
-        showPopup("オフライン動画保存", `
+        if (!plan.supported) {
+            showPopup(
+                "オフライン動画保存",
+                `
             ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                 <p style="margin:0;font-weight:900;">このブラウザでは動画保存を利用できません。</p>
                 <p style="margin:8px 0 0;opacity:.72;">Chrome / Edge / Safari の通常ブラウザ、またはHTTPS配信で試してください。</p>
             </div>
-        `);
-        return;
-    }
+        `,
+            );
+            return;
+        }
 
-    const unknownText = plan.unknownCount > 0
-        ? `<div style="margin-top:8px;color:#92400e;font-weight:900;">サイズ不明の動画が ${plan.unknownCount} 件あります。実際の通信量は表示より増える可能性があります。</div>`
-        : "";
-    const allCachedText = plan.downloadSources.length === 0
-        ? `<div style="margin-top:10px;padding:12px;border-radius:16px;background:rgba(34,197,94,.14);font-weight:900;">この保存モードの対象はすべて保管済みです。</div>`
-        : "";
-    const nextRankText = rank.nextBytes === null
-        ? "最高ランク到達"
-        : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - summary.cachedBytes))}`;
+        const unknownText =
+            plan.unknownCount > 0
+                ? `<div style="margin-top:8px;color:#92400e;font-weight:900;">サイズ不明の動画が ${plan.unknownCount} 件あります。実際の通信量は表示より増える可能性があります。</div>`
+                : "";
+        const allCachedText =
+            plan.downloadSources.length === 0
+                ? `<div style="margin-top:10px;padding:12px;border-radius:16px;background:rgba(34,197,94,.14);font-weight:900;">この保存モードの対象はすべて保管済みです。</div>`
+                : "";
+        const nextRankText =
+            rank.nextBytes === null
+                ? "最高ランク到達"
+                : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - summary.cachedBytes))}`;
 
-    showPopup("オフライン動画保存", `
+        showPopup(
+            "オフライン動画保存",
+            `
         ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
             <div style="padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(30,64,175,.90),rgba(124,58,237,.82));color:#fff;box-shadow:0 14px 34px rgba(30,41,59,.18);">
@@ -136,97 +148,132 @@ async function showOfflineVideoDownloadPopup(mode: OfflineVideoDownloadMode = "r
             </div>
             <p style="margin-bottom:0;opacity:.66;font-size:.92em;">ブラウザのサイトデータ削除や容量不足があると、保存済み動画は消える場合があります。</p>
         </div>
-    `);
+    `,
+        );
 
-    (document.getElementById("offline-mode-recommended") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("recommended"); });
-    (document.getElementById("offline-mode-rare") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("rare"); });
-    (document.getElementById("offline-mode-all") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("all"); });
-    (document.getElementById("offline-video-book-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineMiracleBookPopup(); });
+        (document.getElementById("offline-mode-recommended") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void showOfflineVideoDownloadPopup("recommended");
+            },
+        );
+        (document.getElementById("offline-mode-rare") as HTMLButtonElement | null)?.addEventListener("click", () => {
+            void showOfflineVideoDownloadPopup("rare");
+        });
+        (document.getElementById("offline-mode-all") as HTMLButtonElement | null)?.addEventListener("click", () => {
+            void showOfflineVideoDownloadPopup("all");
+        });
+        (document.getElementById("offline-video-book-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void showOfflineMiracleBookPopup();
+            },
+        );
 
-    const progress = document.getElementById("offline-video-progress") as HTMLDivElement | null;
-    const downloadButton = document.getElementById("offline-video-download-button") as HTMLButtonElement | null;
-    const clearButton = document.getElementById("offline-video-clear-button") as HTMLButtonElement | null;
+        const progress = document.getElementById("offline-video-progress") as HTMLDivElement | null;
+        const downloadButton = document.getElementById("offline-video-download-button") as HTMLButtonElement | null;
+        const clearButton = document.getElementById("offline-video-clear-button") as HTMLButtonElement | null;
 
-    if (downloadButton) {
-        downloadButton.onclick = async () => {
-            const confirmText = plan.unknownCount > 0
-                ? `${getOfflineDownloadModeLabel(mode)}: 推定 ${formatOfflineBytes(plan.knownBytes)} + サイズ不明 ${plan.unknownCount} 件を保存します。よろしいですか？`
-                : `${getOfflineDownloadModeLabel(mode)}: 推定 ${formatOfflineBytes(plan.knownBytes)} を保存します。よろしいですか？`;
-            if (!window.confirm(confirmText)) return;
+        if (downloadButton) {
+            downloadButton.onclick = async () => {
+                const confirmText =
+                    plan.unknownCount > 0
+                        ? `${getOfflineDownloadModeLabel(mode)}: 推定 ${formatOfflineBytes(plan.knownBytes)} + サイズ不明 ${plan.unknownCount} 件を保存します。よろしいですか？`
+                        : `${getOfflineDownloadModeLabel(mode)}: 推定 ${formatOfflineBytes(plan.knownBytes)} を保存します。よろしいですか？`;
+                if (!window.confirm(confirmText)) return;
 
-            downloadButton.disabled = true;
-            if (clearButton) clearButton.disabled = true;
-            if (progress) progress.innerHTML = `<div>奇跡データを封印中...</div>${getOfflineProgressHtml(0)}<div style="margin-top:6px;opacity:.75;">研究所に動画演出を保管しています。</div>`;
+                downloadButton.disabled = true;
+                if (clearButton) clearButton.disabled = true;
+                if (progress)
+                    progress.innerHTML = `<div>奇跡データを封印中...</div>${getOfflineProgressHtml(0)}<div style="margin-top:6px;opacity:.75;">研究所に動画演出を保管しています。</div>`;
 
-            try {
-                const beforeSaveCount = plan.downloadSources.length;
-                const result = await downloadOfflineMiracleVideos(plan, (p) => {
-                    if (!progress) return;
-                    const percent = p.total > 0 ? (p.done / p.total) * 100 : 100;
-                    progress.innerHTML = `<div>封印中 ${p.done} / ${p.total} ... ${formatOfflineBytes(p.downloadedBytes)}</div>${getOfflineProgressHtml(percent)}<div style="margin-top:6px;opacity:.72;word-break:break-all;font-size:.86em;">${escapeHtml(p.currentUrl.split("/").pop() ?? p.currentUrl)}</div>`;
-                });
-                const newRank = getOfflineMiracleResearchRank(result.cachedBytes);
-                if (progress) progress.innerHTML = `<div>保存成功: ${result.cachedCount} 件 / ${formatOfflineBytes(result.cachedBytes)}</div>${getOfflineProgressHtml(100)}<div style="margin-top:6px;color:#166534;">研究ランク: ${escapeHtml(newRank.label)}</div>`;
-                recordOfflineMiracleAction("saveVideo", Math.max(1, beforeSaveCount));
-                await showOfflineTitleUnlockToast();
-                showSoftToast("オフライン動画保存が完了しました");
-            } catch (error) {
-                console.error("[Miracle Offline] video download failed", error);
-                if (progress) progress.textContent = `保存に失敗しました: ${error instanceof Error ? error.message : String(error)}`;
-                showSoftToast("オフライン動画保存に失敗しました");
-            } finally {
-                if (clearButton) clearButton.disabled = false;
-            }
-        };
+                try {
+                    const beforeSaveCount = plan.downloadSources.length;
+                    const result = await downloadOfflineMiracleVideos(plan, (p) => {
+                        if (!progress) return;
+                        const percent = p.total > 0 ? (p.done / p.total) * 100 : 100;
+                        progress.innerHTML = `<div>封印中 ${p.done} / ${p.total} ... ${formatOfflineBytes(p.downloadedBytes)}</div>${getOfflineProgressHtml(percent)}<div style="margin-top:6px;opacity:.72;word-break:break-all;font-size:.86em;">${escapeHtml(p.currentUrl.split("/").pop() ?? p.currentUrl)}</div>`;
+                    });
+                    const newRank = getOfflineMiracleResearchRank(result.cachedBytes);
+                    if (progress)
+                        progress.innerHTML = `<div>保存成功: ${result.cachedCount} 件 / ${formatOfflineBytes(result.cachedBytes)}</div>${getOfflineProgressHtml(100)}<div style="margin-top:6px;color:#166534;">研究ランク: ${escapeHtml(newRank.label)}</div>`;
+                    recordOfflineMiracleAction("saveVideo", Math.max(1, beforeSaveCount));
+                    await showOfflineTitleUnlockToast();
+                    showSoftToast("オフライン動画保存が完了しました");
+                } catch (error) {
+                    console.error("[Miracle Offline] video download failed", error);
+                    if (progress)
+                        progress.textContent = `保存に失敗しました: ${error instanceof Error ? error.message : String(error)}`;
+                    showSoftToast("オフライン動画保存に失敗しました");
+                } finally {
+                    if (clearButton) clearButton.disabled = false;
+                }
+            };
+        }
+
+        if (clearButton) {
+            clearButton.onclick = async () => {
+                if (!window.confirm("保存済みの動画演出を削除します。よろしいですか？")) return;
+                clearButton.disabled = true;
+                if (progress) progress.textContent = "削除中...";
+                await clearOfflineMiracleVideos();
+                if (progress) progress.textContent = "保存済み動画を削除しました。";
+                showSoftToast("保存済み動画を削除しました");
+                if (downloadButton) downloadButton.disabled = false;
+                clearButton.disabled = false;
+            };
+        }
     }
 
-    if (clearButton) {
-        clearButton.onclick = async () => {
-            if (!window.confirm("保存済みの動画演出を削除します。よろしいですか？")) return;
-            clearButton.disabled = true;
-            if (progress) progress.textContent = "削除中...";
-            await clearOfflineMiracleVideos();
-            if (progress) progress.textContent = "保存済み動画を削除しました。";
-            showSoftToast("保存済み動画を削除しました");
-            if (downloadButton) downloadButton.disabled = false;
-            clearButton.disabled = false;
-        };
-    }
-}
-
-async function showOfflineMiracleBookPopup(): Promise<void> {
-    recordOfflineMiracleAction("bookOpen");
-    showPopup("オフライン演出図鑑", `
+    async function showOfflineMiracleBookPopup(): Promise<void> {
+        recordOfflineMiracleAction("bookOpen");
+        showPopup(
+            "オフライン演出図鑑",
+            `
         ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
             <p style="margin:0;font-weight:900;">保存済み動画を確認しています...</p>
         </div>
-    `);
+    `,
+        );
 
-    const videos = await getOfflineVideoAssetsForUi(false);
-    const catalog = await getOfflineMiracleCatalog(videos, getRemoteMiracleAssetSources);
-    const rank = getOfflineMiracleResearchRank(catalog.cachedBytes);
+        const videos = await getOfflineVideoAssetsForUi(false);
+        const catalog = await getOfflineMiracleCatalog(videos, getRemoteMiracleAssetSources);
+        const rank = getOfflineMiracleResearchRank(catalog.cachedBytes);
 
-    if (!catalog.supported) {
-        showPopup("オフライン演出図鑑", `
+        if (!catalog.supported) {
+            showPopup(
+                "オフライン演出図鑑",
+                `
             ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                 <p style="margin:0;font-weight:900;">このブラウザではオフライン図鑑を利用できません。</p>
             </div>
-        `);
-        return;
-    }
+        `,
+            );
+            return;
+        }
 
-    const rankRows = Object.entries(catalog.rankCounts).sort(([a], [b]) => b.localeCompare(a)).map(([rankName, count]) => `
+        const rankRows =
+            Object.entries(catalog.rankCounts)
+                .sort(([a], [b]) => b.localeCompare(a))
+                .map(
+                    ([rankName, count]) => `
         <div class="offline-lab-small-card" style="padding:12px;border-radius:16px;background:rgba(255,255,255,.68);display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;">
             <span style="padding:5px 10px;border-radius:999px;font-weight:1000;${getOfflineRankBadgeStyle(rankName)}">${escapeHtml(rankName)}</span>
             <div style="font-weight:900;">${count.cached} / ${count.total}<div style="font-size:.84em;opacity:.65;">${formatOfflineBytes(count.bytes)}</div></div>
         </div>
-    `).join("") || `<div style="opacity:.7;">manifest情報がまだありません。</div>`;
+    `,
+                )
+                .join("") || `<div style="opacity:.7;">manifest情報がまだありません。</div>`;
 
-    const cachedRows = catalog.cachedItems.length === 0
-        ? `<div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);font-weight:900;">まだ保存済み動画がありません。「動画保存」から保管してください。</div>`
-        : catalog.cachedItems.slice(0, 80).map((item, index) => `
+        const cachedRows =
+            catalog.cachedItems.length === 0
+                ? `<div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.68);font-weight:900;">まだ保存済み動画がありません。「動画保存」から保管してください。</div>`
+                : catalog.cachedItems
+                      .slice(0, 80)
+                      .map(
+                          (item, index) => `
             <div class="offline-lab-list-row" style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;">
                 <div style="min-width:0;">
                     <div style="font-weight:1000;"><span style="padding:4px 9px;border-radius:999px;${getOfflineRankBadgeStyle(item.rank)}">${escapeHtml(String(item.rank ?? "common").toUpperCase())}</span> ${index + 1}. ${escapeHtml(getOfflineCatalogDisplayName(item))}</div>
@@ -235,13 +282,18 @@ async function showOfflineMiracleBookPopup(): Promise<void> {
                 </div>
                 <button class="offline-video-test-button miracle-home-button" data-url="${escapeHtml(item.url)}">再生テスト</button>
             </div>
-        `).join("");
+        `,
+                      )
+                      .join("");
 
-    const nextRankText = rank.nextBytes === null
-        ? "最高ランク到達"
-        : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - catalog.cachedBytes))}`;
+        const nextRankText =
+            rank.nextBytes === null
+                ? "最高ランク到達"
+                : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - catalog.cachedBytes))}`;
 
-    showPopup("オフライン演出図鑑", `
+        showPopup(
+            "オフライン演出図鑑",
+            `
         ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
             <div class="offline-lab-card" style="padding:16px;border-radius:22px;background:linear-gradient(135deg,rgba(8,47,73,.92),rgba(88,28,135,.82));color:#fff;">
@@ -263,108 +315,128 @@ async function showOfflineMiracleBookPopup(): Promise<void> {
                 <button id="offline-book-stop-button" class="miracle-home-button">動画停止</button>
             </div>
         </div>
-    `);
+    `,
+        );
 
-    (document.getElementById("offline-book-download-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("recommended"); });
-    (document.getElementById("offline-book-stop-button") as HTMLButtonElement | null)?.addEventListener("click", () => stopRemoteMiracleVideo());
-    document.querySelectorAll<HTMLButtonElement>(".offline-video-test-button").forEach((button) => {
-        button.onclick = () => {
-            const item = catalog.cachedItems.find((x) => x.url === button.dataset.url);
-            if (!item) {
-                showSoftToast("対象動画が見つかりません");
-                return;
-            }
-            showSoftToast("保存済み動画を再生テストします");
-            void offlineTheater.playOfflineCatalogItem(item, "testPlay");
-        };
-    });
-}
+        (document.getElementById("offline-book-download-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void showOfflineVideoDownloadPopup("recommended");
+            },
+        );
+        (document.getElementById("offline-book-stop-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => stopRemoteMiracleVideo(),
+        );
+        document.querySelectorAll<HTMLButtonElement>(".offline-video-test-button").forEach((button) => {
+            button.onclick = () => {
+                const item = catalog.cachedItems.find((x) => x.url === button.dataset.url);
+                if (!item) {
+                    showSoftToast("対象動画が見つかりません");
+                    return;
+                }
+                showSoftToast("保存済み動画を再生テストします");
+                void offlineTheater.playOfflineCatalogItem(item, "testPlay");
+            };
+        });
+    }
 
+    async function getOfflineCatalogForUi(): Promise<{
+        videos: RemoteMiracleAsset[];
+        catalog: Awaited<ReturnType<typeof getOfflineMiracleCatalog>>;
+    }> {
+        const videos = await getOfflineVideoAssetsForUi(false);
+        const catalog = await getOfflineMiracleCatalog(videos, getRemoteMiracleAssetSources);
+        return { videos, catalog };
+    }
 
-async function getOfflineCatalogForUi(): Promise<{ videos: RemoteMiracleAsset[]; catalog: Awaited<ReturnType<typeof getOfflineMiracleCatalog>> }> {
-    const videos = await getOfflineVideoAssetsForUi(false);
-    const catalog = await getOfflineMiracleCatalog(videos, getRemoteMiracleAssetSources);
-    return { videos, catalog };
-}
-
-function renderOfflineMissionRows(): string {
-    const missions = getOfflineMiracleMissions(loadOfflineMiracleProgress());
-    return missions.map((mission) => {
-        const percent = clamp((mission.current / Math.max(1, mission.target)) * 100, 0, 100);
-        return `
+    function renderOfflineMissionRows(): string {
+        const missions = getOfflineMiracleMissions(loadOfflineMiracleProgress());
+        return missions
+            .map((mission) => {
+                const percent = clamp((mission.current / Math.max(1, mission.target)) * 100, 0, 100);
+                return `
             <div class="offline-lab-small-card" style="padding:12px;border-radius:18px;background:${mission.done ? "rgba(34,197,94,.18)" : "rgba(255,255,255,.68)"};border:1px solid rgba(100,116,139,.18);">
                 <div style="display:flex;justify-content:space-between;gap:10px;font-weight:1000;"><span>${mission.done ? "✅" : "🧪"} ${escapeHtml(mission.label)}</span><span>${Math.min(mission.current, mission.target)} / ${mission.target}</span></div>
                 <div style="margin-top:5px;opacity:.72;font-size:.9em;">${escapeHtml(mission.description)}</div>
                 <div style="margin-top:8px;">${getOfflineProgressHtml(percent)}</div>
                 <div style="margin-top:5px;font-weight:900;color:#166534;">${escapeHtml(mission.reward)}</div>
             </div>`;
-    }).join("");
-}
+            })
+            .join("");
+    }
 
-function renderOfflineTitleRows(catalog: Awaited<ReturnType<typeof getOfflineMiracleCatalog>>): string {
-    const titles = getOfflineMiracleTitles(catalog, loadOfflineMiracleProgress());
-    return titles.map((title) => `
+    function renderOfflineTitleRows(catalog: Awaited<ReturnType<typeof getOfflineMiracleCatalog>>): string {
+        const titles = getOfflineMiracleTitles(catalog, loadOfflineMiracleProgress());
+        return titles
+            .map(
+                (title) => `
         <div class="offline-lab-small-card" style="padding:12px;border-radius:18px;background:${title.unlocked ? "linear-gradient(135deg,rgba(250,204,21,.24),rgba(34,197,94,.16))" : "rgba(148,163,184,.18)"};border:1px solid rgba(100,116,139,.18);">
             <div style="font-weight:1000;">${title.unlocked ? "🏅" : "🔒"} ${escapeHtml(title.label)}</div>
             <div style="opacity:.72;font-size:.9em;margin-top:4px;">${escapeHtml(title.description)}</div>
         </div>
-    `).join("");
-}
-
-async function showOfflineTitleUnlockToast(): Promise<void> {
-    try {
-        const { catalog } = await getOfflineCatalogForUi();
-        const labels = getNewlyUnlockedOfflineTitleLabels(catalog);
-        if (labels.length > 0) {
-            showSoftToast(`称号解放: ${labels[0]}${labels.length > 1 ? ` ほか${labels.length - 1}件` : ""}`);
-        }
-    } catch {
-        // 称号チェック失敗は無視します。
+    `,
+            )
+            .join("");
     }
-}
 
+    async function showOfflineTitleUnlockToast(): Promise<void> {
+        try {
+            const { catalog } = await getOfflineCatalogForUi();
+            const labels = getNewlyUnlockedOfflineTitleLabels(catalog);
+            if (labels.length > 0) {
+                showSoftToast(`称号解放: ${labels[0]}${labels.length > 1 ? ` ほか${labels.length - 1}件` : ""}`);
+            }
+        } catch {
+            // 称号チェック失敗は無視します。
+        }
+    }
 
-const offlineTheater = createOfflineTheaterController({
-    isMobile,
-    showPopup,
-    closePopup,
-    showSoftToast,
-    getOfflineCatalogForUi,
-    playRemoteMiracleVideoAsset,
-    showOfflineVideoDownloadPopup,
-});
+    const offlineTheater = createOfflineTheaterController({
+        isMobile,
+        showPopup,
+        closePopup,
+        showSoftToast,
+        getOfflineCatalogForUi,
+        playRemoteMiracleVideoAsset,
+        showOfflineVideoDownloadPopup,
+    });
 
-const offlineStorage = createOfflineStorageController({
-    isMobile,
-    showPopup,
-    showSoftToast,
-    getOfflineCatalogForUi,
-});
+    const offlineStorage = createOfflineStorageController({
+        isMobile,
+        showPopup,
+        showSoftToast,
+        getOfflineCatalogForUi,
+    });
 
-const customOfflineVideo = createOfflineCustomVideoController({
-    isMobile,
-    showPopup,
-    showSoftToast,
-    getOfflineCatalogForUi,
-    showOfflineMiracleBookPopup,
-});
+    const customOfflineVideo = createOfflineCustomVideoController({
+        isMobile,
+        showPopup,
+        showSoftToast,
+        getOfflineCatalogForUi,
+        showOfflineMiracleBookPopup,
+    });
 
-async function showOfflineLabHomePopup(): Promise<void> {
-    recordOfflineMiracleAction("bookOpen");
-    showPopup("オフライン研究所", `
+    async function showOfflineLabHomePopup(): Promise<void> {
+        recordOfflineMiracleAction("bookOpen");
+        showPopup(
+            "オフライン研究所",
+            `
         ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
             <p style="margin:0;font-weight:900;">オフライン研究所を起動しています...</p>
         </div>
-    `);
+    `,
+        );
 
-    const { catalog } = await getOfflineCatalogForUi();
-    const rank = getOfflineMiracleResearchRank(catalog.cachedBytes);
-    const nextRankText = rank.nextBytes === null
-        ? "最高ランク到達"
-        : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - catalog.cachedBytes))}`;
-    const tutorialHtml = shouldShowOfflineTutorial()
-        ? `<div class="offline-lab-card" style="padding:14px;border-radius:20px;background:linear-gradient(135deg,rgba(250,204,21,.24),rgba(59,130,246,.18));border:1px solid rgba(59,130,246,.22);margin-bottom:16px;">
+        const { catalog } = await getOfflineCatalogForUi();
+        const rank = getOfflineMiracleResearchRank(catalog.cachedBytes);
+        const nextRankText =
+            rank.nextBytes === null
+                ? "最高ランク到達"
+                : `次: ${escapeHtml(rank.nextLabel)} まで ${formatOfflineBytes(Math.max(0, rank.nextBytes - catalog.cachedBytes))}`;
+        const tutorialHtml = shouldShowOfflineTutorial()
+            ? `<div class="offline-lab-card" style="padding:14px;border-radius:20px;background:linear-gradient(135deg,rgba(250,204,21,.24),rgba(59,130,246,.18));border:1px solid rgba(59,130,246,.22);margin-bottom:16px;">
                 <div style="font-weight:1000;font-size:${isMobile ? "22px" : "20px"};">初回オフライン準備チュートリアル</div>
                 <ol style="margin:8px 0 0;padding-left:1.4em;line-height:1.75;">
                     <li>まず「おすすめ保存」で動画演出を少し保管します。</li>
@@ -374,9 +446,11 @@ async function showOfflineLabHomePopup(): Promise<void> {
                 </ol>
                 <button id="offline-tutorial-done-button" class="miracle-home-button miracle-home-primary" style="margin-top:10px;">チュートリアル完了</button>
             </div>`
-        : "";
+            : "";
 
-    showPopup("オフライン研究所", `
+        showPopup(
+            "オフライン研究所",
+            `
         ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
             ${tutorialHtml}
@@ -403,30 +477,65 @@ async function showOfflineLabHomePopup(): Promise<void> {
             <h3 style="margin:18px 0 8px;">オフライン限定称号</h3>
             <div class="offline-lab-grid" style="display:grid;grid-template-columns:${isMobile ? "1fr" : "repeat(2,minmax(0,1fr))"};gap:10px;">${renderOfflineTitleRows(catalog)}</div>
         </div>
-    `);
+    `,
+        );
 
-    (document.getElementById("offline-tutorial-done-button") as HTMLButtonElement | null)?.addEventListener("click", () => {
-        completeOfflineTutorial();
-        showSoftToast("オフライン準備チュートリアルを完了しました");
-        void showOfflineLabHomePopup();
-    });
-    (document.getElementById("offline-home-save-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("recommended"); });
-    (document.getElementById("offline-home-book-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineMiracleBookPopup(); });
-    (document.getElementById("offline-home-theater-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void offlineTheater.playOfflineRandomTheater(); });
-    (document.getElementById("offline-home-gacha-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void offlineTheater.showOfflineGachaPopup(); });
-    (document.getElementById("offline-home-cleanup-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void offlineStorage.showOfflineStorageAssistPopup(); });
-    (document.getElementById("offline-home-custom-button") as HTMLButtonElement | null)?.addEventListener("click", () => { customOfflineVideo.showCustomOfflineVideoPopup(); });
-}
+        (document.getElementById("offline-tutorial-done-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                completeOfflineTutorial();
+                showSoftToast("オフライン準備チュートリアルを完了しました");
+                void showOfflineLabHomePopup();
+            },
+        );
+        (document.getElementById("offline-home-save-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void showOfflineVideoDownloadPopup("recommended");
+            },
+        );
+        (document.getElementById("offline-home-book-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void showOfflineMiracleBookPopup();
+            },
+        );
+        (document.getElementById("offline-home-theater-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void offlineTheater.playOfflineRandomTheater();
+            },
+        );
+        (document.getElementById("offline-home-gacha-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void offlineTheater.showOfflineGachaPopup();
+            },
+        );
+        (document.getElementById("offline-home-cleanup-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void offlineStorage.showOfflineStorageAssistPopup();
+            },
+        );
+        (document.getElementById("offline-home-custom-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                customOfflineVideo.showCustomOfflineVideoPopup();
+            },
+        );
+    }
 
-
-function showOfflineModeEventPopup(): void {
-    const text = navigator.onLine
-        ? "オンラインに復帰しました。通常研究モードに戻ります。"
-        : "オフライン研究モード 起動。保存済みの奇跡データだけで実験を続行します。";
-    showSoftToast(text);
-    if (!navigator.onLine && isHelpOverlayClosed()) {
-        recordOfflineMiracleAction("offlineBoot");
-        showPopup("オフライン研究モード", `
+    function showOfflineModeEventPopup(): void {
+        const text = navigator.onLine
+            ? "オンラインに復帰しました。通常研究モードに戻ります。"
+            : "オフライン研究モード 起動。保存済みの奇跡データだけで実験を続行します。";
+        showSoftToast(text);
+        if (!navigator.onLine && isHelpOverlayClosed()) {
+            recordOfflineMiracleAction("offlineBoot");
+            showPopup(
+                "オフライン研究モード",
+                `
             ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(55,48,163,.86));color:#fff;">
                 <div style="font-size:${isMobile ? "26px" : "24px"};font-weight:1000;">通信断絶イベント発生</div>
@@ -435,11 +544,16 @@ function showOfflineModeEventPopup(): void {
                     <button id="offline-event-book-button" class="miracle-home-button miracle-home-primary">オフライン図鑑を見る</button>
                 </div>
             </div>
-        `);
-        (document.getElementById("offline-event-book-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineMiracleBookPopup(); });
+        `,
+            );
+            (document.getElementById("offline-event-book-button") as HTMLButtonElement | null)?.addEventListener(
+                "click",
+                () => {
+                    void showOfflineMiracleBookPopup();
+                },
+            );
+        }
     }
-}
-
 
     return {
         showOfflineVideoDownloadPopup,

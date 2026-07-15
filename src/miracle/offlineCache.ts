@@ -60,7 +60,10 @@ export type OfflineMiracleResearchRank = {
 };
 
 type OfflineMiracleMeta = {
-    sources: Record<string, { assetId: string; rank?: string; sizeBytes: number; cachedAt: number; label?: string; isUserVideo?: boolean }>;
+    sources: Record<
+        string,
+        { assetId: string; rank?: string; sizeBytes: number; cachedAt: number; label?: string; isUserVideo?: boolean }
+    >;
     updatedAt: number;
 };
 
@@ -90,7 +93,10 @@ function saveMeta(meta: OfflineMiracleMeta): void {
     }
 }
 
-function uniqueVideoSources(assets: RemoteMiracleAsset[], getSources: (asset: RemoteMiracleAsset) => RemoteMiracleAssetSource[]): OfflineMiracleVideoSource[] {
+function uniqueVideoSources(
+    assets: RemoteMiracleAsset[],
+    getSources: (asset: RemoteMiracleAsset) => RemoteMiracleAssetSource[],
+): OfflineMiracleVideoSource[] {
     const result: OfflineMiracleVideoSource[] = [];
     const seen = new Set<string>();
 
@@ -210,7 +216,9 @@ export async function downloadOfflineMiracleVideos(
     return getOfflineMiracleSummary();
 }
 
-export async function resolveOfflineMiracleSources(sources: RemoteMiracleAssetSource[]): Promise<{ sources: RemoteMiracleAssetSource[]; objectUrls: string[] }> {
+export async function resolveOfflineMiracleSources(
+    sources: RemoteMiracleAssetSource[],
+): Promise<{ sources: RemoteMiracleAssetSource[]; objectUrls: string[] }> {
     if (!isCacheSupported()) return { sources: [], objectUrls: [] };
 
     const cache = await caches.open(OFFLINE_VIDEO_CACHE_NAME);
@@ -247,7 +255,6 @@ export function revokeOfflineObjectUrls(urls: string[]): void {
     }
 }
 
-
 export function getOfflineMiracleResearchRank(cachedBytes: number): OfflineMiracleResearchRank {
     const thresholds = [
         { bytes: 0, label: "見習い研究員" },
@@ -283,7 +290,14 @@ export async function getOfflineMiracleCatalog(
     getSources: (asset: RemoteMiracleAsset) => RemoteMiracleAssetSource[],
 ): Promise<OfflineMiracleCatalog> {
     if (!isCacheSupported()) {
-        return { supported: false, totalVideoSources: 0, cachedItems: [], cachedBytes: 0, updatedAt: 0, rankCounts: {} };
+        return {
+            supported: false,
+            totalVideoSources: 0,
+            cachedItems: [],
+            cachedBytes: 0,
+            updatedAt: 0,
+            rankCounts: {},
+        };
     }
 
     const sources = uniqueVideoSources(assets, getSources);
@@ -348,9 +362,16 @@ export function filterOfflineMiracleDownloadPlan(
         return aBytes - bBytes;
     });
 
-    const selected = mode === "rare"
-        ? sorted.filter((source) => scoreRank(source.rank) >= 60)
-        : sorted.filter((source) => scoreRank(source.rank) >= 60 || (source.estimateBytes ?? Number.MAX_SAFE_INTEGER) <= 25 * 1024 * 1024).slice(0, 24);
+    const selected =
+        mode === "rare"
+            ? sorted.filter((source) => scoreRank(source.rank) >= 60)
+            : sorted
+                  .filter(
+                      (source) =>
+                          scoreRank(source.rank) >= 60 ||
+                          (source.estimateBytes ?? Number.MAX_SAFE_INTEGER) <= 25 * 1024 * 1024,
+                  )
+                  .slice(0, 24);
 
     return {
         ...plan,

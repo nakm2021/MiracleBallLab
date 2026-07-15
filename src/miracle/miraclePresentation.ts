@@ -33,11 +33,7 @@ export function getMiracleFeatureText(def: SpecialEventDef): string {
 }
 
 export function escapeSvgText(text: string): string {
-    return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+    return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function isCatMiracle(def: SpecialEventDef): boolean {
@@ -130,23 +126,28 @@ export function getMiracleBookImageHtml(def: SpecialEventDef, found: boolean, is
     </div>`;
 }
 
-export function getMiracleBookRowHtml(def: SpecialEventDef, options: {
-    savedCount: number;
-    currentCount: number;
-    firstFoundAt?: number;
-    isMobile: boolean;
-    oddsLabel: string;
-    oddsText: string;
-    totalFoundLabel: string;
-    countSuffix: string;
-    firstFoundLabel: string;
-}): string {
+export function getMiracleBookRowHtml(
+    def: SpecialEventDef,
+    options: {
+        savedCount: number;
+        currentCount: number;
+        firstFoundAt?: number;
+        isMobile: boolean;
+        oddsLabel: string;
+        oddsText: string;
+        totalFoundLabel: string;
+        countSuffix: string;
+        firstFoundLabel: string;
+    },
+): string {
     const totalCount = options.savedCount + options.currentCount;
     const found = totalCount > 0;
     const displayName = found ? `${def.symbol} ${def.label}` : "??? シークレット枠";
     const imageHtml = getMiracleBookImageHtml(def, found, options.isMobile);
     const firstFoundText = found && options.firstFoundAt ? new Date(options.firstFoundAt).toLocaleString() : "----";
-    const featureText = found ? getMiracleFeatureText(def) : "未発見のため詳細は伏せられています。観測すると画像・名前・説明が解放されます。";
+    const featureText = found
+        ? getMiracleFeatureText(def)
+        : "未発見のため詳細は伏せられています。観測すると画像・名前・説明が解放されます。";
     const odds = found ? options.oddsText : "????";
     return `<div style="display:grid;grid-template-columns:${options.isMobile ? "98px minmax(0,1fr)" : "112px minmax(0,1fr)"};gap:14px;align-items:start;padding:14px 0;border-bottom:1px solid rgba(80,90,120,.16);">
         <div>${imageHtml}</div>

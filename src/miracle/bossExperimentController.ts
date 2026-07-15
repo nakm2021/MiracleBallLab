@@ -1,5 +1,11 @@
 import type Matter from "matter-js";
-import { BOSS_EXPERIMENT_DEFS, getBossAssetUrl, getBossDef, getBossExperimentPopupHtml, type BossExperimentDef } from "./bossExperiment";
+import {
+    BOSS_EXPERIMENT_DEFS,
+    getBossAssetUrl,
+    getBossDef,
+    getBossExperimentPopupHtml,
+    type BossExperimentDef,
+} from "./bossExperiment";
 import { drawBossEnemyFrame, drawBossHudFrame, type BossRenderOptions, type BossRenderState } from "./bossRendering";
 import {
     calculateBossDamage,
@@ -132,11 +138,14 @@ export function createBossExperimentController(deps: {
     }
 
     function showPopup(): void {
-        deps.showPopup("ボス実験モード", getBossExperimentPopupHtml({
-            bosses: BOSS_EXPERIMENT_DEFS,
-            cleared: deps.getRecords().bossCleared ?? {},
-            records: deps.getRecords().bossRecords ?? [],
-        }));
+        deps.showPopup(
+            "ボス実験モード",
+            getBossExperimentPopupHtml({
+                bosses: BOSS_EXPERIMENT_DEFS,
+                cleared: deps.getRecords().bossCleared ?? {},
+                records: deps.getRecords().bossRecords ?? [],
+            }),
+        );
     }
 
     function start(bossId: string): void {
@@ -175,7 +184,7 @@ export function createBossExperimentController(deps: {
         if (!state.active || state.hp <= 0 || !runtime.isStarted || runtime.isFinished) return;
         const geometry = deps.getGeometry();
         const drawX = x ?? geometry.width / 2;
-        const drawY = y ?? geometry.height * 0.20;
+        const drawY = y ?? geometry.height * 0.2;
         const value = calculateBossDamage(amount, state.maxHp);
         if (value <= 0) return;
         state.hp = Math.max(0, state.hp - value);
@@ -200,19 +209,38 @@ export function createBossExperimentController(deps: {
     function damageForYakumono(kind: PachinkoYakumonoKind, def: PachinkoYakumonoDef, drop: Matter.Body): void {
         if (!state.active) return;
         const geometry = deps.getGeometry();
-        damage(getBossYakumonoDamage(kind, state.active.weakness), def.label, drop.position.x, drop.position.y - 44 * geometry.scale);
+        damage(
+            getBossYakumonoDamage(kind, state.active.weakness),
+            def.label,
+            drop.position.x,
+            drop.position.y - 44 * geometry.scale,
+        );
     }
 
     function damageForDrop(kind: DropKind, binIndex: number, body: Matter.Body): void {
         if (!state.active || binIndex < 0) return;
         const def = deps.findSpecialDef(kind);
-        const value = getBossDropDamage({ kind, def, weakness: state.active.weakness, getRankScore: deps.getRankScore });
-        if (value > 0) damage(value, def?.label ?? (kind === "gold" ? "金玉" : "虹玉"), body.position.x, body.position.y);
+        const value = getBossDropDamage({
+            kind,
+            def,
+            weakness: state.active.weakness,
+            getRankScore: deps.getRankScore,
+        });
+        if (value > 0)
+            damage(value, def?.label ?? (kind === "gold" ? "金玉" : "虹玉"), body.position.x, body.position.y);
     }
 
     function maybeAttack(): void {
         const runtime = deps.getRuntimeState();
-        if (!state.active || !runtime.isStarted || runtime.isFinished || runtime.isPaused || runtime.isMiraclePaused || state.hp <= 0) return;
+        if (
+            !state.active ||
+            !runtime.isStarted ||
+            runtime.isFinished ||
+            runtime.isPaused ||
+            runtime.isMiraclePaused ||
+            state.hp <= 0
+        )
+            return;
         const now = Date.now();
         if (now - state.lastAttackAt < getBossAttackInterval(state.phase)) return;
         state.lastAttackAt = now;
@@ -224,7 +252,15 @@ export function createBossExperimentController(deps: {
 
     function maybeFinishByTime(): boolean {
         const runtime = deps.getRuntimeState();
-        if (!state.active || runtime.isFinished || runtime.isPaused || runtime.isMiraclePaused || state.hp <= 0 || remaining() > 0) return false;
+        if (
+            !state.active ||
+            runtime.isFinished ||
+            runtime.isPaused ||
+            runtime.isMiraclePaused ||
+            state.hp <= 0 ||
+            remaining() > 0
+        )
+            return false;
         state.timedOut = true;
         state.cleared = false;
         deps.triggerTimeoutEffect();

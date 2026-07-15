@@ -39,13 +39,19 @@ export function drawRareBoardCatastropheFrame(
         const r = (progress * 480 + i * 70) * geometry.scale;
         context.lineWidth = Math.max(2, 5 * geometry.scale);
         context.beginPath();
-        context.arc(geometry.width / 2, geometry.height * 0.42, r % (Math.max(geometry.width, geometry.height) * 0.7), 0, Math.PI * 2);
+        context.arc(
+            geometry.width / 2,
+            geometry.height * 0.42,
+            r % (Math.max(geometry.width, geometry.height) * 0.7),
+            0,
+            Math.PI * 2,
+        );
         context.stroke();
     }
 
     for (let i = 0; i < def.lightning; i++) {
         const seed = i * 37 + Math.floor(elapsed / 120);
-        const x = ((seed * 97) % Math.max(1, Math.floor(geometry.width)));
+        const x = (seed * 97) % Math.max(1, Math.floor(geometry.width));
         const top = 10 * geometry.scale;
         const bottom = geometry.height * (0.25 + ((seed * 13) % 55) / 100);
         context.lineWidth = Math.max(2, 3.5 * geometry.scale);

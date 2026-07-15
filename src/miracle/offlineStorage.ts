@@ -40,15 +40,25 @@ export function createOfflineStorageController(deps: OfflineStorageDependencies)
 
     async function showOfflineStorageAssistPopup(): Promise<void> {
         const { catalog } = await getOfflineCatalogForUi();
-        const largeRows = catalog.cachedItems.slice().sort((a, b) => b.sizeBytes - a.sizeBytes).slice(0, 12).map((item) => `
+        const largeRows =
+            catalog.cachedItems
+                .slice()
+                .sort((a, b) => b.sizeBytes - a.sizeBytes)
+                .slice(0, 12)
+                .map(
+                    (item) => `
             <div class="offline-lab-list-row" style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid rgba(100,116,139,.18);">
                 <div style="min-width:0;"><b>${escapeHtml(getOfflineCatalogDisplayName(item))}</b><div style="opacity:.64;font-size:.86em;">${escapeHtml(String(item.rank ?? "offline").toUpperCase())}</div></div>
                 <div style="font-weight:900;">${formatOfflineBytes(item.sizeBytes)}</div>
                 <button class="offline-delete-one-button miracle-home-button" data-url="${escapeHtml(item.url)}">削除</button>
             </div>
-        `).join("") || `<div style="padding:14px;opacity:.72;">保存済み動画はまだありません。</div>`;
+        `,
+                )
+                .join("") || `<div style="padding:14px;opacity:.72;">保存済み動画はまだありません。</div>`;
 
-        showPopup("ストレージ整理アシスト", `
+        showPopup(
+            "ストレージ整理アシスト",
+            `
             ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                 <div class="offline-lab-card" style="padding:16px;border-radius:20px;background:rgba(15,23,42,.88);color:#fff;">
@@ -63,7 +73,8 @@ export function createOfflineStorageController(deps: OfflineStorageDependencies)
                 <h3 style="margin:18px 0 8px;">容量が大きい保存済み動画</h3>
                 <div class="offline-lab-scroll-box" style="border-radius:18px;background:rgba(255,255,255,.68);padding:4px 14px;max-height:${isMobile ? "48vh" : "420px"};overflow:auto;">${largeRows}</div>
             </div>
-        `);
+        `,
+        );
 
         const trim = async (limit: number) => {
             const deleted = await trimOfflineMiracleVideosToBytes(limit);
@@ -72,15 +83,28 @@ export function createOfflineStorageController(deps: OfflineStorageDependencies)
             showSoftToast(`整理完了: ${deleted} 件削除しました`);
             void showOfflineStorageAssistPopup();
         };
-        (document.getElementById("offline-trim-500mb-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void trim(500 * 1024 * 1024); });
-        (document.getElementById("offline-trim-1gb-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void trim(1024 * 1024 * 1024); });
-        (document.getElementById("offline-clear-all-button") as HTMLButtonElement | null)?.addEventListener("click", async () => {
-            if (!window.confirm("保存済み動画をすべて削除します。よろしいですか？")) return;
-            await clearOfflineMiracleVideos();
-            recordOfflineMiracleAction("cleanup");
-            showSoftToast("保存済み動画をすべて削除しました");
-            void showOfflineStorageAssistPopup();
-        });
+        (document.getElementById("offline-trim-500mb-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void trim(500 * 1024 * 1024);
+            },
+        );
+        (document.getElementById("offline-trim-1gb-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void trim(1024 * 1024 * 1024);
+            },
+        );
+        (document.getElementById("offline-clear-all-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            async () => {
+                if (!window.confirm("保存済み動画をすべて削除します。よろしいですか？")) return;
+                await clearOfflineMiracleVideos();
+                recordOfflineMiracleAction("cleanup");
+                showSoftToast("保存済み動画をすべて削除しました");
+                void showOfflineStorageAssistPopup();
+            },
+        );
         document.querySelectorAll<HTMLButtonElement>(".offline-delete-one-button").forEach((button) => {
             button.onclick = async () => {
                 const url = button.dataset.url;

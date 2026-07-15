@@ -18,6 +18,8 @@ export function saveJsonToStorage(key: string, value: unknown): void {
 
 export function removeStorageKeys(keys: string[]): void {
     for (const key of keys) {
-        try { localStorage.removeItem(key); } catch {}
+        try {
+            localStorage.removeItem(key);
+        } catch {}
     }
 }

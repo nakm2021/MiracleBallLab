@@ -5,7 +5,7 @@ export const CURRENT_SAVE_SCHEMA_VERSION = 3;
 type UnknownRecord = Record<string, unknown>;
 
 function asObject(value: unknown): UnknownRecord {
-    return value && typeof value === "object" && !Array.isArray(value) ? value as UnknownRecord : {};
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as UnknownRecord) : {};
 }
 
 function migrateV0ToV1(data: UnknownRecord): UnknownRecord {

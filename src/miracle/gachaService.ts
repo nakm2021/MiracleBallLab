@@ -10,11 +10,16 @@ export function pickMiracleGachaDef(params: {
     const weighted: SpecialEventDef[] = [];
     for (const def of pool) {
         const score = params.getRankScore(def.rank);
-        const weight = score >= params.getRankScore("GOD") ? 1
-            : score >= params.getRankScore("EX") ? 1
-            : score >= params.getRankScore("SSR") ? 4
-            : score >= params.getRankScore("SR") ? 28
-            : 220;
+        const weight =
+            score >= params.getRankScore("GOD")
+                ? 1
+                : score >= params.getRankScore("EX")
+                  ? 1
+                  : score >= params.getRankScore("SSR")
+                    ? 4
+                    : score >= params.getRankScore("SR")
+                      ? 28
+                      : 220;
         for (let i = 0; i < weight; i++) weighted.push(def);
     }
     return weighted[Math.floor(params.random() * weighted.length)] ?? pool[0];

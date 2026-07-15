@@ -170,23 +170,42 @@ export function createAdminLogApi(deps: AdminLogDependencies): AdminLogApi {
     }
 
     function getTopAdminDays(map: Record<string, number>): string {
-        const rows = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 7);
+        const rows = Object.entries(map)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 7);
         if (rows.length === 0) return `<div style="opacity:.65;">記録なし</div>`;
-        return rows.map(([day, count]) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed rgba(80,90,120,.16);"><span>${deps.escapeHtml(day)}</span><b>${count.toLocaleString()}</b></div>`).join("");
+        return rows
+            .map(
+                ([day, count]) =>
+                    `<div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed rgba(80,90,120,.16);"><span>${deps.escapeHtml(day)}</span><b>${count.toLocaleString()}</b></div>`,
+            )
+            .join("");
     }
 
     function getAdminRankRows(): string {
-        const rows = Object.entries(adminStats.rankCounts).sort((a, b) => deps.getRankScore(b[0]) - deps.getRankScore(a[0]) || b[1] - a[1]);
+        const rows = Object.entries(adminStats.rankCounts).sort(
+            (a, b) => deps.getRankScore(b[0]) - deps.getRankScore(a[0]) || b[1] - a[1],
+        );
         if (rows.length === 0) return `<div style="opacity:.65;">まだレア役の記録はありません。</div>`;
-        return rows.map(([rank, count]) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed rgba(80,90,120,.16);"><span>${deps.escapeHtml(rank)}</span><b>${count.toLocaleString()}</b></div>`).join("");
+        return rows
+            .map(
+                ([rank, count]) =>
+                    `<div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed rgba(80,90,120,.16);"><span>${deps.escapeHtml(rank)}</span><b>${count.toLocaleString()}</b></div>`,
+            )
+            .join("");
     }
 
     function getAdminEventRows(): string {
         if (adminStats.lastEvents.length === 0) return `<div style="opacity:.65;">ログなし</div>`;
-        return adminStats.lastEvents.slice(0, 35).map((event) => {
-            const label = [event.label, event.rank ? `[${event.rank}]` : "", event.detail].filter(Boolean).join(" ");
-            return `<div style="padding:8px 0;border-bottom:1px solid rgba(80,90,120,.12);"><b>${deps.escapeHtml(event.type)}</b> <span style="opacity:.68;">${deps.formatDateTime(event.at)}</span><br><span style="opacity:.78;">${deps.escapeHtml(label || "-")}</span></div>`;
-        }).join("");
+        return adminStats.lastEvents
+            .slice(0, 35)
+            .map((event) => {
+                const label = [event.label, event.rank ? `[${event.rank}]` : "", event.detail]
+                    .filter(Boolean)
+                    .join(" ");
+                return `<div style="padding:8px 0;border-bottom:1px solid rgba(80,90,120,.12);"><b>${deps.escapeHtml(event.type)}</b> <span style="opacity:.68;">${deps.formatDateTime(event.at)}</span><br><span style="opacity:.78;">${deps.escapeHtml(label || "-")}</span></div>`;
+            })
+            .join("");
     }
 
     function showAdminStatsPopup(): void {
@@ -196,7 +215,10 @@ export function createAdminLogApi(deps: AdminLogDependencies): AdminLogApi {
         }
         const isMobile = deps.getIsMobile();
         const uiButtonFontPx = deps.getUiButtonFontPx();
-        const avgFinished = adminStats.runFinishCount > 0 ? Math.round(adminStats.totalFinishedCount / adminStats.runFinishCount).toLocaleString() : "0";
+        const avgFinished =
+            adminStats.runFinishCount > 0
+                ? Math.round(adminStats.totalFinishedCount / adminStats.runFinishCount).toLocaleString()
+                : "0";
         const body = `
             <p><b>この端末内だけに保存している管理者用ログです。</b> 個人情報や広告IDは保存せず、ローカル分析にしています。</p>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(${isMobile ? "145px" : "170px"},1fr));gap:10px;margin:14px 0;">

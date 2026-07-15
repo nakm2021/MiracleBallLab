@@ -61,7 +61,15 @@ export function buildMagicBoardPlan(def: MagicCircleDef, geometry: Geometry): Ma
     const pinLine = (points: Array<{ x: number; y: number }>, label: string, radiusScale = 1.2) => {
         for (const point of points) pin(point.x, point.y, label, radiusScale);
     };
-    const field = (kind: MagicPhysicsField["kind"], x: number, y: number, radius: number, strength: number, durationMs: number, label: string) => {
+    const field = (
+        kind: MagicPhysicsField["kind"],
+        x: number,
+        y: number,
+        radius: number,
+        strength: number,
+        durationMs: number,
+        label: string,
+    ) => {
         fields.push({ kind, x, y, radius, strength, durationMs, label });
     };
 
@@ -73,41 +81,65 @@ export function buildMagicBoardPlan(def: MagicCircleDef, geometry: Geometry): Ma
         case "sun":
             pin(midX, midY, "太陽核ピン", 2.2);
             for (let i = 0; i < 12; i++) {
-                const a = i * Math.PI * 2 / 12;
+                const a = (i * Math.PI * 2) / 12;
                 pin(midX + Math.cos(a) * spanX * 0.42, midY + Math.sin(a) * spanY * 0.42, "太陽環ピン", 1.15);
             }
             field("repel", midX, midY, spanX * 0.9, 0.00013, 9000, "太陽放射");
             break;
         case "moon":
             for (let i = 0; i < 12; i++) {
-                const a = -Math.PI * 0.72 + i * Math.PI * 1.44 / 11;
+                const a = -Math.PI * 0.72 + (i * Math.PI * 1.44) / 11;
                 pin(midX + Math.cos(a) * spanX * 0.38, midY + Math.sin(a) * spanY * 0.72, "月弧ピン", 1.35);
             }
             field("blackhole", midX, midY, spanX, 0.00008, 9000, "月重力");
             break;
         case "thunder":
-            pinLine(Array.from({ length: 9 }, (_v, i) => ({ x: midX + (i % 2 === 0 ? -1 : 1) * spanX * 0.28, y: top + (bottom - top) * (i / 8) })), "稲妻ピン", 1.35);
+            pinLine(
+                Array.from({ length: 9 }, (_v, i) => ({
+                    x: midX + (i % 2 === 0 ? -1 : 1) * spanX * 0.28,
+                    y: top + (bottom - top) * (i / 8),
+                })),
+                "稲妻ピン",
+                1.35,
+            );
             field("wave", midX, midY, spanX, 0.00016, 9000, "雷路");
             break;
         case "wave":
-            pinLine(Array.from({ length: 16 }, (_v, i) => {
-                const x = geometry.wallWidth + geometry.binWidth + (geometry.width - geometry.wallWidth * 2 - geometry.binWidth * 2) * (i / 15);
-                return { x, y: midY + Math.sin(i * 0.95) * spanY * 0.34 };
-            }), "波頭ピン", 1.15);
+            pinLine(
+                Array.from({ length: 16 }, (_v, i) => {
+                    const x =
+                        geometry.wallWidth +
+                        geometry.binWidth +
+                        (geometry.width - geometry.wallWidth * 2 - geometry.binWidth * 2) * (i / 15);
+                    return { x, y: midY + Math.sin(i * 0.95) * spanY * 0.34 };
+                }),
+                "波頭ピン",
+                1.15,
+            );
             field("vortex", midX, midY, spanX * 1.2, 0.00012, 9000, "潮流レーン");
             break;
         case "earth":
             for (let row = 0; row < 3; row++) {
-                for (let i = 0; i < 7 - row; i++) pin(midX + (i - (6 - row) / 2) * geometry.binWidth * 0.86, bottom - row * geometry.binWidth * 0.72, "地層ピン", 1.55);
+                for (let i = 0; i < 7 - row; i++)
+                    pin(
+                        midX + (i - (6 - row) / 2) * geometry.binWidth * 0.86,
+                        bottom - row * geometry.binWidth * 0.72,
+                        "地層ピン",
+                        1.55,
+                    );
             }
-            field("repel", midX, bottom, spanX, 0.00010, 9000, "地層隆起");
+            field("repel", midX, bottom, spanX, 0.0001, 9000, "地層隆起");
             break;
         case "wind":
-            pinLine(Array.from({ length: 18 }, (_v, i) => {
-                const a = i * 0.78;
-                const r = geometry.binWidth * (0.36 + i * 0.105);
-                return { x: midX + Math.cos(a) * r, y: midY + Math.sin(a) * r * 0.72 };
-            }), "旋風ピン", 1.05);
+            pinLine(
+                Array.from({ length: 18 }, (_v, i) => {
+                    const a = i * 0.78;
+                    const r = geometry.binWidth * (0.36 + i * 0.105);
+                    return { x: midX + Math.cos(a) * r, y: midY + Math.sin(a) * r * 0.72 };
+                }),
+                "旋風ピン",
+                1.05,
+            );
             field("vortex", midX, midY, spanX * 1.1, 0.00015, 10000, "旋風迷路");
             break;
         case "gate":
@@ -130,7 +162,10 @@ export function buildMagicBoardPlan(def: MagicCircleDef, geometry: Geometry): Ma
         case "dragon":
             for (let i = 0; i < 20; i++) {
                 const p = i / 19;
-                const x = geometry.wallWidth + geometry.binWidth + (geometry.width - geometry.wallWidth * 2 - geometry.binWidth * 2) * p;
+                const x =
+                    geometry.wallWidth +
+                    geometry.binWidth +
+                    (geometry.width - geometry.wallWidth * 2 - geometry.binWidth * 2) * p;
                 const y = top + (bottom - top) * p + Math.sin(p * Math.PI * 4) * geometry.binWidth * 0.9;
                 pin(x, y, "龍脈ピン", i % 5 === 0 ? 1.75 : 1.12);
             }
@@ -143,44 +178,64 @@ export function buildMagicBoardPlan(def: MagicCircleDef, geometry: Geometry): Ma
         case "flower":
             pin(midX, midY, "花芯ピン", 1.55);
             for (let petal = 0; petal < 6; petal++) {
-                const a = petal * Math.PI * 2 / 6;
-                for (let i = 1; i <= 3; i++) pin(midX + Math.cos(a) * geometry.binWidth * 0.62 * i, midY + Math.sin(a) * geometry.binWidth * 0.44 * i, "花弁ピン", 1.05);
+                const a = (petal * Math.PI * 2) / 6;
+                for (let i = 1; i <= 3; i++)
+                    pin(
+                        midX + Math.cos(a) * geometry.binWidth * 0.62 * i,
+                        midY + Math.sin(a) * geometry.binWidth * 0.44 * i,
+                        "花弁ピン",
+                        1.05,
+                    );
             }
-            field("repel", midX, midY, spanX * 0.85, 0.00010, 9000, "開花盤面");
+            field("repel", midX, midY, spanX * 0.85, 0.0001, 9000, "開花盤面");
             break;
         case "gear":
             for (let i = 0; i < 16; i++) {
-                const a = i * Math.PI * 2 / 16;
-                const r = i % 2 === 0 ? spanX * 0.44 : spanX * 0.30;
+                const a = (i * Math.PI * 2) / 16;
+                const r = i % 2 === 0 ? spanX * 0.44 : spanX * 0.3;
                 pin(midX + Math.cos(a) * r, midY + Math.sin(a) * r * 0.72, "歯車ピン", i % 2 === 0 ? 1.35 : 1.05);
             }
             field("vortex", midX, midY, spanX, 0.00014, 10000, "歯車回転");
             break;
         case "meteor":
-            for (let i = 0; i < 14; i++) pin(midX - spanX * 0.48 + i * geometry.binWidth * 0.46, top + i * geometry.binWidth * 0.42, "隕石軌道ピン", 1.22);
+            for (let i = 0; i < 14; i++)
+                pin(
+                    midX - spanX * 0.48 + i * geometry.binWidth * 0.46,
+                    top + i * geometry.binWidth * 0.42,
+                    "隕石軌道ピン",
+                    1.22,
+                );
             field("repel", midX, top + spanY * 0.25, spanX, 0.00013, 9000, "隕石斜面");
             break;
         case "clock":
             pin(midX, midY, "時計軸ピン", 1.65);
-            pinLine([
-                { x: midX, y: midY - spanY * 0.55 },
-                { x: midX, y: midY - spanY * 0.28 },
-                { x: midX, y: midY + spanY * 0.18 },
-                { x: midX + spanX * 0.18, y: midY + spanY * 0.28 },
-                { x: midX + spanX * 0.36, y: midY + spanY * 0.38 },
-            ], "時計針ピン", 1.18);
-            field("blackhole", midX, midY, spanX * 0.92, 0.00010, 10000, "時間の針");
+            pinLine(
+                [
+                    { x: midX, y: midY - spanY * 0.55 },
+                    { x: midX, y: midY - spanY * 0.28 },
+                    { x: midX, y: midY + spanY * 0.18 },
+                    { x: midX + spanX * 0.18, y: midY + spanY * 0.28 },
+                    { x: midX + spanX * 0.36, y: midY + spanY * 0.38 },
+                ],
+                "時計針ピン",
+                1.18,
+            );
+            field("blackhole", midX, midY, spanX * 0.92, 0.0001, 10000, "時間の針");
             break;
         case "crown":
-            pinLine([
-                { x: midX - spanX * 0.48, y: bottom },
-                { x: midX - spanX * 0.36, y: midY },
-                { x: midX - spanX * 0.18, y: bottom - spanY * 0.22 },
-                { x: midX, y: top + spanY * 0.12 },
-                { x: midX + spanX * 0.18, y: bottom - spanY * 0.22 },
-                { x: midX + spanX * 0.36, y: midY },
-                { x: midX + spanX * 0.48, y: bottom },
-            ], "王冠ピン", 1.55);
+            pinLine(
+                [
+                    { x: midX - spanX * 0.48, y: bottom },
+                    { x: midX - spanX * 0.36, y: midY },
+                    { x: midX - spanX * 0.18, y: bottom - spanY * 0.22 },
+                    { x: midX, y: top + spanY * 0.12 },
+                    { x: midX + spanX * 0.18, y: bottom - spanY * 0.22 },
+                    { x: midX + spanX * 0.36, y: midY },
+                    { x: midX + spanX * 0.48, y: bottom },
+                ],
+                "王冠ピン",
+                1.55,
+            );
             field("repel", midX, midY, spanX, 0.00012, 10000, "王冠導線");
             break;
     }
@@ -193,22 +248,38 @@ export function buildMagicBoardPlan(def: MagicCircleDef, geometry: Geometry): Ma
     };
 }
 
-export function buildMagicCircleActivationPlan(def: MagicCircleDef, center: { x: number; y: number }, geometry: Geometry): MagicCircleActivationPlan {
+export function buildMagicCircleActivationPlan(
+    def: MagicCircleDef,
+    center: { x: number; y: number },
+    geometry: Geometry,
+): MagicCircleActivationPlan {
     const fieldRadius = clamp(230 * geometry.scale, 150, 420);
     const baseFieldKind: MagicPhysicsField["kind"] = ["wind", "wave", "gate", "dragon"].includes(def.effect)
         ? "vortex"
         : ["void", "moon", "clock"].includes(def.effect)
-            ? "blackhole"
-            : ["sun", "crown", "flower", "earth"].includes(def.effect)
-                ? "repel"
-                : "wave";
+          ? "blackhole"
+          : ["sun", "crown", "flower", "earth"].includes(def.effect)
+            ? "repel"
+            : "wave";
     const baseField: MagicBoardFieldSpec = {
         kind: baseFieldKind,
         x: center.x,
         y: center.y,
         radius: ["void", "moon", "clock"].includes(def.effect) ? fieldRadius * 1.1 : fieldRadius,
-        strength: baseFieldKind === "vortex" ? 0.00009 : baseFieldKind === "blackhole" || baseFieldKind === "repel" ? 0.000075 : 0.00007,
-        durationMs: baseFieldKind === "vortex" ? 5600 : baseFieldKind === "blackhole" ? 5200 : baseFieldKind === "repel" ? 4400 : 4800,
+        strength:
+            baseFieldKind === "vortex"
+                ? 0.00009
+                : baseFieldKind === "blackhole" || baseFieldKind === "repel"
+                  ? 0.000075
+                  : 0.00007,
+        durationMs:
+            baseFieldKind === "vortex"
+                ? 5600
+                : baseFieldKind === "blackhole"
+                  ? 5200
+                  : baseFieldKind === "repel"
+                    ? 4400
+                    : 4800,
         label: def.label,
     };
     const plan: MagicCircleActivationPlan = {
@@ -253,14 +324,27 @@ export function buildMagicCircleActivationPlan(def: MagicCircleDef, center: { x:
             break;
         case "dragon":
             plan.catastrophes.push("dragon");
-            plan.extraFields.push({ kind: "vortex", x: center.x, y: center.y, radius: fieldRadius * 1.45, strength: 0.00013, durationMs: 7600, label: "龍脈暴走" });
+            plan.extraFields.push({
+                kind: "vortex",
+                x: center.x,
+                y: center.y,
+                radius: fieldRadius * 1.45,
+                strength: 0.00013,
+                durationMs: 7600,
+                label: "龍脈暴走",
+            });
             plan.intruderBursts.push({ count: 32, reason: "龍脈暴走" });
             break;
         case "void":
             plan.catastrophes.push("void");
             break;
         case "flower":
-            for (let i = 0; i < 6; i++) tempPin(center.x + Math.cos(i * Math.PI / 3) * 58 * geometry.scale, center.y + Math.sin(i * Math.PI / 3) * 58 * geometry.scale, "花冠ピン");
+            for (let i = 0; i < 6; i++)
+                tempPin(
+                    center.x + Math.cos((i * Math.PI) / 3) * 58 * geometry.scale,
+                    center.y + Math.sin((i * Math.PI) / 3) * 58 * geometry.scale,
+                    "花冠ピン",
+                );
             break;
         case "gear":
             plan.wiggleAllPins = true;

@@ -21,7 +21,13 @@ export type BossRenderOptions = {
     bossImage: HTMLImageElement | null;
 };
 
-export function drawBossEnemyFrame(context: CanvasRenderingContext2D, state: BossRenderState, options: BossRenderOptions, compact = false, now = Date.now()): void {
+export function drawBossEnemyFrame(
+    context: CanvasRenderingContext2D,
+    state: BossRenderState,
+    options: BossRenderOptions,
+    compact = false,
+    now = Date.now(),
+): void {
     const { boss } = state;
     const { geometry, uiFont, blackModeEnabled, bossImage } = options;
     if (!boss || !state.isStarted) return;
@@ -33,8 +39,11 @@ export function drawBossEnemyFrame(context: CanvasRenderingContext2D, state: Bos
     const cx = geometry.width / 2;
     const cy = compact ? geometry.height * 0.21 : geometry.height * 0.29;
     const imageReady = !!bossImage && bossImage.complete && bossImage.naturalWidth > 0 && bossImage.naturalHeight > 0;
-    const targetHeight = clamp(geometry.height * (compact ? 0.34 : 0.43), 210 * geometry.scale, 430 * geometry.scale) * phaseScale;
-    const targetWidth = imageReady ? targetHeight * (bossImage.naturalWidth / bossImage.naturalHeight) : targetHeight * 0.66;
+    const targetHeight =
+        clamp(geometry.height * (compact ? 0.34 : 0.43), 210 * geometry.scale, 430 * geometry.scale) * phaseScale;
+    const targetWidth = imageReady
+        ? targetHeight * (bossImage.naturalWidth / bossImage.naturalHeight)
+        : targetHeight * 0.66;
     const alpha = state.hp <= 0 ? 0.32 : compact ? 0.72 : 0.88;
 
     context.save();
@@ -49,7 +58,15 @@ export function drawBossEnemyFrame(context: CanvasRenderingContext2D, state: Bos
     aura.addColorStop(1, "rgba(15,23,42,0)");
     context.fillStyle = aura;
     context.beginPath();
-    context.ellipse(0, targetHeight * 0.02, targetWidth * (0.82 + attackPulse * 0.16), targetHeight * (0.56 + attackPulse * 0.10), 0, 0, Math.PI * 2);
+    context.ellipse(
+        0,
+        targetHeight * 0.02,
+        targetWidth * (0.82 + attackPulse * 0.16),
+        targetHeight * (0.56 + attackPulse * 0.1),
+        0,
+        0,
+        Math.PI * 2,
+    );
     context.fill();
 
     context.save();
@@ -81,7 +98,15 @@ export function drawBossEnemyFrame(context: CanvasRenderingContext2D, state: Bos
     context.lineWidth = Math.max(2 * geometry.scale, targetHeight * 0.008);
     for (let i = 0; i < 3; i++) {
         context.beginPath();
-        context.ellipse(0, 0, targetWidth * (0.42 + i * 0.1), targetHeight * (0.18 + i * 0.045), i * 0.55, 0, Math.PI * 2);
+        context.ellipse(
+            0,
+            0,
+            targetWidth * (0.42 + i * 0.1),
+            targetHeight * (0.18 + i * 0.045),
+            i * 0.55,
+            0,
+            Math.PI * 2,
+        );
         context.stroke();
     }
     context.restore();
@@ -102,7 +127,11 @@ export function drawBossEnemyFrame(context: CanvasRenderingContext2D, state: Bos
     context.restore();
 }
 
-export function drawBossHudFrame(context: CanvasRenderingContext2D, state: BossRenderState, options: BossRenderOptions): void {
+export function drawBossHudFrame(
+    context: CanvasRenderingContext2D,
+    state: BossRenderState,
+    options: BossRenderOptions,
+): void {
     const { boss } = state;
     const { geometry, uiFont } = options;
     if (!boss || !state.isStarted) return;
@@ -118,14 +147,32 @@ export function drawBossHudFrame(context: CanvasRenderingContext2D, state: BossR
     roundRect(context, x, y, w, h, 18 * geometry.scale);
     context.fill();
     context.fillStyle = "rgba(255,255,255,.18)";
-    roundRect(context, x + 14 * geometry.scale, y + 34 * geometry.scale, w - 28 * geometry.scale, 14 * geometry.scale, 999);
+    roundRect(
+        context,
+        x + 14 * geometry.scale,
+        y + 34 * geometry.scale,
+        w - 28 * geometry.scale,
+        14 * geometry.scale,
+        999,
+    );
     context.fill();
     context.fillStyle = boss.color;
-    roundRect(context, x + 14 * geometry.scale, y + 34 * geometry.scale, (w - 28 * geometry.scale) * percent, 14 * geometry.scale, 999);
+    roundRect(
+        context,
+        x + 14 * geometry.scale,
+        y + 34 * geometry.scale,
+        (w - 28 * geometry.scale) * percent,
+        14 * geometry.scale,
+        999,
+    );
     context.fill();
     context.fillStyle = "#fff";
     context.font = `900 ${Math.round(clamp(17 * geometry.scale, 13, 25))}px ${uiFont}`;
     context.textAlign = "center";
-    context.fillText(`${boss.name} PHASE ${state.phase}  TIME ${timeLeft}s  HP ${state.hp.toLocaleString()} / ${state.maxHp.toLocaleString()}`, geometry.width / 2, y + 22 * geometry.scale);
+    context.fillText(
+        `${boss.name} PHASE ${state.phase}  TIME ${timeLeft}s  HP ${state.hp.toLocaleString()} / ${state.maxHp.toLocaleString()}`,
+        geometry.width / 2,
+        y + 22 * geometry.scale,
+    );
     context.restore();
 }

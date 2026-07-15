@@ -38,7 +38,9 @@ export function getCraftMaterialStatus(params: {
         return `${def?.label ?? kind} ${count}/${params.recipe.requiredCount}`;
     });
     return {
-        ready: params.recipe.materialKinds.every((kind) => (params.discovered[kind] ?? 0) >= params.recipe.requiredCount),
+        ready: params.recipe.materialKinds.every(
+            (kind) => (params.discovered[kind] ?? 0) >= params.recipe.requiredCount,
+        ),
         label: parts.join(" / "),
     };
 }

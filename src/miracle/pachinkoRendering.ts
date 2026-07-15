@@ -2,7 +2,12 @@ import type { DropKind, Geometry, PachinkoYakumonoDef, PachinkoYakumonoKind } fr
 import { getSpecialIconColors, hexToRgbTriplet, roundRect } from "./drawing";
 import { clamp } from "./utils";
 
-export function drawDiscardBinLabelFrame(context: CanvasRenderingContext2D, physicalIndex: number, geometry: Geometry, isMobile: boolean): void {
+export function drawDiscardBinLabelFrame(
+    context: CanvasRenderingContext2D,
+    physicalIndex: number,
+    geometry: Geometry,
+    isMobile: boolean,
+): void {
     const x = geometry.binLeft + physicalIndex * geometry.binWidth + geometry.binWidth / 2;
     const labelFont = Math.round(clamp(geometry.labelFont * 0.78, isMobile ? 18 : 13, isMobile ? 36 : 30));
     const countFont = Math.round(clamp(geometry.countFont * 0.88, isMobile ? 13 : 10, isMobile ? 28 : 26));
@@ -10,7 +15,12 @@ export function drawDiscardBinLabelFrame(context: CanvasRenderingContext2D, phys
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillStyle = "rgba(80, 86, 100, 0.18)";
-    context.fillRect(x - geometry.binWidth / 2, geometry.groundTop - 118 * geometry.scale, geometry.binWidth, 118 * geometry.scale);
+    context.fillRect(
+        x - geometry.binWidth / 2,
+        geometry.groundTop - 118 * geometry.scale,
+        geometry.binWidth,
+        118 * geometry.scale,
+    );
     context.font = `900 ${labelFont}px "Segoe UI", "Noto Sans JP", sans-serif`;
     context.fillStyle = "#5b3b3b";
     context.fillText("捨て", x, geometry.labelY - labelFont * 0.55);
@@ -21,7 +31,16 @@ export function drawDiscardBinLabelFrame(context: CanvasRenderingContext2D, phys
     context.restore();
 }
 
-export function drawSpecialIconFrame(context: CanvasRenderingContext2D, kind: DropKind, x: number, y: number, radius: number, symbol: string, options: { isMobile: boolean; geometry: Geometry }, timeSec = Date.now() / 1000): void {
+export function drawSpecialIconFrame(
+    context: CanvasRenderingContext2D,
+    kind: DropKind,
+    x: number,
+    y: number,
+    radius: number,
+    symbol: string,
+    options: { isMobile: boolean; geometry: Geometry },
+    timeSec = Date.now() / 1000,
+): void {
     const colors = getSpecialIconColors(kind);
     const r = Math.max(radius * (options.isMobile ? 1.45 : 1.2), options.isMobile ? 22 : 18 * options.geometry.scale);
     context.save();
@@ -73,11 +92,13 @@ export function drawSpecialIconFrame(context: CanvasRenderingContext2D, kind: Dr
         context.beginPath();
         context.ellipse(0, r * 0.05, r * 0.82, r * 0.28, 0, 0, Math.PI * 2);
         context.fillStyle = "#dce3e7";
-        context.fill(); context.stroke();
+        context.fill();
+        context.stroke();
         context.beginPath();
         context.arc(0, -r * 0.08, r * 0.36, Math.PI, 0);
         context.fillStyle = "#9bdcff";
-        context.fill(); context.stroke();
+        context.fill();
+        context.stroke();
     } else if (kind === "blueFlame") {
         context.beginPath();
         context.moveTo(0, -r * 0.78);
@@ -85,10 +106,11 @@ export function drawSpecialIconFrame(context: CanvasRenderingContext2D, kind: Dr
         context.bezierCurveTo(-r * 0.62, r * 0.3, -r * 0.55, -r * 0.15, 0, -r * 0.78);
         context.closePath();
         context.fillStyle = "#00c8ff";
-        context.fill(); context.stroke();
+        context.fill();
+        context.stroke();
         context.beginPath();
         context.moveTo(0, -r * 0.32);
-        context.bezierCurveTo(r * 0.28, r * 0.12, r * 0.10, r * 0.42, 0, r * 0.5);
+        context.bezierCurveTo(r * 0.28, r * 0.12, r * 0.1, r * 0.42, 0, r * 0.5);
         context.bezierCurveTo(-r * 0.22, r * 0.28, -r * 0.18, 0, 0, -r * 0.32);
         context.fillStyle = "#ffffff";
         context.fill();
@@ -102,7 +124,8 @@ export function drawSpecialIconFrame(context: CanvasRenderingContext2D, kind: Dr
         }
         context.fillStyle = "#ffffff";
         context.font = `900 ${Math.round(r * 0.44)}px "Noto Sans JP", "Segoe UI", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
         context.fillText(kind === "timeRift" ? "裂" : "銀", 0, 0);
     } else if (kind === "heart") {
         context.beginPath();
@@ -110,10 +133,11 @@ export function drawSpecialIconFrame(context: CanvasRenderingContext2D, kind: Dr
         context.bezierCurveTo(-r * 0.9, -r * 0.02, -r * 0.62, -r * 0.72, 0, -r * 0.36);
         context.bezierCurveTo(r * 0.62, -r * 0.72, r * 0.9, -r * 0.02, 0, r * 0.58);
         context.fillStyle = "#ff4da6";
-        context.fill(); context.stroke();
+        context.fill();
+        context.stroke();
     } else if (kind === "blackSun") {
         for (let i = 0; i < 10; i++) {
-            const a = i * Math.PI * 2 / 10;
+            const a = (i * Math.PI * 2) / 10;
             context.beginPath();
             context.moveTo(Math.cos(a) * r * 0.75, Math.sin(a) * r * 0.75);
             context.lineTo(Math.cos(a) * r * 1.18, Math.sin(a) * r * 1.18);
@@ -121,46 +145,61 @@ export function drawSpecialIconFrame(context: CanvasRenderingContext2D, kind: Dr
             context.lineWidth = Math.max(3, r * 0.1);
             context.stroke();
         }
-        context.beginPath(); context.arc(0, 0, r * .62, 0, Math.PI * 2); context.fillStyle = "#050505"; context.fill(); context.strokeStyle = "#ff0044"; context.stroke();
+        context.beginPath();
+        context.arc(0, 0, r * 0.62, 0, Math.PI * 2);
+        context.fillStyle = "#050505";
+        context.fill();
+        context.strokeStyle = "#ff0044";
+        context.stroke();
     } else if (kind === "poseidonMode") {
         context.font = `900 ${Math.round(r * 0.88)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
         context.fillText("🌊", 0, 0);
     } else if (kind === "zeusuMode") {
         context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
         context.fillText("⚡", 0, 0);
     } else if (kind === "hadesuMode") {
         context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
         context.fillText("☠️", 0, 0);
     } else if (kind === "heartMode") {
         context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
         context.fillText("💗", 0, 0);
     } else if (kind === "nekochanMode") {
         context.font = `900 ${Math.round(r * 0.82)}px "Noto Sans JP", "Segoe UI Emoji", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
         context.fillText("🐈", 0, 0);
     } else if (kind === "lifeQuoteMode") {
         context.fillStyle = "#ffffff";
         context.font = `900 ${Math.round(r * 0.46)}px "Noto Sans JP", "Segoe UI", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
         context.fillText("声", 0, 0);
     } else if (kind === "labExplosion") {
         context.beginPath();
         for (let i = 0; i < 12; i++) {
-            const a = i * Math.PI * 2 / 12;
+            const a = (i * Math.PI * 2) / 12;
             const rr = i % 2 ? r * 0.45 : r * 0.95;
-            const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
-            if (i === 0) context.moveTo(px, py); else context.lineTo(px, py);
+            const px = Math.cos(a) * rr,
+                py = Math.sin(a) * rr;
+            if (i === 0) context.moveTo(px, py);
+            else context.lineTo(px, py);
         }
         context.closePath();
         context.fillStyle = "#ff3b30";
-        context.fill(); context.stroke();
+        context.fill();
+        context.stroke();
         context.fillStyle = "#fff3b0";
         context.font = `900 ${Math.round(r * 0.48)}px "Noto Sans JP", "Segoe UI", sans-serif`;
-        context.textAlign = "center"; context.textBaseline = "middle";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
         context.fillText("爆", 0, 0);
     } else {
         context.font = `900 ${Math.round(symbol.length >= 2 ? r * 0.58 : r * 0.78)}px "Noto Sans JP", "Yu Gothic", "Segoe UI", sans-serif`;
@@ -203,7 +242,12 @@ export function drawPachinkoMachineFrame(
 
     context.strokeStyle = options.blackModeEnabled ? "rgba(255,255,255,.22)" : "rgba(255,214,96,.75)";
     context.lineWidth = Math.max(8 * geometry.scale, 4);
-    context.strokeRect(framePad, framePad, geometry.width - framePad * 2, geometry.height - geometry.groundHeight - framePad * 1.4);
+    context.strokeRect(
+        framePad,
+        framePad,
+        geometry.width - framePad * 2,
+        geometry.height - geometry.groundHeight - framePad * 1.4,
+    );
 
     const cx = geometry.width / 2;
     const cy = geometry.height * 0.43;
@@ -241,6 +285,10 @@ export function drawPachinkoMachineFrame(
     context.font = `900 ${Math.round(clamp(18 * geometry.scale, 12, 28))}px ${options.uiFont}`;
     context.fillStyle = options.blackModeEnabled ? "rgba(255,255,255,.72)" : "rgba(255,239,200,.86)";
     context.textAlign = "center";
-    context.fillText(`MIRACLE BALL LAB / ${options.currentPattern.toUpperCase()}`, geometry.width / 2, Math.max(26 * geometry.scale, 20));
+    context.fillText(
+        `MIRACLE BALL LAB / ${options.currentPattern.toUpperCase()}`,
+        geometry.width / 2,
+        Math.max(26 * geometry.scale, 20),
+    );
     context.restore();
 }

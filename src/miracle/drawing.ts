@@ -1,6 +1,13 @@
 import type { DropKind } from "./types";
 
-export function drawSparkle(context: CanvasRenderingContext2D, x: number, y: number, size: number, color: string, rotate: number): void {
+export function drawSparkle(
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    size: number,
+    color: string,
+    rotate: number,
+): void {
     context.save();
     context.translate(x, y);
     context.rotate(rotate);
@@ -30,7 +37,8 @@ export function getSpecialIconColors(kind: DropKind): { main: string; sub: strin
     if (kind === "nekochanMode") return { main: "#ffb36b", sub: "#7f5032", text: "#402000", stroke: "#fff0dd" };
     if (kind === "lifeQuoteMode") return { main: "#ff9ed4", sub: "#8f3f73", text: "#ffffff", stroke: "#ffe0f0" };
     if (kind === "heart") return { main: "#ff69b4", sub: "#ff2d86", text: "#ffffff", stroke: "#ffe0f0" };
-    if (kind === "crown" || kind === "goldenDaruma" || kind === "meteorCrown") return { main: "#ffd54a", sub: "#b8860b", text: "#3a2600", stroke: "#fff4a8" };
+    if (kind === "crown" || kind === "goldenDaruma" || kind === "meteorCrown")
+        return { main: "#ffd54a", sub: "#b8860b", text: "#3a2600", stroke: "#fff4a8" };
     if (kind === "crystalDragon") return { main: "#72f1ff", sub: "#3f6bff", text: "#06192f", stroke: "#e8fdff" };
     if (kind === "moonRabbit") return { main: "#eef4ff", sub: "#9dbbff", text: "#223047", stroke: "#ffffff" };
     if (kind === "phantomCastle") return { main: "#9b8cff", sub: "#3b1a84", text: "#ffffff", stroke: "#eeeaff" };
@@ -55,7 +63,14 @@ export function drawStarPath(context: CanvasRenderingContext2D, radius: number, 
     context.closePath();
 }
 
-export function roundRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
+export function roundRect(
+    context: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+): void {
     const r = Math.min(radius, width / 2, height / 2);
     context.beginPath();
     context.moveTo(x + r, y);

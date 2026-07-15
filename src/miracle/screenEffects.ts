@@ -5,7 +5,8 @@ export function triggerSwordImpactEffect(): void {
     layer.style.zIndex = "9997";
     layer.style.pointerEvents = "none";
     layer.style.overflow = "hidden";
-    layer.style.background = "radial-gradient(circle at 50% 50%, rgba(255,255,255,.20), rgba(30,80,160,.12) 32%, rgba(0,0,0,.62) 100%)";
+    layer.style.background =
+        "radial-gradient(circle at 50% 50%, rgba(255,255,255,.20), rgba(30,80,160,.12) 32%, rgba(0,0,0,.62) 100%)";
     layer.innerHTML = `
         <style>
             @keyframes sword-impact-fade{0%{opacity:0}8%{opacity:1}100%{opacity:0}}

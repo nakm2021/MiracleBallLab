@@ -13,16 +13,35 @@ export type MagicPhysicsField = {
     label: string;
 };
 
-export function drawMagicPhysicsFieldsFrame(context: CanvasRenderingContext2D, fields: MagicPhysicsField[], geometry: Geometry, now = performance.now()): void {
+export function drawMagicPhysicsFieldsFrame(
+    context: CanvasRenderingContext2D,
+    fields: MagicPhysicsField[],
+    geometry: Geometry,
+    now = performance.now(),
+): void {
     if (fields.length === 0) return;
     context.save();
     context.globalCompositeOperation = "lighter";
     for (const field of fields) {
         const life = clamp((field.until - now) / 5000, 0, 1);
         const pulse = 0.82 + Math.sin(now / 120) * 0.12;
-        const grad = context.createRadialGradient(field.x, field.y, field.radius * 0.05, field.x, field.y, field.radius * pulse);
-        const color = field.kind === "blackhole" ? "124,58,237" : field.kind === "repel" ? "250,204,21" : field.kind === "wave" ? "56,189,248" : "34,211,238";
-        grad.addColorStop(0, `rgba(${color},${0.20 * life})`);
+        const grad = context.createRadialGradient(
+            field.x,
+            field.y,
+            field.radius * 0.05,
+            field.x,
+            field.y,
+            field.radius * pulse,
+        );
+        const color =
+            field.kind === "blackhole"
+                ? "124,58,237"
+                : field.kind === "repel"
+                  ? "250,204,21"
+                  : field.kind === "wave"
+                    ? "56,189,248"
+                    : "34,211,238";
+        grad.addColorStop(0, `rgba(${color},${0.2 * life})`);
         grad.addColorStop(0.58, `rgba(${color},${0.08 * life})`);
         grad.addColorStop(1, `rgba(${color},0)`);
         context.fillStyle = grad;
@@ -53,7 +72,7 @@ export function drawBrokenResearchNoteFrame(
     if (!options.text || now > options.until || options.simpleMode) return;
     const { geometry } = options;
     const alpha = clamp((options.until - now) / 900, 0, 1);
-    const w = Math.min(geometry.width * 0.70, 620 * geometry.scale);
+    const w = Math.min(geometry.width * 0.7, 620 * geometry.scale);
     const h = 92 * geometry.scale;
     const x = geometry.width / 2 - w / 2;
     const y = geometry.height * 0.12;
@@ -64,8 +83,17 @@ export function drawBrokenResearchNoteFrame(
     context.fill();
     const rc = options.roughCanvas;
     if (rc) {
-        rc.rectangle(x + 6, y + 6, w - 12, h - 12, { stroke: "rgba(120,53,15,.70)", strokeWidth: 2.2, roughness: 2.8, bowing: 2.2 });
-        rc.line(x + 24, y + h * 0.44, x + w - 24, y + h * 0.38, { stroke: "rgba(180,83,9,.34)", strokeWidth: 1.6, roughness: 3.5 });
+        rc.rectangle(x + 6, y + 6, w - 12, h - 12, {
+            stroke: "rgba(120,53,15,.70)",
+            strokeWidth: 2.2,
+            roughness: 2.8,
+            bowing: 2.2,
+        });
+        rc.line(x + 24, y + h * 0.44, x + w - 24, y + h * 0.38, {
+            stroke: "rgba(180,83,9,.34)",
+            strokeWidth: 1.6,
+            roughness: 3.5,
+        });
     }
     context.fillStyle = "rgba(67,20,7,.92)";
     context.font = `900 ${Math.round(clamp(19 * geometry.scale, 14, 28))}px ${options.uiFont}`;

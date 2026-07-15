@@ -11,12 +11,18 @@ export function getMiracleGachaHtml(options: {
 }): string {
     const canOnce = options.point >= options.onceCost;
     const canTen = options.point >= options.tenCost;
-    const recentRewards = options.recentRewards.slice(0, 6).map((entry) => `
+    const recentRewards =
+        options.recentRewards
+            .slice(0, 6)
+            .map(
+                (entry) => `
         <div style="padding:10px 0;border-bottom:1px solid rgba(80,90,120,.16);">
             <b>${escapeHtml(entry.label)} [${escapeHtml(entry.rank)}]</b>
             <div style="opacity:.78;line-height:1.55;">${escapeHtml(entry.rewardLabel)} / ${new Date(entry.createdAt).toLocaleString()}</div>
         </div>
-    `).join("") || `<div style="opacity:.72;">まだガチャ報酬はありません。</div>`;
+    `,
+            )
+            .join("") || `<div style="opacity:.72;">まだガチャ報酬はありません。</div>`;
     return `
         <div style="display:grid;gap:18px;text-align:center;">
             <div class="miracle-user-card" style="background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.95),rgba(255,230,160,.86),rgba(160,80,255,.34));">
@@ -90,8 +96,15 @@ export function getGachaSpinHtml(count: 1 | 10, cost: number): string {
     `;
 }
 
-export function getGachaResultHtml(rewards: GachaRewardEntry[], best: SpecialEventDef, getDef: (kind: string) => SpecialEventDef | undefined, isMobile: boolean): string {
-    const rows = rewards.map((entry) => `
+export function getGachaResultHtml(
+    rewards: GachaRewardEntry[],
+    best: SpecialEventDef,
+    getDef: (kind: string) => SpecialEventDef | undefined,
+    isMobile: boolean,
+): string {
+    const rows = rewards
+        .map(
+            (entry) => `
         <div class="miracle-user-card" style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;align-items:center;">
             ${getGachaRewardImageHtml(best.kind === entry.kind ? best : (getDef(entry.kind) ?? best), entry.label, isMobile)}
             <div>
@@ -99,7 +112,9 @@ export function getGachaResultHtml(rewards: GachaRewardEntry[], best: SpecialEve
                 <div style="opacity:.82;line-height:1.65;">${escapeHtml(entry.rewardLabel)}</div>
             </div>
         </div>
-    `).join("");
+    `,
+        )
+        .join("");
     return `
         <div style="display:grid;gap:14px;">
             <div class="miracle-user-card" style="text-align:center;background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.96),rgba(250,204,21,.34),rgba(59,130,246,.16));">
@@ -116,16 +131,22 @@ export function getGachaResultHtml(rewards: GachaRewardEntry[], best: SpecialEve
 }
 
 export function getGachaRewardBookHtml(rewards: GachaRewardEntry[]): string {
-    const totalTickets = rewards.reduce((acc, entry) => ({
-        normal: acc.normal + entry.ticketNormal,
-        rare: acc.rare + entry.ticketRare,
-        divine: acc.divine + entry.ticketDivine,
-    }), { normal: 0, rare: 0, divine: 0 });
+    const totalTickets = rewards.reduce(
+        (acc, entry) => ({
+            normal: acc.normal + entry.ticketNormal,
+            rare: acc.rare + entry.ticketRare,
+            divine: acc.divine + entry.ticketDivine,
+        }),
+        { normal: 0, rare: 0, divine: 0 },
+    );
     const rankCounts = rewards.reduce<Record<string, number>>((acc, entry) => {
         acc[entry.rank] = (acc[entry.rank] ?? 0) + 1;
         return acc;
     }, {});
-    const rows = rewards.map((entry) => `
+    const rows =
+        rewards
+            .map(
+                (entry) => `
         <div class="miracle-user-card" style="display:grid;gap:6px;">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
                 <b>${escapeHtml(entry.label)} [${escapeHtml(entry.rank)}]</b>
@@ -133,7 +154,10 @@ export function getGachaRewardBookHtml(rewards: GachaRewardEntry[]): string {
             </div>
             <div style="opacity:.84;line-height:1.65;">${escapeHtml(entry.rewardLabel)}</div>
         </div>
-    `).join("") || `<div class="miracle-user-card">まだガチャ履歴はありません。奇跡ガチャを回すとここに保存されます。</div>`;
+    `,
+            )
+            .join("") ||
+        `<div class="miracle-user-card">まだガチャ履歴はありません。奇跡ガチャを回すとここに保存されます。</div>`;
     return `
         <div style="display:grid;gap:14px;">
             <div class="miracle-user-card">
@@ -144,7 +168,11 @@ export function getGachaRewardBookHtml(rewards: GachaRewardEntry[]): string {
                 <div class="miracle-user-card"><b>総排出</b><br><span style="font-size:1.5em;font-weight:1000;">${rewards.length.toLocaleString()}</span></div>
                 <div class="miracle-user-card"><b>最高レア</b><br><span style="font-size:1.1em;font-weight:1000;">${rewards.slice().sort((a, b) => getRankScore(b.rank) - getRankScore(a.rank))[0]?.rank ?? "-"}</span></div>
                 <div class="miracle-user-card"><b>獲得チケット</b><br>通常 ${totalTickets.normal} / レア ${totalTickets.rare} / 神域 ${totalTickets.divine}</div>
-                <div class="miracle-user-card"><b>ランク内訳</b><br>${Object.entries(rankCounts).map(([rank, count]) => `${escapeHtml(rank)} ${count}`).join(" / ") || "-"}</div>
+                <div class="miracle-user-card"><b>ランク内訳</b><br>${
+                    Object.entries(rankCounts)
+                        .map(([rank, count]) => `${escapeHtml(rank)} ${count}`)
+                        .join(" / ") || "-"
+                }</div>
             </div>
             ${rows}
         </div>

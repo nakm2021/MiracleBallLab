@@ -96,19 +96,29 @@ export function createOfflineTheaterController(deps: OfflineTheaterDependencies)
     async function showOfflineGachaPopup(): Promise<void> {
         const item = await pickOfflineCatalogItem(true);
         if (!item) {
-            showPopup("オフライン専用ガチャ", `
+            showPopup(
+                "オフライン専用ガチャ",
+                `
                 ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                     <p style="margin:0;font-weight:900;">保存済み動画がありません。</p>
                     <p style="margin:8px 0 0;opacity:.72;">先におすすめ保存を行うと、通信なしでもガチャ演出を楽しめます。</p>
                     <button id="offline-gacha-save-button" class="miracle-home-button miracle-home-primary" style="margin-top:12px;">おすすめ保存へ</button>
                 </div>
-            `);
-            (document.getElementById("offline-gacha-save-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineVideoDownloadPopup("recommended"); });
+            `,
+            );
+            (document.getElementById("offline-gacha-save-button") as HTMLButtonElement | null)?.addEventListener(
+                "click",
+                () => {
+                    void showOfflineVideoDownloadPopup("recommended");
+                },
+            );
             return;
         }
 
-        showPopup("オフライン専用ガチャ", `
+        showPopup(
+            "オフライン専用ガチャ",
+            `
             ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;text-align:center;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(88,28,135,.86));color:#fff;">
                 <div style="font-size:${isMobile ? "42px" : "56px"};font-weight:1000;text-shadow:0 0 20px rgba(250,204,21,.8);">封印解除</div>
@@ -120,8 +130,14 @@ export function createOfflineTheaterController(deps: OfflineTheaterDependencies)
                 </div>
                 <button id="offline-gacha-play-button" class="miracle-home-button miracle-home-primary">演出を再生</button>
             </div>
-        `);
-        (document.getElementById("offline-gacha-play-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void playOfflineCatalogItem(item, "gachaPlay"); });
+        `,
+        );
+        (document.getElementById("offline-gacha-play-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void playOfflineCatalogItem(item, "gachaPlay");
+            },
+        );
     }
 
     return {

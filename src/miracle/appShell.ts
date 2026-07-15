@@ -308,7 +308,8 @@ export function createBootOverlay(options: {
     bootBarFrame.appendChild(bootBar);
 
     const bootAnimationStyle = document.createElement("style");
-    bootAnimationStyle.textContent = "@keyframes miracle-boot-bar{0%{transform:translateX(-120%)}100%{transform:translateX(260%)}}";
+    bootAnimationStyle.textContent =
+        "@keyframes miracle-boot-bar{0%{transform:translateX(-120%)}100%{transform:translateX(260%)}}";
 
     bootOverlay.appendChild(bootIcon);
     bootOverlay.appendChild(bootTitle);
@@ -329,13 +330,15 @@ export function createBootOverlay(options: {
                 const wait = Math.max(0, options.minimumDurationMs - (Date.now() - bootStartedAt));
                 window.setTimeout(() => resolve(), wait);
             }),
-        ]).then(() => {
-            bootOverlay.style.opacity = "0";
-            window.setTimeout(() => bootOverlay.remove(), 460);
-        }).catch(() => {
-            bootOverlay.style.opacity = "0";
-            window.setTimeout(() => bootOverlay.remove(), 460);
-        });
+        ])
+            .then(() => {
+                bootOverlay.style.opacity = "0";
+                window.setTimeout(() => bootOverlay.remove(), 460);
+            })
+            .catch(() => {
+                bootOverlay.style.opacity = "0";
+                window.setTimeout(() => bootOverlay.remove(), 460);
+            });
     };
 
     window.setTimeout(() => hide(), options.minimumDurationMs + 300);

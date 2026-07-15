@@ -2,14 +2,18 @@ import { getMagicCircleMarkSvg, type MagicCircleDef } from "./magicCircles";
 import { escapeHtml } from "./utils";
 
 export function getAdminMagicCircleAnswerHtml(defs: MagicCircleDef[], isMobile: boolean): string {
-    const rows = defs.map((def, index) => `
+    const rows = defs
+        .map(
+            (def, index) => `
         <div style="padding:14px;border-radius:18px;background:rgba(255,255,255,.72);border:1px solid rgba(80,90,120,.16);text-align:center;">
             ${getMagicCircleMarkSvg(def)}
             <div style="font-weight:1000;font-size:1.05em;">${index + 1}. ${def.emoji} ${escapeHtml(def.label)}</div>
             <div style="margin-top:6px;opacity:.76;line-height:1.65;text-align:left;"><b>${escapeHtml(def.chant)}</b><br>${escapeHtml(def.description)}</div>
             <div style="margin-top:5px;font-size:.84em;opacity:.62;text-align:left;">内部ID: ${escapeHtml(def.kind)}</div>
         </div>
-    `).join("");
+    `,
+        )
+        .join("");
 
     return `
         <p style="line-height:1.8;margin-top:0;">管理者確認用です。各魔法陣の見た目イメージを表示しています。実際の判定は線の長さ、曲がり方、描いた範囲、閉じ具合、点数から分類します。</p>

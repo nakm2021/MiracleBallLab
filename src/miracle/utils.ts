@@ -12,13 +12,18 @@ export function getBrowserName(): string {
 }
 
 export function isMobileDevice(): boolean {
-    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    return (
+        /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
         window.matchMedia?.("(pointer: coarse)")?.matches === true ||
-        window.innerWidth < 700;
+        window.innerWidth < 700
+    );
 }
 
 export function parseLabels(text: string, count: number): string[] {
-    const items = text.split(/\n|,/).map((x) => x.trim()).filter((x) => x.length > 0);
+    const items = text
+        .split(/\n|,/)
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0);
     const result: string[] = [];
     for (let i = 0; i < count; i++) result.push(items[i] ?? String(i + 1));
     return result;

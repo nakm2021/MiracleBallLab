@@ -25,11 +25,13 @@ export function calculateMiracleRateScale(params: {
     seasonBoost: number;
     extraScale?: number;
 }): number {
-    return getProbabilityScale(params.probabilityMode)
-        * Math.max(0, params.passiveBoost)
-        * Math.max(0, params.dailyBoost)
-        * Math.max(0, params.seasonBoost)
-        * Math.max(0, params.extraScale ?? 1);
+    return (
+        getProbabilityScale(params.probabilityMode) *
+        Math.max(0, params.passiveBoost) *
+        Math.max(0, params.dailyBoost) *
+        Math.max(0, params.seasonBoost) *
+        Math.max(0, params.extraScale ?? 1)
+    );
 }
 
 export function rollSpecialEvent(

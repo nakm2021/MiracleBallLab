@@ -1,7 +1,4 @@
-export function getAboutHtml(params: {
-    normalTraitSummaryHtml: string;
-    isMobile: boolean;
-}): string {
+export function getAboutHtml(params: { normalTraitSummaryHtml: string; isMobile: boolean }): string {
     return `
         <p><b>ミラクルボールラボ</b>は、玉が盤面を落ち、<b>START / 役物 / PREMIUM</b> を通過した瞬間だけ抽選するパチンコ風シミュレーションです。</p>
         <p>落ちていく玉を眺めながら、まれに起きる奇跡を集めて、自分だけの研究記録を増やしていく遊びです。研究所ホーム、奇跡アルバム、実験レポート履歴、デイリー研究、研究員ランクから進行状況を確認できます。</p>

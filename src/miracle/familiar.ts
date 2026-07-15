@@ -3,12 +3,60 @@ import type { DropKind, FamiliarDef, FamiliarKind, FamiliarMode, FamiliarState }
 export const FAMILIAR_STORAGE_KEY = "miracle-ball-lab-familiar-v1";
 
 export const FAMILIAR_DEFS: FamiliarDef[] = [
-    { kind: "mame", name: "まめピヨ", emoji: "🐣", color: "#facc15", accent: "#f97316", description: "最初から一緒にいる小さな研究助手。通常玉でも少しずつ育ちます。", secretCode: "" },
-    { kind: "neko", name: "ねこ式使い魔", emoji: "🐈", color: "#fb7185", accent: "#be123c", description: "奇跡の気配に反応して、たまに小さな予兆を出します。", secretCode: "nekomata" },
-    { kind: "kuro", name: "黒羽コウモリ", emoji: "🦇", color: "#111827", accent: "#a78bfa", description: "捨て区画に落ちた玉を見張る夜型の使い魔です。", secretCode: "kurohane" },
-    { kind: "tokei", name: "時計キツネ", emoji: "🦊", color: "#38bdf8", accent: "#0f766e", description: "時間停止と相性がよく、コンボの研究を手伝います。", secretCode: "tokeikitsune" },
-    { kind: "hoshi", name: "星くらげ", emoji: "🪼", color: "#818cf8", accent: "#f0abfc", description: "発見済みの奇跡が増えるほど、画面をふわっと漂います。", secretCode: "hoshikurage" },
-    { kind: "miko", name: "秘密巫女うさぎ", emoji: "🐇", color: "#f9a8d4", accent: "#db2777", description: "スマホでも秘密契約できる、超レア寄りの使い魔です。", secretCode: "miko" },
+    {
+        kind: "mame",
+        name: "まめピヨ",
+        emoji: "🐣",
+        color: "#facc15",
+        accent: "#f97316",
+        description: "最初から一緒にいる小さな研究助手。通常玉でも少しずつ育ちます。",
+        secretCode: "",
+    },
+    {
+        kind: "neko",
+        name: "ねこ式使い魔",
+        emoji: "🐈",
+        color: "#fb7185",
+        accent: "#be123c",
+        description: "奇跡の気配に反応して、たまに小さな予兆を出します。",
+        secretCode: "nekomata",
+    },
+    {
+        kind: "kuro",
+        name: "黒羽コウモリ",
+        emoji: "🦇",
+        color: "#111827",
+        accent: "#a78bfa",
+        description: "捨て区画に落ちた玉を見張る夜型の使い魔です。",
+        secretCode: "kurohane",
+    },
+    {
+        kind: "tokei",
+        name: "時計キツネ",
+        emoji: "🦊",
+        color: "#38bdf8",
+        accent: "#0f766e",
+        description: "時間停止と相性がよく、コンボの研究を手伝います。",
+        secretCode: "tokeikitsune",
+    },
+    {
+        kind: "hoshi",
+        name: "星くらげ",
+        emoji: "🪼",
+        color: "#818cf8",
+        accent: "#f0abfc",
+        description: "発見済みの奇跡が増えるほど、画面をふわっと漂います。",
+        secretCode: "hoshikurage",
+    },
+    {
+        kind: "miko",
+        name: "秘密巫女うさぎ",
+        emoji: "🐇",
+        color: "#f9a8d4",
+        accent: "#db2777",
+        description: "スマホでも秘密契約できる、超レア寄りの使い魔です。",
+        secretCode: "miko",
+    },
 ];
 
 export function createInitialFamiliarState(now = Date.now()): FamiliarState {
@@ -31,7 +79,7 @@ export function normalizeFamiliarState(value: unknown): FamiliarState {
     const base = createInitialFamiliarState();
     if (!value || typeof value !== "object") return base;
     const raw = value as Partial<FamiliarState>;
-    const kind = FAMILIAR_DEFS.some((x) => x.kind === raw.kind) ? raw.kind as FamiliarKind : base.kind;
+    const kind = FAMILIAR_DEFS.some((x) => x.kind === raw.kind) ? (raw.kind as FamiliarKind) : base.kind;
     const def = getFamiliarDef(kind) ?? FAMILIAR_DEFS[0];
     return {
         ...base,
@@ -41,7 +89,7 @@ export function normalizeFamiliarState(value: unknown): FamiliarState {
         level: Math.max(1, Math.floor(Number(raw.level) || 1)),
         xp: Math.max(0, Math.floor(Number(raw.xp) || 0)),
         affection: Math.max(0, Math.floor(Number(raw.affection) || 0)),
-        mode: isFamiliarMode(raw.mode) ? raw.mode as FamiliarMode : "assist",
+        mode: isFamiliarMode(raw.mode) ? (raw.mode as FamiliarMode) : "assist",
         unlocked: { ...base.unlocked, ...(raw.unlocked ?? {}) },
         secretContracts: { ...(raw.secretContracts ?? {}) },
         lastAssistAt: Number(raw.lastAssistAt) || 0,
@@ -59,7 +107,9 @@ export function loadFamiliarState(): FamiliarState {
 }
 
 export function saveFamiliarState(state: FamiliarState): void {
-    try { localStorage.setItem(FAMILIAR_STORAGE_KEY, JSON.stringify(normalizeFamiliarState(state))); } catch {}
+    try {
+        localStorage.setItem(FAMILIAR_STORAGE_KEY, JSON.stringify(normalizeFamiliarState(state)));
+    } catch {}
 }
 
 export function getFamiliarDef(kind: FamiliarKind): FamiliarDef | undefined {
@@ -71,7 +121,10 @@ export function getFamiliarLevelInfo(xp: number): { level: number; nextXp: numbe
     const level = Math.max(1, Math.floor(Math.sqrt(safeXp / 95)) + 1);
     const currentBase = Math.pow(level - 1, 2) * 95;
     const nextXp = Math.pow(level, 2) * 95;
-    const progressPercent = Math.max(0, Math.min(100, ((safeXp - currentBase) / Math.max(1, nextXp - currentBase)) * 100));
+    const progressPercent = Math.max(
+        0,
+        Math.min(100, ((safeXp - currentBase) / Math.max(1, nextXp - currentBase)) * 100),
+    );
     return { level, nextXp, progressPercent };
 }
 
@@ -84,7 +137,11 @@ export function gainFamiliarXp(state: FamiliarState, amount: number, affection =
     return next;
 }
 
-export function unlockFamiliar(state: FamiliarState, kind: FamiliarKind, now = Date.now()): { state: FamiliarState; unlockedNow: boolean } {
+export function unlockFamiliar(
+    state: FamiliarState,
+    kind: FamiliarKind,
+    now = Date.now(),
+): { state: FamiliarState; unlockedNow: boolean } {
     const next = normalizeFamiliarState(state);
     if (next.unlocked[kind]) return { state: next, unlockedNow: false };
     next.unlocked[kind] = now;

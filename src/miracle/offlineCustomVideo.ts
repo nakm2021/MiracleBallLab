@@ -34,7 +34,9 @@ export function createOfflineCustomVideoController(deps: OfflineCustomVideoDepen
     }
 
     function showCustomOfflineVideoPopup(): void {
-        showPopup("自分の動画を演出に登録", `
+        showPopup(
+            "自分の動画を演出に登録",
+            `
             ${getOfflineLabStyles(isMobile)}
         <div class="miracle-user-card offline-lab-panel" style="border-radius:22px;padding:18px;">
                 <div class="offline-lab-card" style="padding:16px;border-radius:20px;background:linear-gradient(135deg,rgba(30,64,175,.18),rgba(34,197,94,.14));">
@@ -59,33 +61,44 @@ export function createOfflineCustomVideoController(deps: OfflineCustomVideoDepen
                 </div>
                 <p style="margin-bottom:0;opacity:.66;font-size:.92em;">登録した動画はこのブラウザのサイトデータ内に保存されます。容量不足やサイトデータ削除で消える場合があります。</p>
             </div>
-        `);
+        `,
+        );
 
-        (document.getElementById("offline-custom-video-book-button") as HTMLButtonElement | null)?.addEventListener("click", () => { void showOfflineMiracleBookPopup(); });
-        (document.getElementById("offline-custom-video-save-button") as HTMLButtonElement | null)?.addEventListener("click", async () => {
-            const input = document.getElementById("offline-custom-video-input") as HTMLInputElement | null;
-            const select = document.getElementById("offline-custom-video-rank") as HTMLSelectElement | null;
-            const status = document.getElementById("offline-custom-video-status") as HTMLDivElement | null;
-            const file = input?.files?.[0];
-            if (!file) {
-                if (status) status.textContent = "動画ファイルを選択してください。";
-                return;
-            }
-            const confirmText = `${file.name} / ${formatOfflineBytes(file.size)} をユーザー動画として保存します。よろしいですか？`;
-            if (!window.confirm(confirmText)) return;
-            if (status) status.textContent = "ユーザー動画を保管庫へ登録中...";
-            try {
-                const item = await saveCustomOfflineMiracleVideo(file, select?.value || "custom");
-                recordOfflineMiracleAction("customVideo");
-                recordOfflineMiracleAction("saveVideo");
-                if (status) status.textContent = `登録完了: ${getOfflineCatalogDisplayName(item)} / ${formatOfflineBytes(item.sizeBytes)}`;
-                await showOfflineTitleUnlockToast();
-                showSoftToast("自分の動画を登録しました");
-            } catch (error) {
-                console.error("[Miracle Offline] custom video save failed", error);
-                if (status) status.textContent = `登録に失敗しました: ${error instanceof Error ? error.message : String(error)}`;
-            }
-        });
+        (document.getElementById("offline-custom-video-book-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            () => {
+                void showOfflineMiracleBookPopup();
+            },
+        );
+        (document.getElementById("offline-custom-video-save-button") as HTMLButtonElement | null)?.addEventListener(
+            "click",
+            async () => {
+                const input = document.getElementById("offline-custom-video-input") as HTMLInputElement | null;
+                const select = document.getElementById("offline-custom-video-rank") as HTMLSelectElement | null;
+                const status = document.getElementById("offline-custom-video-status") as HTMLDivElement | null;
+                const file = input?.files?.[0];
+                if (!file) {
+                    if (status) status.textContent = "動画ファイルを選択してください。";
+                    return;
+                }
+                const confirmText = `${file.name} / ${formatOfflineBytes(file.size)} をユーザー動画として保存します。よろしいですか？`;
+                if (!window.confirm(confirmText)) return;
+                if (status) status.textContent = "ユーザー動画を保管庫へ登録中...";
+                try {
+                    const item = await saveCustomOfflineMiracleVideo(file, select?.value || "custom");
+                    recordOfflineMiracleAction("customVideo");
+                    recordOfflineMiracleAction("saveVideo");
+                    if (status)
+                        status.textContent = `登録完了: ${getOfflineCatalogDisplayName(item)} / ${formatOfflineBytes(item.sizeBytes)}`;
+                    await showOfflineTitleUnlockToast();
+                    showSoftToast("自分の動画を登録しました");
+                } catch (error) {
+                    console.error("[Miracle Offline] custom video save failed", error);
+                    if (status)
+                        status.textContent = `登録に失敗しました: ${error instanceof Error ? error.message : String(error)}`;
+                }
+            },
+        );
     }
 
     return { showCustomOfflineVideoPopup };

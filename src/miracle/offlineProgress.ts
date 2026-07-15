@@ -4,14 +4,7 @@ const OFFLINE_PROGRESS_KEY = "miracleBallLab.offlineProgress.v1";
 const OFFLINE_TUTORIAL_KEY = "miracleBallLab.offlineTutorialDone.v1";
 
 export type OfflineMiracleAction =
-    | "bookOpen"
-    | "saveVideo"
-    | "testPlay"
-    | "theaterPlay"
-    | "gachaPlay"
-    | "cleanup"
-    | "customVideo"
-    | "offlineBoot";
+    "bookOpen" | "saveVideo" | "testPlay" | "theaterPlay" | "gachaPlay" | "cleanup" | "customVideo" | "offlineBoot";
 
 export type OfflineMiracleProgress = {
     dateKey: string;
@@ -64,7 +57,9 @@ export function loadOfflineMiracleProgress(): OfflineMiracleProgress {
         const base: OfflineMiracleProgress = {
             dateKey: parsed.dateKey === today ? today : today,
             actions: createEmptyActions(),
-            unlockedTitleIds: Array.isArray(parsed.unlockedTitleIds) ? parsed.unlockedTitleIds.filter((x): x is string => typeof x === "string") : [],
+            unlockedTitleIds: Array.isArray(parsed.unlockedTitleIds)
+                ? parsed.unlockedTitleIds.filter((x): x is string => typeof x === "string")
+                : [],
             lastUpdatedAt: Number(parsed.lastUpdatedAt ?? 0),
         };
 
@@ -138,7 +133,10 @@ export function getOfflineMiracleMissions(progress = loadOfflineMiracleProgress(
     ];
 }
 
-export function getOfflineMiracleTitles(catalog: OfflineMiracleCatalog, progress = loadOfflineMiracleProgress()): OfflineTitleDef[] {
+export function getOfflineMiracleTitles(
+    catalog: OfflineMiracleCatalog,
+    progress = loadOfflineMiracleProgress(),
+): OfflineTitleDef[] {
     const bytes = catalog.cachedBytes;
     const count = catalog.cachedItems.length;
     const actions = progress.actions;
@@ -147,14 +145,54 @@ export function getOfflineMiracleTitles(catalog: OfflineMiracleCatalog, progress
     return [
         { id: "first-seal", label: "初めての封印者", description: "動画演出を1本以上保存した", unlocked: count >= 1 },
         { id: "ten-seals", label: "十封印の研究員", description: "動画演出を10本以上保存した", unlocked: count >= 10 },
-        { id: "hundred-mb", label: "100MBを預かる者", description: "保存容量が100MBを超えた", unlocked: bytes >= 100 * 1024 * 1024 },
-        { id: "one-gb", label: "1GB保管官", description: "保存容量が1GBを超えた", unlocked: bytes >= 1024 * 1024 * 1024 },
-        { id: "offline-operator", label: "通信断絶の研究員", description: "オフラインイベントを経験した", unlocked: actions.offlineBoot >= 1 },
-        { id: "theater-master", label: "地下シアター支配人", description: "ランダム鑑賞を3回以上使った", unlocked: actions.theaterPlay >= 3 },
-        { id: "gacha-priest", label: "封印ガチャ祈祷師", description: "オフラインガチャを3回以上使った", unlocked: actions.gachaPlay >= 3 },
-        { id: "custom-director", label: "自作演出監督", description: "自分の動画を1本以上登録した", unlocked: customCount >= 1 || actions.customVideo >= 1 },
-        { id: "cleaner", label: "保管庫整備士", description: "ストレージ整理を1回以上行った", unlocked: actions.cleanup >= 1 },
-        { id: "complete-archive", label: "全演出を持つ者", description: "manifest内の動画をすべて保存した", unlocked: catalog.totalVideoSources > 0 && count >= catalog.totalVideoSources },
+        {
+            id: "hundred-mb",
+            label: "100MBを預かる者",
+            description: "保存容量が100MBを超えた",
+            unlocked: bytes >= 100 * 1024 * 1024,
+        },
+        {
+            id: "one-gb",
+            label: "1GB保管官",
+            description: "保存容量が1GBを超えた",
+            unlocked: bytes >= 1024 * 1024 * 1024,
+        },
+        {
+            id: "offline-operator",
+            label: "通信断絶の研究員",
+            description: "オフラインイベントを経験した",
+            unlocked: actions.offlineBoot >= 1,
+        },
+        {
+            id: "theater-master",
+            label: "地下シアター支配人",
+            description: "ランダム鑑賞を3回以上使った",
+            unlocked: actions.theaterPlay >= 3,
+        },
+        {
+            id: "gacha-priest",
+            label: "封印ガチャ祈祷師",
+            description: "オフラインガチャを3回以上使った",
+            unlocked: actions.gachaPlay >= 3,
+        },
+        {
+            id: "custom-director",
+            label: "自作演出監督",
+            description: "自分の動画を1本以上登録した",
+            unlocked: customCount >= 1 || actions.customVideo >= 1,
+        },
+        {
+            id: "cleaner",
+            label: "保管庫整備士",
+            description: "ストレージ整理を1回以上行った",
+            unlocked: actions.cleanup >= 1,
+        },
+        {
+            id: "complete-archive",
+            label: "全演出を持つ者",
+            description: "manifest内の動画をすべて保存した",
+            unlocked: catalog.totalVideoSources > 0 && count >= catalog.totalVideoSources,
+        },
     ];
 }
 

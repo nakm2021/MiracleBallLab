@@ -4,18 +4,97 @@ export function getNormalTraitSummaryHtml(traits: NormalBallTraitDef[]): string 
     return traits.map((trait) => `<li><b>${trait.label}</b>: ${trait.description}</li>`).join("");
 }
 
-export function getCommentaryLineHtml(params: {
-    message: string;
-    isMobile: boolean;
-    displayMs: number;
-}): string {
+export function getCommentaryLineHtml(params: { message: string; isMobile: boolean; displayMs: number }): string {
     return `<div style="position:absolute;white-space:nowrap;left:100vw;bottom:0;padding:4px 16px;border-radius:999px;background:rgba(15,23,42,.74);color:#fff;font-weight:900;font-size:${params.isMobile ? "18px" : "16px"};line-height:1.4;text-shadow:0 2px 8px rgba(0,0,0,.45);box-shadow:0 8px 22px rgba(0,0,0,.22);transition:transform ${params.displayMs}ms linear;">${params.message}</div>`;
 }
 
 export function pickCelebrationEffect(random: () => number): { name: string; icon: string } {
-    const icons = ["🎆", "💥", "🌊", "🎂", "👍", "⚡", "🐶", "🐱", "⭐", "🔥", "🪐", "🎉", "🌈", "🦊", "🐸", "🦄", "🍀", "🍙", "🍜", "🍤", "🍣", "🥁", "🎺", "🎸", "🪩", "🛸", "🚀", "🌋", "🗿", "👺", "🥷", "🧊", "🫧", "🌪️", "☄️", "🌕", "🌞", "🦖", "🐉", "🦕"];
-    const prefixes = ["大", "超", "激", "謎", "夢", "夜", "朝", "山", "海", "森", "宇宙", "古代", "未来", "昭和", "平成", "令和", "無音", "爆速", "低速", "ぬるぬる"];
-    const suffixes = ["花火", "爆発", "祭り", "旋風", "波動", "祝福", "行進", "ダンス", "点滅", "ジャンプ", "拍手", "覚醒", "降臨", "乱舞", "パレード", "お祝い", "びっくり", "フィーバー", "チャンス", "ミラクル"];
+    const icons = [
+        "🎆",
+        "💥",
+        "🌊",
+        "🎂",
+        "👍",
+        "⚡",
+        "🐶",
+        "🐱",
+        "⭐",
+        "🔥",
+        "🪐",
+        "🎉",
+        "🌈",
+        "🦊",
+        "🐸",
+        "🦄",
+        "🍀",
+        "🍙",
+        "🍜",
+        "🍤",
+        "🍣",
+        "🥁",
+        "🎺",
+        "🎸",
+        "🪩",
+        "🛸",
+        "🚀",
+        "🌋",
+        "🗿",
+        "👺",
+        "🥷",
+        "🧊",
+        "🫧",
+        "🌪️",
+        "☄️",
+        "🌕",
+        "🌞",
+        "🦖",
+        "🐉",
+        "🦕",
+    ];
+    const prefixes = [
+        "大",
+        "超",
+        "激",
+        "謎",
+        "夢",
+        "夜",
+        "朝",
+        "山",
+        "海",
+        "森",
+        "宇宙",
+        "古代",
+        "未来",
+        "昭和",
+        "平成",
+        "令和",
+        "無音",
+        "爆速",
+        "低速",
+        "ぬるぬる",
+    ];
+    const suffixes = [
+        "花火",
+        "爆発",
+        "祭り",
+        "旋風",
+        "波動",
+        "祝福",
+        "行進",
+        "ダンス",
+        "点滅",
+        "ジャンプ",
+        "拍手",
+        "覚醒",
+        "降臨",
+        "乱舞",
+        "パレード",
+        "お祝い",
+        "びっくり",
+        "フィーバー",
+        "チャンス",
+        "ミラクル",
+    ];
     const i = Math.floor(random() * icons.length);
     const prefix = prefixes[Math.floor(random() * prefixes.length)];
     const suffix = suffixes[Math.floor(random() * suffixes.length)];
@@ -37,10 +116,7 @@ export function getFullScreenCelebrationHtml(params: {
         </div>`;
 }
 
-export function getLifeQuoteHtml(params: {
-    text: string;
-    isMobile: boolean;
-}): string {
+export function getLifeQuoteHtml(params: { text: string; isMobile: boolean }): string {
     return `<div style="font-size:${params.isMobile ? "26px" : "34px"};font-weight:1000;line-height:1.7;text-shadow:0 3px 18px rgba(0,0,0,.55);">${params.text}</div>`;
 }
 

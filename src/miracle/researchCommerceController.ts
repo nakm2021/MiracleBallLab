@@ -1,10 +1,28 @@
-import { canBuyShopItem, canCraftRecipe, getCraftMaterialStatus, getRewardParts, getShopCostLabel } from "./commerceService";
+import {
+    canBuyShopItem,
+    canCraftRecipe,
+    getCraftMaterialStatus,
+    getRewardParts,
+    getShopCostLabel,
+} from "./commerceService";
 import { BASE_SPECIAL_EVENT_DEFS, SPECIAL_EVENT_DEFS } from "./eventCatalog";
 import { getGachaResultHtml, getGachaRewardBookHtml, getGachaSpinHtml, getMiracleGachaHtml } from "./gachaPresentation";
 import { pickGachaRewardTheme, pickMiracleGachaDef } from "./gachaService";
-import { awardTicketsForRank, saveMiracleTicketState, spendMiracleTickets, type MiracleTicketState } from "./miracleTicket";
+import {
+    awardTicketsForRank,
+    saveMiracleTicketState,
+    spendMiracleTickets,
+    type MiracleTicketState,
+} from "./miracleTicket";
 import { getRankScore } from "./rarity";
-import { EVENT_SEASONS, EXPERIMENT_PRESETS, MIRACLE_CRAFT_RECIPES, RESEARCH_SHOP_ITEMS, type EventSeasonDef, type ShopItemDef } from "./researchFeatures";
+import {
+    EVENT_SEASONS,
+    EXPERIMENT_PRESETS,
+    MIRACLE_CRAFT_RECIPES,
+    RESEARCH_SHOP_ITEMS,
+    type EventSeasonDef,
+    type ShopItemDef,
+} from "./researchFeatures";
 import { getEventSeasonHtml, getMiracleCraftHtml, getResearchShopHtml } from "./researchCommercePresentation";
 import { getSeasonClaimKey, getSeasonMissionValue } from "./rewardService";
 import { getCurrentEventSeason } from "./seasonService";
@@ -97,7 +115,10 @@ export function createResearchCommerceController(deps: {
     }
 
     function recordGachaReward(entry: GachaRewardEntry): void {
-        records().gachaRewards = [entry, ...((records().gachaRewards ?? []).filter((x) => x.id !== entry.id))].slice(0, 80);
+        records().gachaRewards = [entry, ...(records().gachaRewards ?? []).filter((x) => x.id !== entry.id)].slice(
+            0,
+            80,
+        );
         deps.saveRecords();
     }
 
@@ -108,14 +129,17 @@ export function createResearchCommerceController(deps: {
         state.divine += divine;
         state.totalEarned += normal + rare + divine;
         const kind: "normal" | "rare" | "divine" = divine ? "divine" : rare ? "rare" : "normal";
-        state.history = [{
-            id: deps.createId("ticket"),
-            at: now(),
-            label,
-            amount: normal + rare + divine,
-            kind,
-            reason: "研究所ショップ",
-        }, ...state.history].slice(0, 50);
+        state.history = [
+            {
+                id: deps.createId("ticket"),
+                at: now(),
+                label,
+                amount: normal + rare + divine,
+                kind,
+                reason: "研究所ショップ",
+            },
+            ...state.history,
+        ].slice(0, 50);
         saveMiracleTicketState(state);
         deps.setTickets(state);
         deps.updateTicketButton(state.normal);
@@ -171,14 +195,17 @@ export function createResearchCommerceController(deps: {
         const effectLabel = applyShopItemEffect(item);
         records().shopPurchased = records().shopPurchased ?? {};
         if (!item.repeatable) records().shopPurchased![item.id] = now();
-        records().shopPurchases = [{
-            id: deps.createId("shop"),
-            itemId: item.id,
-            label: item.label,
-            purchasedAt: now(),
-            costLabel: getShopCostLabel(item),
-            effectLabel,
-        }, ...(records().shopPurchases ?? [])].slice(0, 80);
+        records().shopPurchases = [
+            {
+                id: deps.createId("shop"),
+                itemId: item.id,
+                label: item.label,
+                purchasedAt: now(),
+                costLabel: getShopCostLabel(item),
+                effectLabel,
+            },
+            ...(records().shopPurchases ?? []),
+        ].slice(0, 80);
         deps.saveRecords();
         deps.showToast(`${item.label}を購入: ${effectLabel}`);
         showResearchShopPopup();
@@ -200,7 +227,13 @@ export function createResearchCommerceController(deps: {
         }
         if (mission.rewardPoint > 0) addGachaPoint(mission.rewardPoint, `シーズン:${mission.label}`, false);
         if (mission.rewardTheme) deps.markThemeUnlocked(mission.rewardTheme);
-        if (mission.rewardTickets) grantTicketBundle(mission.rewardTickets.normal ?? 0, mission.rewardTickets.rare ?? 0, mission.rewardTickets.divine ?? 0, `シーズン:${mission.label}`);
+        if (mission.rewardTickets)
+            grantTicketBundle(
+                mission.rewardTickets.normal ?? 0,
+                mission.rewardTickets.rare ?? 0,
+                mission.rewardTickets.divine ?? 0,
+                `シーズン:${mission.label}`,
+            );
         const rewardParts = getRewardParts({
             point: mission.rewardPoint,
             themeLabel: mission.rewardTheme ? deps.getThemeDisplayName(mission.rewardTheme) : undefined,
@@ -208,14 +241,17 @@ export function createResearchCommerceController(deps: {
         });
         const claimedAt = now();
         records().seasonRewardClaimed![key] = claimedAt;
-        records().seasonRewards = [{
-            id: deps.createId("season"),
-            seasonId: season.id,
-            missionId: mission.id,
-            label: mission.label,
-            claimedAt,
-            rewardLabel: rewardParts.join(" / "),
-        }, ...(records().seasonRewards ?? [])].slice(0, 80);
+        records().seasonRewards = [
+            {
+                id: deps.createId("season"),
+                seasonId: season.id,
+                missionId: mission.id,
+                label: mission.label,
+                claimedAt,
+                rewardLabel: rewardParts.join(" / "),
+            },
+            ...(records().seasonRewards ?? []),
+        ].slice(0, 80);
         deps.saveRecords();
         deps.showToast(`シーズン報酬: ${rewardParts.join(" / ")}`);
         showEventSeasonPopup();
@@ -224,7 +260,11 @@ export function createResearchCommerceController(deps: {
     function craftMiracleRecipe(recipeId: string): void {
         const recipe = MIRACLE_CRAFT_RECIPES.find((x) => x.id === recipeId);
         if (!recipe) return;
-        const material = getCraftMaterialStatus({ recipe, specialDefs: SPECIAL_EVENT_DEFS, discovered: records().discovered });
+        const material = getCraftMaterialStatus({
+            recipe,
+            specialDefs: SPECIAL_EVENT_DEFS,
+            discovered: records().discovered,
+        });
         const availability = canCraftRecipe({
             recipe,
             unlocked: !!(records().crafted ?? {})[recipe.id],
@@ -241,7 +281,13 @@ export function createResearchCommerceController(deps: {
         }
         if (recipe.rewardPoint) addGachaPoint(recipe.rewardPoint, `クラフト:${recipe.label}`, false);
         if (recipe.rewardTheme) deps.markThemeUnlocked(recipe.rewardTheme);
-        if (recipe.rewardTickets) grantTicketBundle(recipe.rewardTickets.normal ?? 0, recipe.rewardTickets.rare ?? 0, recipe.rewardTickets.divine ?? 0, `クラフト:${recipe.label}`);
+        if (recipe.rewardTickets)
+            grantTicketBundle(
+                recipe.rewardTickets.normal ?? 0,
+                recipe.rewardTickets.rare ?? 0,
+                recipe.rewardTickets.divine ?? 0,
+                `クラフト:${recipe.label}`,
+            );
         const rewardParts = getRewardParts({
             point: recipe.rewardPoint,
             themeLabel: recipe.rewardTheme ? deps.getThemeDisplayName(recipe.rewardTheme) : undefined,
@@ -250,13 +296,16 @@ export function createResearchCommerceController(deps: {
         const craftedAt = now();
         records().crafted = records().crafted ?? {};
         records().crafted![recipe.id] = craftedAt;
-        records().craftHistory = [{
-            id: deps.createId("craft"),
-            recipeId: recipe.id,
-            label: recipe.label,
-            craftedAt,
-            rewardLabel: rewardParts.join(" / "),
-        }, ...(records().craftHistory ?? [])].slice(0, 80);
+        records().craftHistory = [
+            {
+                id: deps.createId("craft"),
+                recipeId: recipe.id,
+                label: recipe.label,
+                craftedAt,
+                rewardLabel: rewardParts.join(" / "),
+            },
+            ...(records().craftHistory ?? []),
+        ].slice(0, 80);
         deps.addScore(12_000 + recipe.rewardPoint * 400, `CRAFT ${recipe.label}`);
         deps.saveRecords();
         deps.showMilestone(`奇跡クラフト: ${recipe.label}`);
@@ -301,41 +350,56 @@ export function createResearchCommerceController(deps: {
     }
 
     function showGachaResultPopup(rewards: GachaRewardEntry[], best: SpecialEventDef): void {
-        deps.showPopup("ガチャ結果", getGachaResultHtml(rewards, best, (kind) => SPECIAL_EVENT_DEFS.find((x) => x.kind === kind), deps.isMobile));
+        deps.showPopup(
+            "ガチャ結果",
+            getGachaResultHtml(rewards, best, (kind) => SPECIAL_EVENT_DEFS.find((x) => x.kind === kind), deps.isMobile),
+        );
         document.getElementById("gacha-result-history-button")?.addEventListener("click", showGachaRewardBookPopup);
         document.getElementById("gacha-result-again-button")?.addEventListener("click", showMiracleGachaPopup);
     }
 
     function showMiracleGachaPopup(): void {
-        deps.showPopup("奇跡ガチャ", getMiracleGachaHtml({
-            point: getGachaPoint(),
-            onceCost: GACHA_ONCE_COST,
-            tenCost: GACHA_TEN_COST,
-            recentRewards: records().gachaRewards ?? [],
-        }));
+        deps.showPopup(
+            "奇跡ガチャ",
+            getMiracleGachaHtml({
+                point: getGachaPoint(),
+                onceCost: GACHA_ONCE_COST,
+                tenCost: GACHA_TEN_COST,
+                recentRewards: records().gachaRewards ?? [],
+            }),
+        );
         document.getElementById("miracle-gacha-history-button")?.addEventListener("click", showGachaRewardBookPopup);
         const run = (count: 1 | 10) => {
             const cost = count === 10 ? GACHA_TEN_COST : GACHA_ONCE_COST;
             if (!spendGachaPoint(cost)) {
-                deps.showToast(`奇跡ガチャPが足りません。必要: ${cost.toLocaleString()}P / 所持: ${getGachaPoint().toLocaleString()}P`);
+                deps.showToast(
+                    `奇跡ガチャPが足りません。必要: ${cost.toLocaleString()}P / 所持: ${getGachaPoint().toLocaleString()}P`,
+                );
                 showMiracleGachaPopup();
                 return;
             }
             deps.showPopup("奇跡ガチャ抽選中", getGachaSpinHtml(count, cost));
             window.setTimeout(() => {
-                const defs = Array.from({ length: count }, () => pickMiracleGachaDef({
-                    specialDefs: SPECIAL_EVENT_DEFS,
-                    fallbackDefs: BASE_SPECIAL_EVENT_DEFS,
-                    getRankScore,
-                    random: deps.random,
-                }));
+                const defs = Array.from({ length: count }, () =>
+                    pickMiracleGachaDef({
+                        specialDefs: SPECIAL_EVENT_DEFS,
+                        fallbackDefs: BASE_SPECIAL_EVENT_DEFS,
+                        getRankScore,
+                        random: deps.random,
+                    }),
+                );
                 const rewards = defs.map((def, index) => grantGachaReward(def, index + 1));
                 const best = defs.slice().sort((a, b) => getRankScore(b.rank) - getRankScore(a.rank))[0] ?? defs[0]!;
                 const probabilityText = `[${best.rank}] ${deps.formatProbability(best.denominator)}`;
-                const feelingText = count === 10 ? "10連ガチャ研究装置が最高反応を観測しました。" : "ガチャ研究装置が未知の奇跡を観測しました。";
-                deps.showToast(count === 10
-                    ? `10連結果: ${defs.map((def, index) => `${index + 1}. ${def.label} [${def.rank}]`).join(" / ")}`
-                    : `ガチャ結果: ${best.label} [${best.rank}] / ${rewards[0]?.rewardLabel ?? "演出カード"}`);
+                const feelingText =
+                    count === 10
+                        ? "10連ガチャ研究装置が最高反応を観測しました。"
+                        : "ガチャ研究装置が未知の奇跡を観測しました。";
+                deps.showToast(
+                    count === 10
+                        ? `10連結果: ${defs.map((def, index) => `${index + 1}. ${def.label} [${def.rank}]`).join(" / ")}`
+                        : `ガチャ結果: ${best.label} [${best.rank}] / ${rewards[0]?.rewardLabel ?? "演出カード"}`,
+                );
                 deps.closePopup();
                 deps.revealGachaResult(best, probabilityText, feelingText);
                 deps.playGachaVideo(best);
@@ -353,8 +417,20 @@ export function createResearchCommerceController(deps: {
     function showResearchShopPopup(): void {
         const items = RESEARCH_SHOP_ITEMS.map((item) => {
             const purchased = isShopItemPurchased(item.id);
-            const availability = canBuyShopItem({ item, purchased, gachaPoint: getGachaPoint(), tickets: deps.getTickets() });
-            const categoryLabel = item.category === "facility" ? "設備" : item.category === "theme" ? "テーマ" : item.category === "ticket" ? "交換" : "プリセット";
+            const availability = canBuyShopItem({
+                item,
+                purchased,
+                gachaPoint: getGachaPoint(),
+                tickets: deps.getTickets(),
+            });
+            const categoryLabel =
+                item.category === "facility"
+                    ? "設備"
+                    : item.category === "theme"
+                      ? "テーマ"
+                      : item.category === "ticket"
+                        ? "交換"
+                        : "プリセット";
             return {
                 item,
                 purchased,
@@ -365,17 +441,20 @@ export function createResearchCommerceController(deps: {
             };
         });
         const tickets = deps.getTickets();
-        deps.showPopup("研究所ショップ", getResearchShopHtml({
-            purchasedCount: Object.keys(records().shopPurchased ?? {}).length,
-            gachaPoint: getGachaPoint(),
-            ticketNormal: tickets.normal,
-            ticketRare: tickets.rare,
-            ticketDivine: tickets.divine,
-            reportLimit: getResearchReportLimit(),
-            pointBoosterOn: isShopItemPurchased("gacha-point-booster"),
-            items,
-            purchaseHistory: records().shopPurchases ?? [],
-        }));
+        deps.showPopup(
+            "研究所ショップ",
+            getResearchShopHtml({
+                purchasedCount: Object.keys(records().shopPurchased ?? {}).length,
+                gachaPoint: getGachaPoint(),
+                ticketNormal: tickets.normal,
+                ticketRare: tickets.rare,
+                ticketDivine: tickets.divine,
+                reportLimit: getResearchReportLimit(),
+                pointBoosterOn: isShopItemPurchased("gacha-point-booster"),
+                items,
+                purchaseHistory: records().shopPurchases ?? [],
+            }),
+        );
     }
 
     function showEventSeasonPopup(): void {
@@ -386,7 +465,7 @@ export function createResearchCommerceController(deps: {
             return {
                 mission,
                 value,
-                percent: mission.target > 0 ? Math.min(100, value / mission.target * 100) : 0,
+                percent: mission.target > 0 ? Math.min(100, (value / mission.target) * 100) : 0,
                 claimed,
                 ready: value >= mission.target,
                 rewardLabel: [
@@ -395,22 +474,36 @@ export function createResearchCommerceController(deps: {
                     mission.rewardTickets?.normal ? `通常券+${mission.rewardTickets.normal}` : "",
                     mission.rewardTickets?.rare ? `レア券+${mission.rewardTickets.rare}` : "",
                     mission.rewardTickets?.divine ? `神域券+${mission.rewardTickets.divine}` : "",
-                ].filter(Boolean).join(" / "),
+                ]
+                    .filter(Boolean)
+                    .join(" / "),
             };
         });
-        deps.showPopup("イベントシーズン", getEventSeasonHtml({
-            season,
-            themeLabel: deps.getThemeDisplayName(season.theme),
-            missions,
-            history: records().seasonRewards ?? [],
-        }));
+        deps.showPopup(
+            "イベントシーズン",
+            getEventSeasonHtml({
+                season,
+                themeLabel: deps.getThemeDisplayName(season.theme),
+                missions,
+                history: records().seasonRewards ?? [],
+            }),
+        );
     }
 
     function showMiracleCraftPopup(): void {
         const recipes = MIRACLE_CRAFT_RECIPES.map((recipe) => {
-            const material = getCraftMaterialStatus({ recipe, specialDefs: SPECIAL_EVENT_DEFS, discovered: records().discovered });
+            const material = getCraftMaterialStatus({
+                recipe,
+                specialDefs: SPECIAL_EVENT_DEFS,
+                discovered: records().discovered,
+            });
             const unlocked = !!(records().crafted ?? {})[recipe.id];
-            const availability = canCraftRecipe({ recipe, unlocked, materialReady: material.ready, gachaPoint: getGachaPoint() });
+            const availability = canCraftRecipe({
+                recipe,
+                unlocked,
+                materialReady: material.ready,
+                gachaPoint: getGachaPoint(),
+            });
             return {
                 recipe,
                 materialLabel: material.label,
@@ -424,14 +517,19 @@ export function createResearchCommerceController(deps: {
                     recipe.rewardTickets?.normal ? `通常券+${recipe.rewardTickets.normal}` : "",
                     recipe.rewardTickets?.rare ? `レア券+${recipe.rewardTickets.rare}` : "",
                     recipe.rewardTickets?.divine ? `神域券+${recipe.rewardTickets.divine}` : "",
-                ].filter(Boolean).join(" / "),
+                ]
+                    .filter(Boolean)
+                    .join(" / "),
             };
         });
-        deps.showPopup("奇跡クラフト", getMiracleCraftHtml({
-            gachaPoint: getGachaPoint(),
-            recipes,
-            history: records().craftHistory ?? [],
-        }));
+        deps.showPopup(
+            "奇跡クラフト",
+            getMiracleCraftHtml({
+                gachaPoint: getGachaPoint(),
+                recipes,
+                history: records().craftHistory ?? [],
+            }),
+        );
     }
 
     return {

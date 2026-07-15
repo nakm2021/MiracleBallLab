@@ -40,7 +40,8 @@ export function getOfflineDownloadModeLabel(mode: OfflineVideoDownloadMode): str
 
 export function getOfflineRankBadgeStyle(rank?: string): string {
     const r = String(rank ?? "common").toUpperCase();
-    if (r === "GOD" || r === "EX" || r === "SECRET") return "background:linear-gradient(135deg,#7c2d12,#facc15,#7e22ce);color:#fff;";
+    if (r === "GOD" || r === "EX" || r === "SECRET")
+        return "background:linear-gradient(135deg,#7c2d12,#facc15,#7e22ce);color:#fff;";
     if (r === "UR" || r === "SSR") return "background:linear-gradient(135deg,#1e3a8a,#22d3ee);color:#fff;";
     if (r === "SR" || r === "RARE") return "background:linear-gradient(135deg,#166534,#bef264);color:#102a10;";
     return "background:rgba(100,116,139,.16);color:#334155;";

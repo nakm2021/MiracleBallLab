@@ -2,12 +2,10 @@ import Matter, { Events } from "matter-js";
 import anime from "animejs";
 import tippy from "tippy.js";
 import "tippy.js/dist/tippy.css";
-import confetti from "canvas-confetti";
-import rough from "roughjs/bundled/rough.esm";
 import { Howl } from "howler";
-import JSConfetti from "js-confetti";
-import party from "party-js";
-import { Application, Graphics } from "pixi.js";
+import { createPixiBackground, type PixiBackground } from "./miracle/pixiBackground";
+import { fireCanvasBurst, fireLibraryBurst } from "./miracle/celebrationEffects";
+import { getPreparedRoughCanvas, prepareRoughCanvas } from "./miracle/roughCanvas";
 import { createAdminLogApi, type AdminLogApi, type AdminLogEntry } from "./miracle/adminLog";
 import { ADMIN_UNLOCK_STORAGE_KEY, verifyAdminPasscode } from "./miracle/admin";
 import { createDefaultSettings, getThemeOptions, getThemeUiPalette } from "./miracle/settings";
@@ -417,8 +415,6 @@ function updateRuntimePanelsDuringRun(): void {
     updateResearchProgressPanel();
 }
 
-let roughCanvas: any = null;
-let jsConfetti: InstanceType<typeof JSConfetti> | null = null;
 const howlerCueCache = new Map<string, Howl>();
 const activeMagicPhysicsFields: MagicPhysicsField[] = [];
 let magicBoardShapeToken = 0;
@@ -580,8 +576,7 @@ installGlobalErrorLogger();
 registerAppOpen();
 let pixiEnabled = false;
 let pixiReady = false;
-let pixiApp: Application | null = null;
-let pixiParticles: Graphics[] = [];
+let pixiBackground: PixiBackground | null = null;
 let animeReady = false;
 let tippyReady = false;
 let mobileDockRunButton: HTMLButtonElement | null = null;
@@ -4582,17 +4577,9 @@ function getCanvasPointFromEvent(event: PointerEvent): { x: number; y: number } 
 }
 
 function getRoughCanvas(): any {
-    if (!roughCanvas) {
-        try { roughCanvas = rough.canvas(render.canvas); } catch { roughCanvas = null; }
-    }
-    return roughCanvas;
-}
-
-function getJsConfetti(): InstanceType<typeof JSConfetti> | null {
-    if (!jsConfetti) {
-        try { jsConfetti = new JSConfetti({ canvas: render.canvas }); } catch { jsConfetti = null; }
-    }
-    return jsConfetti;
+    const prepared = getPreparedRoughCanvas();
+    if (!prepared) void prepareRoughCanvas(render.canvas);
+    return prepared;
 }
 
 function playHowlerCue(kind: string, volume = 0.38, rate = 1): void {
@@ -4630,7 +4617,7 @@ function playHowlerCue(kind: string, volume = 0.38, rate = 1): void {
     }
 }
 
-function fireLibraryParticleBurst(mode: "magic" | "gacha" | "title" | "tempura", x = geometry.width / 2, y = geometry.height * 0.35): void {
+async function fireLibraryParticleBurst(mode: "magic" | "gacha" | "title" | "tempura", x = geometry.width / 2, y = geometry.height * 0.35): Promise<void> {
     if (settings.simpleMode || !confettiEnabled) return;
     if (isMobile && isStarted && !isFinished) return;
     try {
@@ -4639,20 +4626,9 @@ function fireLibraryParticleBurst(mode: "magic" | "gacha" | "title" | "tempura",
             x: canvasRect.left + x / Math.max(1, geometry.width) * canvasRect.width,
             y: canvasRect.top + y / Math.max(1, geometry.height) * canvasRect.height,
         };
-        party.confetti(source as any, {
-            count: mode === "gacha" ? party.variation.range(80, 150) : party.variation.range(35, 80),
-            size: party.variation.range(0.8, mode === "tempura" ? 2.0 : 1.45),
-            spread: party.variation.range(40, 85),
-        });
+        await fireLibraryBurst(render.canvas, mode, source);
     } catch {
-        // party.js が使えない環境では canvas-confetti 側だけに任せる
-    }
-    try {
-        const jc = getJsConfetti();
-        const emojis = mode === "tempura" ? ["🍤", "✨", "🍚"] : mode === "gacha" ? ["💎", "👑", "✨", "🌈"] : mode === "title" ? ["🏅", "✨", "🎉"] : ["🔯", "✨", "⚡", "🌙"];
-        void jc?.addConfetti({ emojis, emojiSize: mode === "gacha" ? 44 : 34, confettiNumber: mode === "gacha" ? 55 : 30 });
-    } catch {
-        // 絵文字紙吹雪失敗は無視
+        // Optional effects must never stop gameplay.
     }
 }
 
@@ -4851,7 +4827,7 @@ function activateMagicCircle(def: MagicCircleDef, points: Array<{ x: number; y: 
         createTapRipple(center.x + Math.cos(a) * 80 * geometry.scale, center.y + Math.sin(a) * 80 * geometry.scale, i % 2 === 0);
     }
     fireConfetti(def.effect === "void" ? "black" : "miracle", true);
-    fireLibraryParticleBurst(def.kind === "tempura" ? "tempura" : "magic", center.x, center.y);
+    void fireLibraryParticleBurst(def.kind === "tempura" ? "tempura" : "magic", center.x, center.y);
     playHowlerCue(def.effect === "gear" || def.effect === "mirror" ? "crystal" : "magic", 0.42, 0.85 + appRandom() * 0.35);
     showBrokenResearchNote(def.label);
     showSoftToast(`魔法陣発動: ${def.label} / ${def.chant}`);
@@ -6223,7 +6199,7 @@ function applyLowSpecMode(): void {
     settings.effectMode = "quiet";
     if (pixiEnabled) {
         pixiEnabled = false;
-        if (pixiApp) (pixiApp.canvas as HTMLCanvasElement).style.display = "none";
+        pixiBackground?.setVisible(false);
     }
     if (settings.activeLimit > 10) settings.activeLimit = 10;
     activeBallInput.value = String(settings.activeLimit);
@@ -7827,14 +7803,9 @@ async function fireConfetti(mode: "normal" | "miracle" | "black" | "cosmic" = "n
     if (isMobile && isStarted && !isFinished) return;
     const ok = await ensureConfetti();
     if (!ok) return;
-    const colors = mode === "cosmic" ? ["#240038", "#7c3cff", "#ffffff", "#00e5ff", "#ffd700"] : mode === "black" ? ["#000000", "#ff0044", "#ffffff"] : mode === "miracle" ? ["#ffd700", "#ff69b4", "#78e7ff", "#ffffff"] : undefined;
     const intensity = getEffectIntensity(force);
-    const mainCount = Math.round((mode === "cosmic" ? 420 : mode === "normal" ? 90 : 220) * intensity);
-    const sideCount = Math.round((mode === "cosmic" ? 220 : mode === "normal" ? 50 : 120) * intensity);
-    confetti({ particleCount: mainCount, spread: mode === "normal" ? 70 : 140, origin: { y: 0.55 }, colors });
-    confetti({ particleCount: sideCount, angle: 60, spread: 80, origin: { x: 0, y: 0.65 }, colors });
-    confetti({ particleCount: sideCount, angle: 120, spread: 80, origin: { x: 1, y: 0.65 }, colors });
-    if (force || mode !== "normal") fireLibraryParticleBurst(mode === "cosmic" ? "gacha" : mode === "black" ? "magic" : "title");
+    await fireCanvasBurst(mode, intensity);
+    if (force || mode !== "normal") void fireLibraryParticleBurst(mode === "cosmic" ? "gacha" : mode === "black" ? "magic" : "title");
 }
 
 async function togglePixiBackground(): Promise<void> {
@@ -7843,46 +7814,18 @@ async function togglePixiBackground(): Promise<void> {
     showSoftToast(pixiEnabled ? t("Pixi背景をONにしました", "Pixi background enabled") : t("Pixi背景をOFFにしました", "Pixi background disabled"));
     if (pixiEnabled) {
         await initPixiBackground();
-        if (pixiApp) (pixiApp.canvas as HTMLCanvasElement).style.display = "block";
-    } else if (pixiApp) (pixiApp.canvas as HTMLCanvasElement).style.display = "none";
+        pixiBackground?.setVisible(true);
+    } else {
+        pixiBackground?.setVisible(false);
+    }
 }
 
 async function initPixiBackground(): Promise<void> {
     if (pixiReady) return;
     try {
-        pixiApp = new Application();
-        await pixiApp.init({ resizeTo: gameArea, backgroundAlpha: 0, antialias: true });
-        const pixiCanvas = pixiApp.canvas as HTMLCanvasElement;
-        pixiCanvas.style.position = "absolute";
-        pixiCanvas.style.inset = "0";
-        pixiCanvas.style.width = "100%";
-        pixiCanvas.style.height = "100%";
-        pixiCanvas.style.pointerEvents = "none";
-        pixiLayer.appendChild(pixiCanvas);
-        pixiParticles = [];
-        for (let i = 0; i < 26; i++) {
-            const g = new Graphics();
-            const hue = i % 2 === 0 ? 0xffe060 : 0x9dd6ff;
-            g.circle(0, 0, 5 + Math.random() * 9).fill({ color: hue, alpha: 0.20 + Math.random() * 0.22 });
-            g.x = Math.random() * gameArea.clientWidth;
-            g.y = Math.random() * gameArea.clientHeight;
-            (g as any).vx = -0.2 + Math.random() * 0.4;
-            (g as any).vy = 0.3 + Math.random() * 1.0;
-            (g as any).drift = Math.random() * Math.PI * 2;
-            pixiApp.stage.addChild(g);
-            pixiParticles.push(g);
-        }
-        pixiApp.ticker.add(() => {
-            if (!pixiEnabled) return;
-            for (const p of pixiParticles) {
-                (p as any).drift += 0.02;
-                p.x += (p as any).vx + Math.sin((p as any).drift) * 0.3;
-                p.y += (p as any).vy;
-                if (p.y > gameArea.clientHeight + 20) { p.y = -20; p.x = Math.random() * gameArea.clientWidth; }
-                if (p.x < -20) p.x = gameArea.clientWidth + 20;
-                if (p.x > gameArea.clientWidth + 20) p.x = -20;
-            }
-        });
+        pixiBackground = await createPixiBackground(gameArea);
+        pixiLayer.appendChild(pixiBackground.canvas);
+        pixiBackground.setVisible(pixiEnabled);
         pixiReady = true;
     } catch {
         pixiEnabled = false;
@@ -8628,6 +8571,7 @@ if (getFamiliarExpeditionProgress(familiarExpeditionState).complete) {
 updateFamiliarButton();
 resetExperiment(false);
 ensureRenderLoop();
+void prepareRoughCanvas(render.canvas);
 void ensureAnimeReady();
 void ensureGifReady();
 void ensureTippyReady();

@@ -10,19 +10,14 @@ export function getGachaPointRewardForRank(rank: string): number {
     return 0;
 }
 
-export function getExperimentFinishGachaPoint(params: {
-    finishedCount: number;
-    boosterPurchased: boolean;
-}): number {
+export function getExperimentFinishGachaPoint(params: { finishedCount: number; boosterPurchased: boolean }): number {
     return 1 + (params.finishedCount >= 1000 ? 1 : 0) + (params.boosterPurchased ? 1 : 0);
 }
 
-export function getSeasonMissionValue(
-    records: SavedRecords,
-    metric: EventSeasonMissionMetric,
-): number {
+export function getSeasonMissionValue(records: SavedRecords, metric: EventSeasonMissionMetric): number {
     if (metric === "run") return records.totalRuns;
-    if (metric === "discovered") return Object.keys(records.discovered).filter((key) => records.discovered[key] > 0).length;
+    if (metric === "discovered")
+        return Object.keys(records.discovered).filter((key) => records.discovered[key] > 0).length;
     if (metric === "gacha") return records.gachaRewards?.length ?? 0;
     if (metric === "craft") return Object.keys(records.crafted ?? {}).length;
     return records.totalScore;

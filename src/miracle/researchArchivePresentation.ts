@@ -4,7 +4,8 @@ import { escapeHtml } from "./utils";
 export function getResearchArchiveHtml(reports: ResearchReportEntry[]): string {
     const bestScore = reports.slice().sort((a, b) => b.score - a.score)[0];
     const bestMiracle = reports.find((x) => x.bestMiracleRank !== "-");
-    const averageScore = reports.length > 0 ? Math.round(reports.reduce((sum, report) => sum + report.score, 0) / reports.length) : 0;
+    const averageScore =
+        reports.length > 0 ? Math.round(reports.reduce((sum, report) => sum + report.score, 0) / reports.length) : 0;
     const totalFinished = reports.reduce((sum, report) => sum + report.finishedCount, 0);
     const gradeCounts = reports.reduce<Record<string, number>>((acc, report) => {
         acc[report.grade] = (acc[report.grade] ?? 0) + 1;
@@ -14,8 +15,16 @@ export function getResearchArchiveHtml(reports: ResearchReportEntry[]): string {
         acc[report.type] = (acc[report.type] ?? 0) + 1;
         return acc;
     }, {});
-    const typeSummary = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([type, count]) => `${escapeHtml(type)} ${count}`).join(" / ") || "-";
-    const rows = reports.map((report) => `
+    const typeSummary =
+        Object.entries(typeCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 4)
+            .map(([type, count]) => `${escapeHtml(type)} ${count}`)
+            .join(" / ") || "-";
+    const rows =
+        reports
+            .map(
+                (report) => `
         <div class="miracle-user-card" style="display:grid;gap:8px;">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
                 <b>第${report.runNo}回 / ${escapeHtml(report.grade)} / ${escapeHtml(report.type)}</b>
@@ -30,7 +39,10 @@ export function getResearchArchiveHtml(reports: ResearchReportEntry[]): string {
             <div style="opacity:.76;line-height:1.65;">${escapeHtml(report.memo)}</div>
             <div><button class="miracle-home-button" data-report-id="${escapeHtml(report.id)}">詳細</button></div>
         </div>
-    `).join("") || `<div class="miracle-user-card">まだ研究レポートはありません。実験を完了するとここに保存されます。</div>`;
+    `,
+            )
+            .join("") ||
+        `<div class="miracle-user-card">まだ研究レポートはありません。実験を完了するとここに保存されます。</div>`;
     return `
         <div style="display:grid;gap:14px;">
             <div class="miracle-user-card">
@@ -43,7 +55,12 @@ export function getResearchArchiveHtml(reports: ResearchReportEntry[]): string {
                 <div class="miracle-user-card"><b>総処理</b><br><span style="font-size:1.45em;font-weight:1000;">${totalFinished.toLocaleString()}</span></div>
                 <div class="miracle-user-card"><b>最高スコア</b><br>${bestScore ? `${bestScore.score.toLocaleString()} / 第${bestScore.runNo}回` : "-"}</div>
                 <div class="miracle-user-card"><b>最高奇跡</b><br>${bestMiracle ? `${escapeHtml(bestMiracle.bestMiracleLabel)} [${escapeHtml(bestMiracle.bestMiracleRank)}]` : "-"}</div>
-                <div class="miracle-user-card"><b>グレード</b><br>${Object.entries(gradeCounts).sort().map(([grade, count]) => `${escapeHtml(grade)} ${count}`).join(" / ") || "-"}</div>
+                <div class="miracle-user-card"><b>グレード</b><br>${
+                    Object.entries(gradeCounts)
+                        .sort()
+                        .map(([grade, count]) => `${escapeHtml(grade)} ${count}`)
+                        .join(" / ") || "-"
+                }</div>
             </div>
             <div class="miracle-user-card"><b>観測タイプ傾向</b><br><span style="opacity:.82;">${typeSummary}</span></div>
             <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">

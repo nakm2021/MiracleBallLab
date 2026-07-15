@@ -91,7 +91,10 @@ export function buildUserPreferences(params: {
         binCount: params.settings.binCount,
         pinRows: params.settings.pinRows,
         labelText: params.settings.labelText,
-        backgroundImage: params.settings.backgroundImage === params.selectedBackgroundObjectUrl ? params.defaultBackgroundImageUrl : params.settings.backgroundImage,
+        backgroundImage:
+            params.settings.backgroundImage === params.selectedBackgroundObjectUrl
+                ? params.defaultBackgroundImageUrl
+                : params.settings.backgroundImage,
         simpleMode: params.settings.simpleMode,
         cameraShakeEnabled: params.settings.cameraShakeEnabled,
         slowMiracleEffects: params.settings.slowMiracleEffects,
@@ -117,8 +120,18 @@ export function buildUserPreferences(params: {
 }
 
 export function getUserPlayStyleLabel(style: UserPlayStyle, isEnglish: boolean): string {
-    const ja: Record<UserPlayStyle, string> = { standard: "標準", viewer: "演出を見る", collector: "図鑑収集", recording: "録画・SNS" };
-    const en: Record<UserPlayStyle, string> = { standard: "Standard", viewer: "Effects", collector: "Collection", recording: "Recording" };
+    const ja: Record<UserPlayStyle, string> = {
+        standard: "標準",
+        viewer: "演出を見る",
+        collector: "図鑑収集",
+        recording: "録画・SNS",
+    };
+    const en: Record<UserPlayStyle, string> = {
+        standard: "Standard",
+        viewer: "Effects",
+        collector: "Collection",
+        recording: "Recording",
+    };
     return isEnglish ? en[style] : ja[style];
 }
 

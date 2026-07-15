@@ -53,7 +53,21 @@ export function buildResultCsv(params: {
         rows.push([`${key}_created`, value]);
     }
     rows.push([]);
-    rows.push(["bin", "label", "count", "percent", "gold", "rainbow", "giant", "shape", "crown", "star", "heart", "blackSun", "cosmicEgg"]);
+    rows.push([
+        "bin",
+        "label",
+        "count",
+        "percent",
+        "gold",
+        "rainbow",
+        "giant",
+        "shape",
+        "crown",
+        "star",
+        "heart",
+        "blackSun",
+        "cosmicEgg",
+    ]);
     for (let i = 0; i < params.binCount; i++) {
         const percent = params.finishedCount > 0 ? ((params.binCounts[i] ?? 0) / params.finishedCount) * 100 : 0;
         rows.push([

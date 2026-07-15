@@ -9,9 +9,14 @@ export type BallShadingOptions = {
     isMobile: boolean;
 };
 
-export function draw3DBallShadingFrame(context: CanvasRenderingContext2D, bodies: Matter.Body[], options: BallShadingOptions, timeMs = performance.now()): void {
+export function draw3DBallShadingFrame(
+    context: CanvasRenderingContext2D,
+    bodies: Matter.Body[],
+    options: BallShadingOptions,
+    timeMs = performance.now(),
+): void {
     const dropBodies = bodies.filter((body) => (body as any).plugin?.isDrop);
-    const maxShaded = options.simpleMode ? 90 : (options.isMobile || options.lowSpecMode ? 140 : 720);
+    const maxShaded = options.simpleMode ? 90 : options.isMobile || options.lowSpecMode ? 140 : 720;
     const step = dropBodies.length > maxShaded ? Math.ceil(dropBodies.length / maxShaded) : 1;
     const timeSec = timeMs * 0.001;
     context.save();
@@ -26,7 +31,7 @@ export function draw3DBallShadingFrame(context: CanvasRenderingContext2D, bodies
         const isDarkBall = kind === "blackSun" || kind === "darkMatter";
         const metallicBall = kind !== "ghost" && kind !== "heart";
         const phase = timeSec * 1.8 + (body.id % 29) * 0.31 + body.angle * 0.35;
-        const stripeShift = Math.sin(phase) * radius * 0.30;
+        const stripeShift = Math.sin(phase) * radius * 0.3;
         const stripeShift2 = Math.cos(phase * 0.72 + 0.6) * radius * 0.22;
 
         context.save();
@@ -34,7 +39,12 @@ export function draw3DBallShadingFrame(context: CanvasRenderingContext2D, bodies
         context.arc(x, y, radius * 0.987, 0, Math.PI * 2);
         context.clip();
 
-        const silverSheen = context.createLinearGradient(x - radius * 1.04, y - radius * 1.08, x + radius * 1.02, y + radius * 1.06);
+        const silverSheen = context.createLinearGradient(
+            x - radius * 1.04,
+            y - radius * 1.08,
+            x + radius * 1.02,
+            y + radius * 1.06,
+        );
         silverSheen.addColorStop(0, isDarkBall ? "rgba(255,255,255,.36)" : "rgba(255,255,255,.72)");
         silverSheen.addColorStop(0.18, isDarkBall ? "rgba(220,230,245,.16)" : "rgba(232,238,248,.46)");
         silverSheen.addColorStop(0.46, "rgba(255,255,255,0)");
@@ -46,10 +56,15 @@ export function draw3DBallShadingFrame(context: CanvasRenderingContext2D, bodies
         context.fill();
 
         if (metallicBall) {
-            const sweep = context.createLinearGradient(x - radius * 0.96 + stripeShift, y - radius * 0.14, x + radius * 0.98 + stripeShift, y + radius * 0.14);
+            const sweep = context.createLinearGradient(
+                x - radius * 0.96 + stripeShift,
+                y - radius * 0.14,
+                x + radius * 0.98 + stripeShift,
+                y + radius * 0.14,
+            );
             sweep.addColorStop(0, "rgba(255,255,255,0)");
             sweep.addColorStop(0.14, "rgba(220,230,245,.18)");
-            sweep.addColorStop(0.30, "rgba(250,252,255,.48)");
+            sweep.addColorStop(0.3, "rgba(250,252,255,.48)");
             sweep.addColorStop(0.48, "rgba(255,255,255,.98)");
             sweep.addColorStop(0.58, "rgba(208,220,240,.56)");
             sweep.addColorStop(0.76, "rgba(255,255,255,.08)");
@@ -59,7 +74,12 @@ export function draw3DBallShadingFrame(context: CanvasRenderingContext2D, bodies
             context.arc(x, y, radius, 0, Math.PI * 2);
             context.fill();
 
-            const sweep2 = context.createLinearGradient(x - radius * 0.84 + stripeShift2, y - radius * 0.05, x + radius * 0.84 + stripeShift2, y + radius * 0.06);
+            const sweep2 = context.createLinearGradient(
+                x - radius * 0.84 + stripeShift2,
+                y - radius * 0.05,
+                x + radius * 0.84 + stripeShift2,
+                y + radius * 0.06,
+            );
             sweep2.addColorStop(0, "rgba(255,255,255,0)");
             sweep2.addColorStop(0.42, "rgba(230,238,250,.10)");
             sweep2.addColorStop(0.52, "rgba(255,255,255,.48)");
@@ -83,7 +103,7 @@ export function draw3DBallShadingFrame(context: CanvasRenderingContext2D, bodies
 
         context.fillStyle = isDarkBall ? "rgba(255,255,255,.66)" : "rgba(255,255,255,.94)";
         context.beginPath();
-        context.ellipse(x - radius * 0.30, y - radius * 0.42, radius * 0.29, radius * 0.18, -0.56, 0, Math.PI * 2);
+        context.ellipse(x - radius * 0.3, y - radius * 0.42, radius * 0.29, radius * 0.18, -0.56, 0, Math.PI * 2);
         context.fill();
 
         context.fillStyle = "rgba(255,255,255,.82)";
@@ -93,18 +113,33 @@ export function draw3DBallShadingFrame(context: CanvasRenderingContext2D, bodies
 
         context.fillStyle = metallicBall ? "rgba(255,255,255,.42)" : "rgba(255,255,255,.16)";
         context.beginPath();
-        context.ellipse(x - radius * 0.02 + stripeShift * 0.25, y - radius * 0.10, radius * 0.50, radius * 0.12, -0.38, 0, Math.PI * 2);
+        context.ellipse(
+            x - radius * 0.02 + stripeShift * 0.25,
+            y - radius * 0.1,
+            radius * 0.5,
+            radius * 0.12,
+            -0.38,
+            0,
+            Math.PI * 2,
+        );
         context.fill();
 
         if (!options.lowSpecMode) {
             context.fillStyle = "rgba(255,255,255,.22)";
             context.beginPath();
-            context.ellipse(x + radius * 0.44, y - radius * 0.02, radius * 0.10, radius * 0.34, 0.2, 0, Math.PI * 2);
+            context.ellipse(x + radius * 0.44, y - radius * 0.02, radius * 0.1, radius * 0.34, 0.2, 0, Math.PI * 2);
             context.fill();
 
-            const lowerShade = context.createRadialGradient(x + radius * 0.22, y + radius * 0.40, radius * 0.18, x + radius * 0.16, y + radius * 0.42, radius * 1.02);
+            const lowerShade = context.createRadialGradient(
+                x + radius * 0.22,
+                y + radius * 0.4,
+                radius * 0.18,
+                x + radius * 0.16,
+                y + radius * 0.42,
+                radius * 1.02,
+            );
             lowerShade.addColorStop(0, "rgba(0,0,0,0)");
-            lowerShade.addColorStop(0.70, "rgba(0,0,0,.08)");
+            lowerShade.addColorStop(0.7, "rgba(0,0,0,.08)");
             lowerShade.addColorStop(1, "rgba(0,0,0,.24)");
             context.fillStyle = lowerShade;
             context.beginPath();
@@ -117,19 +152,24 @@ export function draw3DBallShadingFrame(context: CanvasRenderingContext2D, bodies
         context.strokeStyle = metallicBall ? "rgba(255,255,255,.38)" : "rgba(255,255,255,.24)";
         context.lineWidth = Math.max(1, radius * 0.085);
         context.beginPath();
-        context.arc(x, y, radius * 0.968, Math.PI * 0.80, Math.PI * 1.88);
+        context.arc(x, y, radius * 0.968, Math.PI * 0.8, Math.PI * 1.88);
         context.stroke();
 
         context.strokeStyle = metallicBall ? "rgba(16,22,30,.24)" : "rgba(0,0,0,.14)";
         context.lineWidth = Math.max(1, radius * 0.06);
         context.beginPath();
-        context.arc(x, y, radius * 0.94, Math.PI * 0.04, Math.PI * 1.00);
+        context.arc(x, y, radius * 0.94, Math.PI * 0.04, Math.PI * 1.0);
         context.stroke();
     }
     context.restore();
 }
 
-export function drawNormalTraitMarksFrame(context: CanvasRenderingContext2D, bodies: Matter.Body[], ballRadius: number, simpleMode: boolean): void {
+export function drawNormalTraitMarksFrame(
+    context: CanvasRenderingContext2D,
+    bodies: Matter.Body[],
+    ballRadius: number,
+    simpleMode: boolean,
+): void {
     if (simpleMode) return;
     context.save();
     for (const body of bodies) {
@@ -152,17 +192,29 @@ export function drawNormalTraitMarksFrame(context: CanvasRenderingContext2D, bod
     context.restore();
 }
 
-export function drawRealisticPinsFrame(context: CanvasRenderingContext2D, bodies: Matter.Body[], geometry: Geometry): void {
+export function drawRealisticPinsFrame(
+    context: CanvasRenderingContext2D,
+    bodies: Matter.Body[],
+    geometry: Geometry,
+): void {
     context.save();
     for (const body of bodies) {
         const plugin = (body as any).plugin;
         if (!plugin?.isPin) continue;
-        try { (body.render as any).visible = false; } catch {}
+        try {
+            (body.render as any).visible = false;
+        } catch {}
         const rawRadius = body.circleRadius ?? geometry.pinRadius;
-        const radius = clamp(Math.max(rawRadius * 1.28, geometry.pinRadius * 1.42, 4 * geometry.scale), 3, 92 * geometry.scale);
+        const radius = clamp(
+            Math.max(rawRadius * 1.28, geometry.pinRadius * 1.42, 4 * geometry.scale),
+            3,
+            92 * geometry.scale,
+        );
         const baseX = Number(plugin.baseX ?? body.position.x);
         const baseY = Number(plugin.baseY ?? body.position.y);
-        const magicColor = plugin.isMagicBoardPin ? String(plugin.magicColor || (body.render as any)?.fillStyle || "#fde68a") : "";
+        const magicColor = plugin.isMagicBoardPin
+            ? String(plugin.magicColor || (body.render as any)?.fillStyle || "#fde68a")
+            : "";
         const bend = clamp(Number(plugin.bendAmount ?? 0), -3.2, 3.2);
         const headX = body.position.x + bend * radius * 0.18;
         const headY = body.position.y + Math.abs(bend) * radius * 0.05;
@@ -182,8 +234,13 @@ export function drawRealisticPinsFrame(context: CanvasRenderingContext2D, bodies
         context.strokeStyle = "rgba(20,24,34,.32)";
         context.lineWidth = Math.max(2, radius * 0.28);
         context.beginPath();
-        context.moveTo(anchorX + radius * 0.10, anchorY + radius * 0.18);
-        context.quadraticCurveTo(controlX + radius * 0.10, controlY + radius * 0.18, headX + radius * 0.10, headY + radius * 0.08);
+        context.moveTo(anchorX + radius * 0.1, anchorY + radius * 0.18);
+        context.quadraticCurveTo(
+            controlX + radius * 0.1,
+            controlY + radius * 0.18,
+            headX + radius * 0.1,
+            headY + radius * 0.08,
+        );
         context.stroke();
 
         const stemGrad = context.createLinearGradient(anchorX - radius, anchorY, headX + radius, headY);
@@ -200,13 +257,28 @@ export function drawRealisticPinsFrame(context: CanvasRenderingContext2D, bodies
 
         context.fillStyle = "rgba(0,0,0,.20)";
         context.beginPath();
-        context.ellipse(baseX + radius * 0.16, baseY + radius * 0.62, Math.max(2, radius * 0.90), Math.max(2, radius * 0.30), 0, 0, Math.PI * 2);
+        context.ellipse(
+            baseX + radius * 0.16,
+            baseY + radius * 0.62,
+            Math.max(2, radius * 0.9),
+            Math.max(2, radius * 0.3),
+            0,
+            0,
+            Math.PI * 2,
+        );
         context.fill();
 
         context.translate(headX, headY);
-        context.rotate(bend * 0.10);
+        context.rotate(bend * 0.1);
 
-        const base = context.createRadialGradient(-rx * 0.30, -ry * 0.36, Math.max(1, radius * 0.12), 0, 0, Math.max(2, radius * 1.18));
+        const base = context.createRadialGradient(
+            -rx * 0.3,
+            -ry * 0.36,
+            Math.max(1, radius * 0.12),
+            0,
+            0,
+            Math.max(2, radius * 1.18),
+        );
         if (magicColor) {
             base.addColorStop(0, "rgba(255,255,255,.98)");
             base.addColorStop(0.22, magicColor);
@@ -215,7 +287,7 @@ export function drawRealisticPinsFrame(context: CanvasRenderingContext2D, bodies
             base.addColorStop(1, magicColor);
         } else {
             base.addColorStop(0, "rgba(255,255,248,.98)");
-            base.addColorStop(0.20, "rgba(255,236,148,.98)");
+            base.addColorStop(0.2, "rgba(255,236,148,.98)");
             base.addColorStop(0.48, "rgba(214,149,35,.98)");
             base.addColorStop(0.76, "rgba(129,81,18,.98)");
             base.addColorStop(1, "rgba(255,239,145,.92)");
@@ -227,7 +299,7 @@ export function drawRealisticPinsFrame(context: CanvasRenderingContext2D, bodies
 
         const shine = context.createLinearGradient(-rx, -ry, rx, ry);
         shine.addColorStop(0, "rgba(255,255,255,.92)");
-        shine.addColorStop(0.30, "rgba(255,255,255,.16)");
+        shine.addColorStop(0.3, "rgba(255,255,255,.16)");
         shine.addColorStop(0.52, "rgba(255,255,255,0)");
         shine.addColorStop(0.68, "rgba(255,245,180,.34)");
         shine.addColorStop(1, "rgba(0,0,0,.20)");
@@ -256,7 +328,13 @@ export function drawRealisticPinsFrame(context: CanvasRenderingContext2D, bodies
     context.restore();
 }
 
-export function drawBoardDepthOverlayFrame(context: CanvasRenderingContext2D, geometry: Geometry, simpleMode: boolean, stableRuntime: boolean, timeMs = performance.now()): void {
+export function drawBoardDepthOverlayFrame(
+    context: CanvasRenderingContext2D,
+    geometry: Geometry,
+    simpleMode: boolean,
+    stableRuntime: boolean,
+    timeMs = performance.now(),
+): void {
     context.save();
     context.globalCompositeOperation = "source-over";
     const scale = geometry.scale || 1;
@@ -271,9 +349,9 @@ export function drawBoardDepthOverlayFrame(context: CanvasRenderingContext2D, ge
 
     const frame = context.createLinearGradient(left, top, right, bottom);
     frame.addColorStop(0, `rgba(255,255,255,${0.58 * richAlpha})`);
-    frame.addColorStop(0.18, `rgba(210,223,238,${0.30 * richAlpha})`);
+    frame.addColorStop(0.18, `rgba(210,223,238,${0.3 * richAlpha})`);
     frame.addColorStop(0.45, `rgba(94,111,132,${0.32 * richAlpha})`);
-    frame.addColorStop(0.70, `rgba(255,230,145,${0.30 * richAlpha})`);
+    frame.addColorStop(0.7, `rgba(255,230,145,${0.3 * richAlpha})`);
     frame.addColorStop(1, `rgba(255,255,255,${0.42 * richAlpha})`);
     context.strokeStyle = frame;
     context.lineWidth = Math.max(5 * scale, 3);
@@ -282,12 +360,26 @@ export function drawBoardDepthOverlayFrame(context: CanvasRenderingContext2D, ge
 
     context.strokeStyle = `rgba(255,255,255,${0.34 * richAlpha})`;
     context.lineWidth = Math.max(2 * scale, 1.5);
-    roundRect(context, left + 7 * scale, top + 7 * scale, Math.max(8, w - 14 * scale), Math.max(8, h - 14 * scale), Math.max(8, radius - 7 * scale));
+    roundRect(
+        context,
+        left + 7 * scale,
+        top + 7 * scale,
+        Math.max(8, w - 14 * scale),
+        Math.max(8, h - 14 * scale),
+        Math.max(8, radius - 7 * scale),
+    );
     context.stroke();
 
     context.strokeStyle = `rgba(0,0,0,${0.26 * richAlpha})`;
     context.lineWidth = Math.max(2 * scale, 1);
-    roundRect(context, left + 3 * scale, top + 3 * scale, Math.max(8, w - 6 * scale), Math.max(8, h - 6 * scale), Math.max(8, radius - 3 * scale));
+    roundRect(
+        context,
+        left + 3 * scale,
+        top + 3 * scale,
+        Math.max(8, w - 6 * scale),
+        Math.max(8, h - 6 * scale),
+        Math.max(8, radius - 3 * scale),
+    );
     context.stroke();
 
     const glass = context.createLinearGradient(0, 0, geometry.width, geometry.height);
@@ -302,11 +394,11 @@ export function drawBoardDepthOverlayFrame(context: CanvasRenderingContext2D, ge
     if (!simpleMode && !stableRuntime) {
         context.save();
         context.globalCompositeOperation = "screen";
-        const sweepX = (timeMs / 42) % (geometry.width + geometry.height) - geometry.height;
+        const sweepX = ((timeMs / 42) % (geometry.width + geometry.height)) - geometry.height;
         const sweep = context.createLinearGradient(sweepX, 0, sweepX + geometry.height * 0.55, geometry.height);
         sweep.addColorStop(0, "rgba(255,255,255,0)");
         sweep.addColorStop(0.42, "rgba(255,255,255,0)");
-        sweep.addColorStop(0.50, "rgba(255,255,255,.18)");
+        sweep.addColorStop(0.5, "rgba(255,255,255,.18)");
         sweep.addColorStop(0.58, "rgba(255,255,255,0)");
         sweep.addColorStop(1, "rgba(255,255,255,0)");
         context.fillStyle = sweep;
@@ -364,12 +456,22 @@ export function drawBoardDepthOverlayFrame(context: CanvasRenderingContext2D, ge
     bottomDepth.addColorStop(0.65, `rgba(0,0,0,${0.08 * richAlpha})`);
     bottomDepth.addColorStop(1, `rgba(0,0,0,${0.22 * richAlpha})`);
     context.fillStyle = bottomDepth;
-    context.fillRect(0, Math.max(0, geometry.groundTop - 150 * scale), geometry.width, Math.max(0, geometry.height - (geometry.groundTop - 150 * scale)));
+    context.fillRect(
+        0,
+        Math.max(0, geometry.groundTop - 150 * scale),
+        geometry.width,
+        Math.max(0, geometry.height - (geometry.groundTop - 150 * scale)),
+    );
 
     context.restore();
 }
 
-export function drawLuxuryBoardForegroundFrame(context: CanvasRenderingContext2D, geometry: Geometry, stableRuntime: boolean, timeMs = performance.now()): void {
+export function drawLuxuryBoardForegroundFrame(
+    context: CanvasRenderingContext2D,
+    geometry: Geometry,
+    stableRuntime: boolean,
+    timeMs = performance.now(),
+): void {
     const scale = geometry.scale || 1;
     const left = Math.max(geometry.wallWidth * 0.44, 8 * scale);
     const top = Math.max(8 * scale, 6);
@@ -397,7 +499,14 @@ export function drawLuxuryBoardForegroundFrame(context: CanvasRenderingContext2D
 
     context.strokeStyle = "rgba(255,255,255,.38)";
     context.lineWidth = Math.max(2.5 * scale, 1.5);
-    roundRect(context, left + 8 * scale, top + 8 * scale, Math.max(10, w - 16 * scale), Math.max(10, h - 16 * scale), Math.max(8, radius - 8 * scale));
+    roundRect(
+        context,
+        left + 8 * scale,
+        top + 8 * scale,
+        Math.max(10, w - 16 * scale),
+        Math.max(10, h - 16 * scale),
+        Math.max(8, radius - 8 * scale),
+    );
     context.stroke();
 
     if (!stableRuntime) {
@@ -428,7 +537,12 @@ export function drawLuxuryBoardForegroundFrame(context: CanvasRenderingContext2D
     depth.addColorStop(0, "rgba(0,0,0,0)");
     depth.addColorStop(1, "rgba(0,0,0,.26)");
     context.fillStyle = depth;
-    context.fillRect(0, Math.max(0, bottom - 80 * scale), geometry.width, geometry.height - Math.max(0, bottom - 80 * scale));
+    context.fillRect(
+        0,
+        Math.max(0, bottom - 80 * scale),
+        geometry.width,
+        geometry.height - Math.max(0, bottom - 80 * scale),
+    );
 
     for (const side of [-1, 1]) {
         const cx = side < 0 ? left + 18 * scale : right - 18 * scale;
@@ -446,7 +560,7 @@ export function drawLuxuryBoardForegroundFrame(context: CanvasRenderingContext2D
 
 export function drawMobileRuntimeStableFrame(context: CanvasRenderingContext2D, geometry: Geometry): void {
     const scale = geometry.scale || 1;
-    const left = Math.max(geometry.wallWidth * 0.50, 8 * scale);
+    const left = Math.max(geometry.wallWidth * 0.5, 8 * scale);
     const top = Math.max(8 * scale, 6);
     const right = geometry.width - left;
     const bottom = Math.max(geometry.groundTop - 8 * scale, top + 50 * scale);
@@ -462,7 +576,14 @@ export function drawMobileRuntimeStableFrame(context: CanvasRenderingContext2D, 
     context.stroke();
     context.strokeStyle = "rgba(30,38,52,.72)";
     context.lineWidth = Math.max(2 * scale, 1.5);
-    roundRect(context, left + 5 * scale, top + 5 * scale, Math.max(8, w - 10 * scale), Math.max(8, h - 10 * scale), Math.max(8, radius - 5 * scale));
+    roundRect(
+        context,
+        left + 5 * scale,
+        top + 5 * scale,
+        Math.max(8, w - 10 * scale),
+        Math.max(8, h - 10 * scale),
+        Math.max(8, radius - 5 * scale),
+    );
     context.stroke();
     context.restore();
 }
@@ -475,7 +596,14 @@ export function drawSpecialGlowsFrame(
         isMobile: boolean;
         geometry: Geometry;
         findSpecialDef: (kind: DropKind) => SpecialEventDef | undefined;
-        drawSpecialIcon: (context: CanvasRenderingContext2D, kind: DropKind, x: number, y: number, radius: number, symbol: string) => void;
+        drawSpecialIcon: (
+            context: CanvasRenderingContext2D,
+            kind: DropKind,
+            x: number,
+            y: number,
+            radius: number,
+            symbol: string,
+        ) => void;
     },
     timeSec = Date.now() / 1000,
 ): void {
@@ -495,7 +623,9 @@ export function drawSpecialGlowsFrame(
         if (kind === "rainbow") colors = ["190,100,255", "80,180,255"];
         if (def) {
             const c = getSpecialIconColors(kind);
-            colors = hexToRgbTriplet(c.main, "255,215,0") ? [hexToRgbTriplet(c.main, "255,215,0"), hexToRgbTriplet(c.sub, "255,170,0")] : colors;
+            colors = hexToRgbTriplet(c.main, "255,215,0")
+                ? [hexToRgbTriplet(c.main, "255,215,0"), hexToRgbTriplet(c.sub, "255,170,0")]
+                : colors;
         }
 
         context.save();
@@ -511,13 +641,27 @@ export function drawSpecialGlowsFrame(
         context.restore();
 
         if (def) {
-            options.drawSpecialIcon(context, kind, x, y, Math.max(radius, options.isMobile ? 20 : 14 * options.geometry.scale), plugin.symbol || def.symbol);
+            options.drawSpecialIcon(
+                context,
+                kind,
+                x,
+                y,
+                Math.max(radius, options.isMobile ? 20 : 14 * options.geometry.scale),
+                plugin.symbol || def.symbol,
+            );
         }
 
         if (kind === "gold" || kind === "rainbow") {
             for (let i = 0; i < 6; i++) {
-                const angle = timeSec * 2.5 + i * Math.PI * 2 / 6;
-                drawSparkle(context, x + Math.cos(angle) * radius * 2.6, y + Math.sin(angle) * radius * 2.6, 5 * options.geometry.scale, "rgba(255,255,220,.95)", angle);
+                const angle = timeSec * 2.5 + (i * Math.PI * 2) / 6;
+                drawSparkle(
+                    context,
+                    x + Math.cos(angle) * radius * 2.6,
+                    y + Math.sin(angle) * radius * 2.6,
+                    5 * options.geometry.scale,
+                    "rgba(255,255,220,.95)",
+                    angle,
+                );
             }
         }
     }

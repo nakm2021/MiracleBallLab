@@ -1,7 +1,4 @@
-export function getSafeStopResultHtml(params: {
-    isMobile: boolean;
-    researchMemoHtml: string;
-}): string {
+export function getSafeStopResultHtml(params: { isMobile: boolean; researchMemoHtml: string }): string {
     return `
         <div style="max-width:820px;width:min(820px,94vw);padding:${params.isMobile ? "28px 18px" : "38px"};border-radius:30px;background:rgba(15,23,42,.82);box-shadow:0 28px 90px rgba(0,0,0,.50);text-align:center;">
             <div style="font-size:clamp(34px,7vw,72px);font-weight:1000;color:#fff;">安全停止しました</div>

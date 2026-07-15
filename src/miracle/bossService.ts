@@ -37,12 +37,18 @@ export function getBossDropDamage(params: {
         return 0;
     }
     const rankScore = params.getRankScore(params.def.rank);
-    const base = rankScore >= params.getRankScore("GOD") ? 120000
-        : rankScore >= params.getRankScore("EX") ? 72000
-        : rankScore >= params.getRankScore("UR") ? 36000
-        : rankScore >= params.getRankScore("SSR") ? 18000
-        : rankScore >= params.getRankScore("SR") ? 7200
-        : 3600;
+    const base =
+        rankScore >= params.getRankScore("GOD")
+            ? 120000
+            : rankScore >= params.getRankScore("EX")
+              ? 72000
+              : rankScore >= params.getRankScore("UR")
+                ? 36000
+                : rankScore >= params.getRankScore("SSR")
+                  ? 18000
+                  : rankScore >= params.getRankScore("SR")
+                    ? 7200
+                    : 3600;
     return Math.round(base * (params.weakness === "miracle" ? 1.45 : 1));
 }
 
@@ -76,8 +82,12 @@ export function createBossExperimentRecord(params: {
     };
 }
 
-export function prependBossRecord(records: BossExperimentRecord[] | undefined, record: BossExperimentRecord, limit = 80): BossExperimentRecord[] {
-    return [record, ...((records ?? []).filter((x) => x.id !== record.id))].slice(0, limit);
+export function prependBossRecord(
+    records: BossExperimentRecord[] | undefined,
+    record: BossExperimentRecord,
+    limit = 80,
+): BossExperimentRecord[] {
+    return [record, ...(records ?? []).filter((x) => x.id !== record.id)].slice(0, limit);
 }
 
 export function getBossRewardParts(params: {

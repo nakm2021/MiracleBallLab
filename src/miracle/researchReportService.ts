@@ -47,8 +47,5 @@ export function prependResearchReport(params: {
     report: ResearchReportEntry;
     limit: number;
 }): ResearchReportEntry[] {
-    return [
-        params.report,
-        ...((params.reports ?? []).filter((x) => x.id !== params.report.id)),
-    ].slice(0, params.limit);
+    return [params.report, ...(params.reports ?? []).filter((x) => x.id !== params.report.id)].slice(0, params.limit);
 }

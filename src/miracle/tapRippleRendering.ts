@@ -1,6 +1,10 @@
 import type { Geometry, TapRipple } from "./types";
 
-export function drawTapRipplesFrame(context: CanvasRenderingContext2D, ripples: TapRipple[], options: { simpleMode: boolean; isPaused: boolean; geometry: Geometry }): void {
+export function drawTapRipplesFrame(
+    context: CanvasRenderingContext2D,
+    ripples: TapRipple[],
+    options: { simpleMode: boolean; isPaused: boolean; geometry: Geometry },
+): void {
     if (options.simpleMode || ripples.length === 0) return;
     context.save();
     for (let i = ripples.length - 1; i >= 0; i--) {

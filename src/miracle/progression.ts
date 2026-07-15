@@ -1,6 +1,13 @@
 import { getRankScore } from "./rarity";
 import { getThemeOptions } from "./settings";
-import type { DailyMissionDef, ResearchRankInfo, SavedRecords, ThemeAutoMode, ThemeCollectionEntry, ThemeMode } from "./types";
+import type {
+    DailyMissionDef,
+    ResearchRankInfo,
+    SavedRecords,
+    ThemeAutoMode,
+    ThemeCollectionEntry,
+    ThemeMode,
+} from "./types";
 
 export type DailyMissionContext = {
     finishedCount: number;
@@ -46,7 +53,18 @@ export function resolveAutoTheme(mode: ThemeAutoMode, current: ThemeMode, date =
 
 export function getDailyMissions(dateKey: string): DailyMissionDef[] {
     const seed = hashText(dateKey);
-    const themeHints: ThemeMode[] = ["gold", "space", "sakura", "ocean", "forest", "cyber", "temple", "thunder", "glacier", "neon"];
+    const themeHints: ThemeMode[] = [
+        "gold",
+        "space",
+        "sakura",
+        "ocean",
+        "forest",
+        "cyber",
+        "temple",
+        "thunder",
+        "glacier",
+        "neon",
+    ];
     const luckyTheme = pick(themeHints, seed);
     const targetFinished = 300 + (seed % 5) * 100;
     const targetScore = 30000 + (seed % 7) * 10000;
@@ -93,24 +111,36 @@ export function getDailyMissions(dateKey: string): DailyMissionDef[] {
 
 export function getDailyMissionValue(mission: DailyMissionDef, context: DailyMissionContext): number {
     switch (mission.metric) {
-        case "run": return 1;
-        case "finished": return context.finishedCount;
-        case "score": return context.runScore;
-        case "special": return context.specialCount;
-        case "discard": return context.discardedCount;
-        case "center": return context.centerHits;
+        case "run":
+            return 1;
+        case "finished":
+            return context.finishedCount;
+        case "score":
+            return context.runScore;
+        case "special":
+            return context.specialCount;
+        case "discard":
+            return context.discardedCount;
+        case "center":
+            return context.centerHits;
     }
 }
 
-export function getResearchRankInfo(records: SavedRecords, discoveredCount: number, fusionCount: number, secretCount: number): ResearchRankInfo {
-    const score = Math.max(0,
+export function getResearchRankInfo(
+    records: SavedRecords,
+    discoveredCount: number,
+    fusionCount: number,
+    secretCount: number,
+): ResearchRankInfo {
+    const score = Math.max(
+        0,
         (records.totalScore ?? 0) +
-        (records.bestScore ?? 0) * 0.4 +
-        (records.totalRuns ?? 0) * 1800 +
-        discoveredCount * 5200 +
-        fusionCount * 16000 +
-        secretCount * 24000 +
-        getRankScore(records.bestRank ?? "-") * 1200,
+            (records.bestScore ?? 0) * 0.4 +
+            (records.totalRuns ?? 0) * 1800 +
+            discoveredCount * 5200 +
+            fusionCount * 16000 +
+            secretCount * 24000 +
+            getRankScore(records.bestRank ?? "-") * 1200,
     );
     const ranks = [
         { label: "見習い研究員", score: 0 },
@@ -129,11 +159,17 @@ export function getResearchRankInfo(records: SavedRecords, discoveredCount: numb
     const current = ranks[level];
     const next = ranks[Math.min(level + 1, ranks.length - 1)];
     const width = Math.max(1, next.score - current.score);
-    const progressPercent = level >= ranks.length - 1 ? 100 : Math.max(0, Math.min(100, ((score - current.score) / width) * 100));
+    const progressPercent =
+        level >= ranks.length - 1 ? 100 : Math.max(0, Math.min(100, ((score - current.score) / width) * 100));
     return { label: current.label, level: level + 1, score: Math.floor(score), nextScore: next.score, progressPercent };
 }
 
-export function getThemeCollection(records: SavedRecords, discoveredCount: number, fusionCount: number, secretCount: number): ThemeCollectionEntry[] {
+export function getThemeCollection(
+    records: SavedRecords,
+    discoveredCount: number,
+    fusionCount: number,
+    secretCount: number,
+): ThemeCollectionEntry[] {
     const bestRankScore = getRankScore(records.bestRank ?? "-");
     const runs = records.totalRuns ?? 0;
     const score = records.totalScore ?? 0;
@@ -142,7 +178,10 @@ export function getThemeCollection(records: SavedRecords, discoveredCount: numbe
         lab: [true, "最初から使えます"],
         midnight: [runs >= 1 || !!openUnlocked.midnight, "実験を1回完了"],
         retro: [runs >= 3 || !!openUnlocked.retro, "実験を3回完了"],
-        gold: [bestRankScore >= getRankScore("UR") || score >= 120000 || !!openUnlocked.gold, "UR以上または通算スコア120,000"],
+        gold: [
+            bestRankScore >= getRankScore("UR") || score >= 120000 || !!openUnlocked.gold,
+            "UR以上または通算スコア120,000",
+        ],
         ocean: [discoveredCount >= 3 || !!openUnlocked.ocean, "奇跡を3種類発見"],
         space: [bestRankScore >= getRankScore("EX") || !!openUnlocked.space, "EX以上を発見"],
         sakura: [runs >= 5 || !!openUnlocked.sakura, "実験を5回完了"],
@@ -158,7 +197,10 @@ export function getThemeCollection(records: SavedRecords, discoveredCount: numbe
         monochrome: [runs >= 10 || !!openUnlocked.monochrome, "実験を10回完了"],
         wafuu: [discoveredCount >= 8 || !!openUnlocked.wafuu, "奇跡を8種類発見"],
         glacier: [bestRankScore >= getRankScore("GOD") || !!openUnlocked.glacier, "GODを発見"],
-        thunder: [score >= 500000 || bestRankScore >= getRankScore("EX") || !!openUnlocked.thunder, "通算スコア500,000またはEX以上"],
+        thunder: [
+            score >= 500000 || bestRankScore >= getRankScore("EX") || !!openUnlocked.thunder,
+            "通算スコア500,000またはEX以上",
+        ],
     };
     return getThemeOptions().map((option) => {
         const [unlocked, reason] = conditions[option.value] ?? [false, "研究を進めると解放"];

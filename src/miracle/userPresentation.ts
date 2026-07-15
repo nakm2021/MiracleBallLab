@@ -17,7 +17,8 @@ export function getUserSettingsHtml(params: {
     playStyleLabel: string;
 }): string {
     const fontSize = params.isMobile ? 20 : 18;
-    const option = (value: UserPlayStyle, label: string) => `<option value="${value}" ${params.profile.playStyle === value ? "selected" : ""}>${label}</option>`;
+    const option = (value: UserPlayStyle, label: string) =>
+        `<option value="${value}" ${params.profile.playStyle === value ? "selected" : ""}>${label}</option>`;
     return `
         <div class="miracle-user-card">
             <p style="margin-top:0;"><b>研究員プロフィール</b></p>
@@ -57,11 +58,7 @@ export function getUserSettingsHtml(params: {
     `;
 }
 
-export function getAppInfoHtml(params: {
-    appVersion: string;
-    onlineStatusHtml: string;
-    standalone: boolean;
-}): string {
+export function getAppInfoHtml(params: { appVersion: string; onlineStatusHtml: string; standalone: boolean }): string {
     return `
         <div class="miracle-user-card">
             <p style="margin-top:0;"><b>MiracleBallLab</b></p>

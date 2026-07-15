@@ -83,12 +83,33 @@ export type RemoteMiracleManifest = {
     assets: RemoteMiracleAsset[];
 };
 
-export type ThemeMode = "lab" | "midnight" | "retro" | "gold" | "ocean" | "space" | "sakura" | "snow" | "volcano" | "forest" | "cyber" | "candy" | "poison" | "temple" | "sunset" | "neon" | "monochrome" | "wafuu" | "glacier" | "thunder";
+export type ThemeMode =
+    | "lab"
+    | "midnight"
+    | "retro"
+    | "gold"
+    | "ocean"
+    | "space"
+    | "sakura"
+    | "snow"
+    | "volcano"
+    | "forest"
+    | "cyber"
+    | "candy"
+    | "poison"
+    | "temple"
+    | "sunset"
+    | "neon"
+    | "monochrome"
+    | "wafuu"
+    | "glacier"
+    | "thunder";
 export type ThemeAutoMode = "fixed" | "time" | "random";
 export type EffectMode = "quiet" | "normal" | "flashy" | "recording";
 export type WorldMode = "poseidon" | "zeusu" | "hadesu" | "heart" | "nekochan" | null;
 export type TimeBallTheme = "morning" | "day" | "evening" | "night" | "midnight";
-export type TimeBallSkin = "normal" | "gloss" | "drop" | "spark" | "star" | "moon" | "darkShard" | "swordShard" | "coin" | "heart" | "crown";
+export type TimeBallSkin =
+    "normal" | "gloss" | "drop" | "spark" | "star" | "moon" | "darkShard" | "swordShard" | "coin" | "heart" | "crown";
 export type FamiliarKind = "mame" | "neko" | "kuro" | "tokei" | "hoshi" | "miko";
 export type FamiliarMode = "assist" | "guard" | "lucky" | "chaos";
 
@@ -115,7 +136,6 @@ export type FamiliarState = {
     assistCount: number;
     jackpotWhisperCount: number;
 };
-
 
 export type DailyMissionMetric = "run" | "finished" | "score" | "special" | "discard" | "center";
 
@@ -369,7 +389,8 @@ export type FloatingText = {
     color: string;
 };
 
-export type NormalBallTraitKind = "standard" | "heavy" | "bouncy" | "tiny" | "sleepy" | "sprinter" | "spinner" | "ghost";
+export type NormalBallTraitKind =
+    "standard" | "heavy" | "bouncy" | "tiny" | "sleepy" | "sprinter" | "spinner" | "ghost";
 
 export type NormalBallTraitDef = {
     kind: NormalBallTraitKind;
@@ -393,7 +414,8 @@ export type MiracleChainDef = {
     rewardScore: number;
 };
 
-export type BoardAnomalyMode = "none" | "sideGravity" | "stickyTime" | "dimPins" | "tremor" | "updraft" | "blackHole" | "pinPulse" | "reverseRain";
+export type BoardAnomalyMode =
+    "none" | "sideGravity" | "stickyTime" | "dimPins" | "tremor" | "updraft" | "blackHole" | "pinPulse" | "reverseRain";
 
 export type RarePinKind = "red" | "blue" | "black" | "rainbow";
 

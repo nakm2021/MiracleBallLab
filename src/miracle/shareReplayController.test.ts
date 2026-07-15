@@ -26,14 +26,17 @@ const savedRecords: SavedRecords = {
 
 describe("buildShareText", () => {
     it("includes key run stats and clip count", () => {
-        const text = buildShareText({
-            runScore: 123456,
-            finishedCount: 500,
-            targetCount: 1000,
-            savedRecords,
-            discoveredCount: 7,
-            specialEventCount: 42,
-        }, 5);
+        const text = buildShareText(
+            {
+                runScore: 123456,
+                finishedCount: 500,
+                targetCount: 1000,
+                savedRecords,
+                discoveredCount: 7,
+                specialEventCount: 42,
+            },
+            5,
+        );
 
         expect(text).toContain("スコア: 123,456");
         expect(text).toContain("処理数: 500 / 1,000");

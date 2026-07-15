@@ -7,10 +7,11 @@ export function getMissionHtml(params: {
     totalCompleted: Record<string, number>;
     isMobile: boolean;
 }): string {
-    const rows = params.missions.map((mission) => {
-        const cleared = !!params.progress[mission.id];
-        const totalClear = params.totalCompleted[mission.id] ?? 0;
-        return `<div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+    const rows = params.missions
+        .map((mission) => {
+            const cleared = !!params.progress[mission.id];
+            const totalClear = params.totalCompleted[mission.id] ?? 0;
+            return `<div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
                 <div style="font-weight:900;font-size:${params.isMobile ? 22 : 18}px;color:${cleared ? "#166534" : "#1f2937"};">${cleared ? "✅" : "⬜"} ${escapeHtml(mission.title)}</div>
                 <div style="font-weight:800;color:#475569;">+${mission.rewardScore.toLocaleString()} score</div>
@@ -18,7 +19,8 @@ export function getMissionHtml(params: {
             <div style="margin-top:6px;opacity:.82;line-height:1.55;">${escapeHtml(mission.description)}</div>
             <div style="margin-top:6px;font-size:${params.isMobile ? 16 : 14}px;opacity:.72;">通算達成 ${totalClear}回</div>
         </div>`;
-    }).join("");
+        })
+        .join("");
     return `<div style="margin-top:8px;border-radius:18px;background:rgba(255,255,255,.72);padding:${params.isMobile ? "8px 14px" : "8px 16px"};">${rows}</div>`;
 }
 
@@ -59,20 +61,30 @@ export type ChainView = {
     unlocked: boolean;
 };
 
-export function getFusionHtml(params: {
-    fusions: FusionView[];
-    chains: ChainView[];
-    isMobile: boolean;
-}): string {
-    const rows = params.fusions.map(({ fusion, unlocked, ready, sources }) => `<div style="padding:13px 0;border-bottom:1px solid rgba(80,90,120,.16);">
+export function getFusionHtml(params: { fusions: FusionView[]; chains: ChainView[]; isMobile: boolean }): string {
+    const rows = params.fusions
+        .map(
+            ({
+                fusion,
+                unlocked,
+                ready,
+                sources,
+            }) => `<div style="padding:13px 0;border-bottom:1px solid rgba(80,90,120,.16);">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
             <div style="font-weight:1000;font-size:${params.isMobile ? "22px" : "18px"};color:${unlocked ? "#166534" : ready ? "#854d0e" : "#334155"};">${unlocked ? "✅" : ready ? "🧪" : "🔒"} ${unlocked || ready ? escapeHtml(fusion.label) : "未解放の派生奇跡"} [${escapeHtml(fusion.rank)}]</div>
             <div style="font-weight:900;color:#475569;">+${fusion.rewardScore.toLocaleString()} score</div>
         </div>
         <div style="margin-top:6px;opacity:.80;line-height:1.55;">${unlocked ? escapeHtml(fusion.description) : "素材奇跡を集めると解放されます。"}</div>
         <div style="margin-top:6px;opacity:.72;">素材: ${escapeHtml(sources)}</div>
-    </div>`).join("");
-    const chainRows = params.chains.map(({ chain, names, unlocked }) => `<div style="padding:10px 0;border-bottom:1px dashed rgba(80,90,120,.18);"><b>${unlocked ? "✅" : "🔁"} ${escapeHtml(chain.label)} [${escapeHtml(chain.rank)}]</b><div style="margin-top:4px;opacity:.74;">順番: ${escapeHtml(names)}</div><div style="margin-top:4px;opacity:.74;">${escapeHtml(chain.description)}</div></div>`).join("");
+    </div>`,
+        )
+        .join("");
+    const chainRows = params.chains
+        .map(
+            ({ chain, names, unlocked }) =>
+                `<div style="padding:10px 0;border-bottom:1px dashed rgba(80,90,120,.18);"><b>${unlocked ? "✅" : "🔁"} ${escapeHtml(chain.label)} [${escapeHtml(chain.rank)}]</b><div style="margin-top:4px;opacity:.74;">順番: ${escapeHtml(names)}</div><div style="margin-top:4px;opacity:.74;">${escapeHtml(chain.description)}</div></div>`,
+        )
+        .join("");
     return `<p>特定の奇跡を観測すると、合成・派生の研究記録が解放されます。</p>${rows}<h3 style="margin-top:18px;">実験中の奇跡連鎖</h3><p>下記の順番で奇跡が続くと、その実験中だけの連鎖演出が発生します。</p>${chainRows}`;
 }
 
@@ -83,7 +95,9 @@ export function getReplayHtml(params: {
     gifLabel: string;
     formatProbability: (denominator: number) => string;
 }): string {
-    return params.clips.map((clip, i) => `
+    return params.clips
+        .map(
+            (clip, i) => `
         <div style="padding:12px 0;border-bottom:1px solid rgba(80,90,120,.16);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;">
             <div>
                 <div style="font-weight:900;">${i + 1}. ${escapeHtml(clip.label)} [${escapeHtml(clip.rank)}]</div>
@@ -94,5 +108,7 @@ export function getReplayHtml(params: {
                 <button data-gif-id="${clip.id}" style="font-size:${params.isMobile ? "18px" : "16px"};padding:10px 16px;border-radius:999px;border:1px solid rgba(100,90,180,.28);background:linear-gradient(180deg,#eef0ff 0%,#d7dcff 100%);font-weight:900;cursor:pointer;">${escapeHtml(params.gifLabel)}</button>
             </div>
         </div>
-    `).join("");
+    `,
+        )
+        .join("");
 }

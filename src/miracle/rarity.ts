@@ -1,7 +1,7 @@
 export const RANK_ORDER = ["N", "R", "SR", "SSR", "UR", "EX", "GOD"] as const;
 
 export function getRankScore(rank: string): number {
-    return RANK_ORDER.indexOf(String(rank).toUpperCase() as typeof RANK_ORDER[number]);
+    return RANK_ORDER.indexOf(String(rank).toUpperCase() as (typeof RANK_ORDER)[number]);
 }
 
 export function getRankBaseScore(rank: string): number {

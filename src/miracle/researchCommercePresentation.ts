@@ -40,13 +40,21 @@ export function getResearchShopHtml(params: {
     items: ShopItemView[];
     purchaseHistory: Array<{ label: string; effectLabel: string; costLabel: string; purchasedAt: number }>;
 }): string {
-    const purchaseRows = params.purchaseHistory.slice(0, 8).map((entry) => `
+    const purchaseRows =
+        params.purchaseHistory
+            .slice(0, 8)
+            .map(
+                (entry) => `
         <div style="padding:10px 0;border-bottom:1px solid rgba(80,90,120,.16);">
             <b>${escapeHtml(entry.label)}</b>
             <div style="opacity:.78;line-height:1.55;">${escapeHtml(entry.effectLabel)} / ${escapeHtml(entry.costLabel)} / ${new Date(entry.purchasedAt).toLocaleString()}</div>
         </div>
-    `).join("") || `<div style="opacity:.72;">まだ購入履歴はありません。</div>`;
-    const itemRows = params.items.map(({ item, purchased, available, status, categoryLabel, costLabel }) => `
+    `,
+            )
+            .join("") || `<div style="opacity:.72;">まだ購入履歴はありません。</div>`;
+    const itemRows = params.items
+        .map(
+            ({ item, purchased, available, status, categoryLabel, costLabel }) => `
         <div class="miracle-user-card" style="display:grid;gap:10px;opacity:${purchased && !item.repeatable ? ".72" : "1"};">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
                 <div>
@@ -60,7 +68,9 @@ export function getResearchShopHtml(params: {
                 <button class="miracle-home-button ${available ? "miracle-home-primary" : ""}" data-home-action="shop-buy:${item.id}" ${available ? "" : "disabled"}>${escapeHtml(status)}</button>
             </div>
         </div>
-    `).join("");
+    `,
+        )
+        .join("");
     return `
         <div style="display:grid;gap:14px;">
             <div class="miracle-user-card">
@@ -87,7 +97,9 @@ export function getEventSeasonHtml(params: {
     missions: SeasonMissionView[];
     history: Array<{ label: string; rewardLabel: string; claimedAt: number }>;
 }): string {
-    const rows = params.missions.map(({ mission, value, percent, claimed, ready, rewardLabel }) => `
+    const rows = params.missions
+        .map(
+            ({ mission, value, percent, claimed, ready, rewardLabel }) => `
         <div class="miracle-user-card" style="display:grid;gap:10px;border-left:8px solid ${params.season.accent};opacity:${claimed ? ".72" : "1"};">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
                 <div>
@@ -99,13 +111,21 @@ export function getEventSeasonHtml(params: {
             <div style="height:12px;border-radius:999px;background:rgba(100,116,139,.22);overflow:hidden;"><div style="height:100%;width:${percent.toFixed(1)}%;background:linear-gradient(90deg,${params.season.accent},#ffffff);"></div></div>
             <div style="opacity:.78;font-size:.92em;">報酬: ${escapeHtml(rewardLabel || "-")}</div>
         </div>
-    `).join("");
-    const history = params.history.slice(0, 6).map((entry) => `
+    `,
+        )
+        .join("");
+    const history =
+        params.history
+            .slice(0, 6)
+            .map(
+                (entry) => `
         <div style="padding:9px 0;border-bottom:1px solid rgba(80,90,120,.16);">
             <b>${escapeHtml(entry.label)}</b>
             <div style="opacity:.76;">${escapeHtml(entry.rewardLabel)} / ${new Date(entry.claimedAt).toLocaleString()}</div>
         </div>
-    `).join("") || `<div style="opacity:.72;">まだシーズン報酬はありません。</div>`;
+    `,
+            )
+            .join("") || `<div style="opacity:.72;">まだシーズン報酬はありません。</div>`;
     return `
         <div style="display:grid;gap:14px;">
             <div class="miracle-home-hero" style="border-left:10px solid ${params.season.accent};">
@@ -124,7 +144,9 @@ export function getMiracleCraftHtml(params: {
     recipes: CraftRecipeView[];
     history: Array<{ label: string; rewardLabel: string; craftedAt: number }>;
 }): string {
-    const rows = params.recipes.map(({ recipe, materialLabel, materialReady, available, status, unlocked, rewardLabel }) => `
+    const rows = params.recipes
+        .map(
+            ({ recipe, materialLabel, materialReady, available, status, unlocked, rewardLabel }) => `
         <div class="miracle-user-card" style="display:grid;gap:10px;opacity:${unlocked ? ".72" : "1"};">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
                 <div>
@@ -135,13 +157,21 @@ export function getMiracleCraftHtml(params: {
             </div>
             <div style="opacity:.82;line-height:1.65;"><b>素材:</b> ${escapeHtml(materialLabel)}<br><b>費用:</b> ${recipe.costPoint.toLocaleString()}P<br><b>報酬:</b> ${escapeHtml(rewardLabel)}</div>
         </div>
-    `).join("");
-    const history = params.history.slice(0, 8).map((entry) => `
+    `,
+        )
+        .join("");
+    const history =
+        params.history
+            .slice(0, 8)
+            .map(
+                (entry) => `
         <div style="padding:9px 0;border-bottom:1px solid rgba(80,90,120,.16);">
             <b>${escapeHtml(entry.label)}</b>
             <div style="opacity:.76;">${escapeHtml(entry.rewardLabel)} / ${new Date(entry.craftedAt).toLocaleString()}</div>
         </div>
-    `).join("") || `<div style="opacity:.72;">まだクラフト履歴はありません。</div>`;
+    `,
+            )
+            .join("") || `<div style="opacity:.72;">まだクラフト履歴はありません。</div>`;
     return `
         <div style="display:grid;gap:14px;">
             <div class="miracle-user-card">

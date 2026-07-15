@@ -12,7 +12,9 @@ export type DailyMissionView = {
 };
 
 export function getDailyMissionHtml(today: string, entries: DailyMissionView[]): string {
-    const rows = entries.map(({ mission, value, percent, done, themeLabel }) => `
+    const rows = entries
+        .map(
+            ({ mission, value, percent, done, themeLabel }) => `
         <div class="miracle-user-card" style="margin:12px 0;">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
                 <b>${done ? "✅" : "⬜"} ${escapeHtml(mission.title)}</b>
@@ -21,8 +23,9 @@ export function getDailyMissionHtml(today: string, entries: DailyMissionView[]):
             <div style="margin-top:6px;opacity:.86;">${escapeHtml(mission.description)}</div>
             <div style="margin-top:10px;height:12px;border-radius:999px;background:rgba(100,116,139,.22);overflow:hidden;"><div style="height:100%;width:${percent.toFixed(1)}%;background:linear-gradient(90deg,#86efac,#22d3ee);"></div></div>
             <div style="margin-top:6px;font-size:.92em;opacity:.82;">${value.toLocaleString()} / ${mission.target.toLocaleString()}　報酬テーマ: ${escapeHtml(themeLabel)}</div>
-        </div>`
-    ).join("");
+        </div>`,
+        )
+        .join("");
     return `
         <p>毎日変わる研究ミッションです。達成するとスコアとテーマ解放が進みます。</p>
         ${rows}
@@ -31,7 +34,9 @@ export function getDailyMissionHtml(today: string, entries: DailyMissionView[]):
 }
 
 export function getExperimentPresetHtml(presets: ExperimentPresetDef[]): string {
-    const rows = presets.map((preset) => `
+    const rows = presets
+        .map(
+            (preset) => `
         <div class="miracle-user-card" style="display:grid;gap:10px;">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;">
                 <div>
@@ -49,7 +54,9 @@ export function getExperimentPresetHtml(presets: ExperimentPresetDef[]): string 
                 <div><b>演出</b><br>${preset.effectsEnabled ? preset.effectMode : "OFF"}</div>
             </div>
         </div>
-    `).join("");
+    `,
+        )
+        .join("");
     return `
         <div style="display:grid;gap:14px;">
             <div class="miracle-user-card">
@@ -82,7 +89,9 @@ export function getResearchRankHtml(rank: ResearchRankInfo): string {
 }
 
 export function getThemeBookHtml(entries: ThemeCollectionEntry[], isEnglish: boolean): string {
-    const rows = entries.map((entry) => `
+    const rows = entries
+        .map(
+            (entry) => `
         <div class="miracle-user-card" style="margin:10px 0;opacity:${entry.unlocked ? "1" : ".62"};">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
                 <b>${entry.unlocked ? "🎨" : "🔒"} ${escapeHtml(isEnglish ? entry.en : entry.ja)}</b>
@@ -90,7 +99,9 @@ export function getThemeBookHtml(entries: ThemeCollectionEntry[], isEnglish: boo
             </div>
             <div style="margin-top:6px;opacity:.84;">${escapeHtml(entry.reason)}</div>
             ${entry.unlocked ? `<button style="margin-top:10px;" data-theme-book-select="${entry.value}">このテーマにする</button>` : ""}
-        </div>`).join("");
+        </div>`,
+        )
+        .join("");
     const unlocked = entries.filter((x) => x.unlocked).length;
     return `
         <p>テーマの解放状況です。テーマは見た目のカスタマイズ・毎日の遊び直し要素として使えます。</p>
@@ -116,8 +127,9 @@ export function getLabHomeHtml(params: {
     isMobile: boolean;
     userGuideHtml: string;
 }): string {
-    const wallHtml = params.labWallFormulas.length > 0
-        ? `
+    const wallHtml =
+        params.labWallFormulas.length > 0
+            ? `
             <div class="miracle-user-card" style="position:relative;overflow:hidden;border-color:rgba(124,58,237,.34);background:linear-gradient(135deg,rgba(30,27,75,.92),rgba(76,29,149,.72),rgba(15,23,42,.94));color:#f8fafc;">
                 <div style="position:absolute;inset:auto -30px -42px auto;font-size:120px;opacity:.08;transform:rotate(-12deg);">∑</div>
                 <div style="font-weight:1000;color:#ddd6fe;letter-spacing:.08em;">研究所の壁</div>
@@ -126,7 +138,7 @@ export function getLabHomeHtml(params: {
                 <div style="margin-top:6px;line-height:1.7;opacity:.86;">${escapeHtml(params.labWallFormulas[0]?.note ?? "")}</div>
                 <div style="margin-top:8px;font-size:.9em;opacity:.72;">壁の数式 ${params.labWallFormulas.length} / 実験 ${params.labWallFormulas[0]?.runCount.toLocaleString() ?? "-"} 回目に出現</div>
             </div>`
-        : `
+            : `
             <div class="miracle-user-card" style="border-style:dashed;opacity:.82;">
                 <b>研究所の壁</b><br>
                 <span style="opacity:.78;line-height:1.7;">まだ白い壁です。何回か実験を終えると、知らない数式が浮かぶかもしれません。</span>

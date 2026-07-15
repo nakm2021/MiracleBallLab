@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-    CURRENT_SAVE_SCHEMA_VERSION,
-    migrateSavedRecords,
-    normalizeSavedRecords,
-} from "./saveMigration";
+import { CURRENT_SAVE_SCHEMA_VERSION, migrateSavedRecords, normalizeSavedRecords } from "./saveMigration";
 
 describe("saveMigration", () => {
     it("バージョンなしの旧セーブを最新スキーマへ移行する", () => {

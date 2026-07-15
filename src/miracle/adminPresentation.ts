@@ -17,10 +17,13 @@ export function getAdminGateHtml(params: {
     `;
 }
 
-export function getAdminMiracleButtonHtml(def: SpecialEventDef, params: {
-    isMobile: boolean;
-    formatProbability: (denominator: number) => string;
-}): string {
+export function getAdminMiracleButtonHtml(
+    def: SpecialEventDef,
+    params: {
+        isMobile: boolean;
+        formatProbability: (denominator: number) => string;
+    },
+): string {
     return `<button class="admin-miracle-button" data-kind="${escapeHtml(def.kind)}" style="font-size:${params.isMobile ? "16px" : "15px"};font-weight:900;padding:10px 12px;border-radius:14px;border:1px solid rgba(127,29,29,.24);background:linear-gradient(180deg,#fff7ed 0%,#fed7aa 100%);color:#7c2d12;cursor:pointer;text-align:left;white-space:normal;overflow-wrap:anywhere;line-height:1.2;">${escapeHtml(def.label)}<br><span style="font-size:.82em;opacity:.78;">[${escapeHtml(def.rank)}] ${params.formatProbability(def.denominator)}</span></button>`;
 }
 
@@ -104,11 +107,7 @@ export function getAdminRemoteVideoRowHtml(params: {
     `;
 }
 
-export function getAdminRemoteVideoListHtml(params: {
-    count: number;
-    rows: string;
-    isMobile: boolean;
-}): string {
+export function getAdminRemoteVideoListHtml(params: { count: number; rows: string; isMobile: boolean }): string {
     return `
         <p><b>${params.count}件</b> の動画を確認できます。</p>
         <p style="opacity:.72;line-height:1.6;">
@@ -125,13 +124,20 @@ export function getAdminRemoteVideoListHtml(params: {
 }
 
 export function getRuntimeGuardLogHtml(logs: Array<{ at: number; reason: string; detail: string }>): string {
-    const rows = logs.slice().reverse().map((entry, index) => `
+    const rows =
+        logs
+            .slice()
+            .reverse()
+            .map(
+                (entry, index) => `
         <div style="padding:10px 0;border-bottom:1px solid rgba(100,116,139,.18);">
             <div style="font-weight:1000;">${index + 1}. ${escapeHtml(entry.reason)}</div>
             <div style="opacity:.72;font-size:.86em;">${escapeHtml(new Date(entry.at).toLocaleString())}</div>
             <div style="margin-top:4px;line-height:1.55;word-break:break-all;">${escapeHtml(entry.detail)}</div>
         </div>
-    `).join("") || `<p>復旧ログはまだありません。</p>`;
+    `,
+            )
+            .join("") || `<p>復旧ログはまだありません。</p>`;
 
     return `
         <p>画面縮小・白画面・操作不能などを検知したときのログです。</p>

@@ -7,12 +7,15 @@ export function isIOSLikeDevice(navigatorLike: Navigator = navigator): boolean {
     return /iPad|iPhone|iPod/.test(ua) || (platform === "MacIntel" && navigatorLike.maxTouchPoints > 1);
 }
 
-export function prepareRemoteVideoForSound(video: HTMLVideoElement, params: {
-    soundEnabled: boolean;
-    isMobile: boolean;
-    mobileAudioUnlocked: boolean;
-    volume?: number;
-}): void {
+export function prepareRemoteVideoForSound(
+    video: HTMLVideoElement,
+    params: {
+        soundEnabled: boolean;
+        isMobile: boolean;
+        mobileAudioUnlocked: boolean;
+        volume?: number;
+    },
+): void {
     const normalizedVolume = params.soundEnabled ? clamp(params.volume ?? 0.45, 0, 1) : 0;
     video.autoplay = false;
     video.playsInline = true;
@@ -33,7 +36,12 @@ export function prepareRemoteVideoForSound(video: HTMLVideoElement, params: {
     }
 }
 
-export function getFreshRemoteVideoSourceUrl(url: string, asset: RemoteMiracleAsset, loadedAt: number, now = Date.now()): string {
+export function getFreshRemoteVideoSourceUrl(
+    url: string,
+    asset: RemoteMiracleAsset,
+    loadedAt: number,
+    now = Date.now(),
+): string {
     if (!url || url.startsWith("blob:") || url.startsWith("data:")) return url;
     try {
         const u = new URL(url, window.location.href);
@@ -200,10 +208,7 @@ export function playUiToneCue(params: {
     window.setTimeout(() => synth.dispose(), 650);
 }
 
-export function playSecretToneCue(params: {
-    toneModule: any;
-    volume: number;
-}): void {
+export function playSecretToneCue(params: { toneModule: any; volume: number }): void {
     const Tone = params.toneModule;
     if (!Tone) return;
     const now = Tone.now();
@@ -212,9 +217,17 @@ export function playSecretToneCue(params: {
         envelope: { attack: 0.01, decay: 0.18, sustain: 0.18, release: 0.42 },
     }).toDestination();
     synth.volume.value = params.volume;
-    ["C4", "E4", "G4", "B4", "D5", "G5"].forEach((note, i) => synth.triggerAttackRelease(note, i < 4 ? "16n" : "8n", now + i * 0.075));
-    const noise = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.005, decay: 0.13, sustain: 0 } }).toDestination();
+    ["C4", "E4", "G4", "B4", "D5", "G5"].forEach((note, i) =>
+        synth.triggerAttackRelease(note, i < 4 ? "16n" : "8n", now + i * 0.075),
+    );
+    const noise = new Tone.NoiseSynth({
+        noise: { type: "white" },
+        envelope: { attack: 0.005, decay: 0.13, sustain: 0 },
+    }).toDestination();
     noise.volume.value = -22;
     noise.triggerAttackRelease("16n", now + 0.08);
-    window.setTimeout(() => { synth.dispose(); noise.dispose(); }, 1200);
+    window.setTimeout(() => {
+        synth.dispose();
+        noise.dispose();
+    }, 1200);
 }

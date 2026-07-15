@@ -26,23 +26,40 @@ export function evaluateResearchRun(params: {
     const centerIndex = Math.floor(params.binCount / 2);
     const centerCount = params.binCounts[centerIndex] ?? 0;
     const centerRate = params.finishedCount > 0 ? centerCount / params.finishedCount : 0;
-    const density = Math.round(params.clamp(
-        specialCount * 16 + params.chainCount * 24 + params.bestComboThisRun * 7 + params.smallMiracleCount * 3 + (params.hasOmen ? 10 : 0),
-        0,
-        100,
-    ));
-    const score = params.runScore + specialCount * 9000 + params.chainCount * 18000 + density * 350 - discardRate * 12000;
+    const density = Math.round(
+        params.clamp(
+            specialCount * 16 +
+                params.chainCount * 24 +
+                params.bestComboThisRun * 7 +
+                params.smallMiracleCount * 3 +
+                (params.hasOmen ? 10 : 0),
+            0,
+            100,
+        ),
+    );
+    const score =
+        params.runScore + specialCount * 9000 + params.chainCount * 18000 + density * 350 - discardRate * 12000;
     const grade = score > 120000 ? "S" : score > 70000 ? "A" : score > 35000 ? "B" : score > 12000 ? "C" : "D";
-    const type = specialCount > 0 ? "奇跡観測型" : discardRate <= 0.06 ? "安定研究型" : centerRate >= 0.22 ? "中央集中型" : params.smallMiracleCount >= 2 ? "予兆多発型" : "基礎観測型";
-    const note = grade === "S"
-        ? "研究所の記録に残るかなり濃い実験です。"
-        : grade === "A"
-            ? "見せ場のある良い観測回です。"
-            : grade === "B"
+    const type =
+        specialCount > 0
+            ? "奇跡観測型"
+            : discardRate <= 0.06
+              ? "安定研究型"
+              : centerRate >= 0.22
+                ? "中央集中型"
+                : params.smallMiracleCount >= 2
+                  ? "予兆多発型"
+                  : "基礎観測型";
+    const note =
+        grade === "S"
+            ? "研究所の記録に残るかなり濃い実験です。"
+            : grade === "A"
+              ? "見せ場のある良い観測回です。"
+              : grade === "B"
                 ? "小さな変化を拾えた研究回です。"
                 : grade === "C"
-                    ? "次回の奇跡に向けた土台作りの回です。"
-                    : "静かな基礎データとして保存されました。";
+                  ? "次回の奇跡に向けた土台作りの回です。"
+                  : "静かな基礎データとして保存されました。";
     return { grade, type, density, note };
 }
 
@@ -68,11 +85,12 @@ export function buildResearchMemoText(params: {
     const topIndex = params.binCounts.indexOf(maxCount);
     const discardRate = params.finishedCount > 0 ? (params.discardedCount / params.finishedCount) * 100 : 0;
     const imbalance = ((maxCount - minCount) / sum) * 100;
-    const mood = imbalance > 18
-        ? "大きな偏りがあり、盤面がかなり主張した回でした。"
-        : imbalance > 10
-            ? "少し偏りがあり、中央か端に流れが寄った回でした。"
-            : "分布は比較的落ち着いており、安定した観測になりました。";
+    const mood =
+        imbalance > 18
+            ? "大きな偏りがあり、盤面がかなり主張した回でした。"
+            : imbalance > 10
+              ? "少し偏りがあり、中央か端に流れが寄った回でした。"
+              : "分布は比較的落ち着いており、安定した観測になりました。";
     const miracleLine = params.bestMiracle
         ? `今回もっとも印象的だった奇跡は「${params.bestMiracle.label}」です。`
         : "今回は大きな奇跡は出ませんでしたが、通常観測として記録する価値があります。";

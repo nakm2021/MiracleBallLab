@@ -4,7 +4,11 @@ export type UiFactoryOptions = {
     roundedUiFont: string;
 };
 
-export function createField(label: string, input: HTMLElement, options: UiFactoryOptions): { wrapper: HTMLDivElement; labelEl: HTMLLabelElement } {
+export function createField(
+    label: string,
+    input: HTMLElement,
+    options: UiFactoryOptions,
+): { wrapper: HTMLDivElement; labelEl: HTMLLabelElement } {
     const wrapper = document.createElement("div");
     wrapper.style.display = "flex";
     wrapper.style.flexDirection = "column";
@@ -63,7 +67,11 @@ export function getMetallicButtonBackground(primary = false): string {
         : "linear-gradient(180deg,#ffffff 0%,#dfe8f3 18%,#8fa3b7 50%,#f9fbff 100%)";
 }
 
-export function applyUnifiedMetallicButtonStyle(button: HTMLButtonElement, primary = false, options: UiFactoryOptions): void {
+export function applyUnifiedMetallicButtonStyle(
+    button: HTMLButtonElement,
+    primary = false,
+    options: UiFactoryOptions,
+): void {
     button.style.width = "100%";
     button.style.minWidth = "0";
     button.style.height = options.isMobile ? "46px" : "44px";

@@ -19,7 +19,13 @@ export type ShareReplaySummary = {
     missionTotalCount: number;
 };
 
-export function buildShareText(summary: Pick<ShareReplaySummary, "runScore" | "finishedCount" | "targetCount" | "savedRecords" | "discoveredCount" | "specialEventCount">, clipCount: number): string {
+export function buildShareText(
+    summary: Pick<
+        ShareReplaySummary,
+        "runScore" | "finishedCount" | "targetCount" | "savedRecords" | "discoveredCount" | "specialEventCount"
+    >,
+    clipCount: number,
+): string {
     return `ミラクルボールラボ
 スコア: ${summary.runScore.toLocaleString()}
 処理数: ${summary.finishedCount.toLocaleString()} / ${summary.targetCount.toLocaleString()}
@@ -197,27 +203,35 @@ export function createShareReplayController(deps: {
         const copyBtn = document.getElementById("sns-copy-button") as HTMLButtonElement | null;
         const shotBtn = document.getElementById("screenshot-save-button") as HTMLButtonElement | null;
         const cardBtn = document.getElementById("sns-card-button") as HTMLButtonElement | null;
-        if (copyBtn) copyBtn.onclick = () => { void shareToSns(); };
+        if (copyBtn)
+            copyBtn.onclick = () => {
+                void shareToSns();
+            };
         if (shotBtn) shotBtn.onclick = () => saveCurrentScreenshot();
         if (cardBtn) cardBtn.onclick = () => saveShareCard();
     };
 
     const saveMiracleClip = (def: SpecialEventDef, subtitle: string): void => {
-        miracleClips.unshift(createMiracleClip({
-            def,
-            subtitle,
-            finishedCount: deps.getSummary().finishedCount,
-            frames: replayFrameBuffer,
-            now: Date.now(),
-            random: deps.random,
-        }));
+        miracleClips.unshift(
+            createMiracleClip({
+                def,
+                subtitle,
+                finishedCount: deps.getSummary().finishedCount,
+                frames: replayFrameBuffer,
+                now: Date.now(),
+                random: deps.random,
+            }),
+        );
         miracleClips = miracleClips.slice(0, 24);
     };
 
     const replayClipById = (id: string): void => {
         const clip = miracleClips.find((x) => x.id === id);
         if (!clip || clip.frames.length === 0) {
-            deps.showPopup(deps.t("リプレイ", "Replay"), `<p>${deps.t("再生できるクリップがありません。", "No replay clip is available.")}</p>`);
+            deps.showPopup(
+                deps.t("リプレイ", "Replay"),
+                `<p>${deps.t("再生できるクリップがありません。", "No replay clip is available.")}</p>`,
+            );
             return;
         }
         const body = `
@@ -231,7 +245,10 @@ export function createShareReplayController(deps: {
             </div>`;
         deps.showPopup(`${deps.t("リプレイ", "Replay")}: ${clip.label}`, body);
         const gifButton = document.getElementById("replay-gif-save-button") as HTMLButtonElement | null;
-        if (gifButton) gifButton.onclick = () => { void exportClipAsGif(id); };
+        if (gifButton)
+            gifButton.onclick = () => {
+                void exportClipAsGif(id);
+            };
         const img = document.getElementById("replay-image") as HTMLImageElement | null;
         if (!img) return;
         let index = 0;
@@ -248,25 +265,39 @@ export function createShareReplayController(deps: {
     const exportClipAsGif = async (id: string): Promise<void> => {
         const clip = miracleClips.find((x) => x.id === id);
         if (!clip || clip.frames.length === 0) {
-            deps.showPopup(deps.t("GIF保存", "Save GIF"), `<p>${deps.t("保存できるフレームがありません。", "No frames available to export.")}</p>`);
+            deps.showPopup(
+                deps.t("GIF保存", "Save GIF"),
+                `<p>${deps.t("保存できるフレームがありません。", "No frames available to export.")}</p>`,
+            );
             return;
         }
         const ok = await warmupGif();
         if (!ok || !gifReady) {
-            deps.showPopup(deps.t("GIF保存", "Save GIF"), `<p>${deps.t("gif.js の読み込みに失敗しました。", "Failed to load gif.js.")}</p>`);
+            deps.showPopup(
+                deps.t("GIF保存", "Save GIF"),
+                `<p>${deps.t("gif.js の読み込みに失敗しました。", "Failed to load gif.js.")}</p>`,
+            );
             return;
         }
 
         const previous = deps.helpOverlay.style.display !== "none" ? deps.helpOverlay.innerHTML : "";
-        deps.showPopup(deps.t("GIF保存中", "Rendering GIF"), `<p>${deps.t("GIFを書き出しています。少しお待ちください。", "Rendering the GIF. Please wait a moment.")}</p><div id="gif-progress" style="margin-top:12px;font-weight:900;">0%</div>`);
+        deps.showPopup(
+            deps.t("GIF保存中", "Rendering GIF"),
+            `<p>${deps.t("GIFを書き出しています。少しお待ちください。", "Rendering the GIF. Please wait a moment.")}</p><div id="gif-progress" style="margin-top:12px;font-weight:900;">0%</div>`,
+        );
 
         try {
-            const images = await Promise.all(clip.frames.map((src) => new Promise<HTMLImageElement>((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.onerror = () => reject(new Error("frame load failed"));
-                img.src = src;
-            })));
+            const images = await Promise.all(
+                clip.frames.map(
+                    (src) =>
+                        new Promise<HTMLImageElement>((resolve, reject) => {
+                            const img = new Image();
+                            img.onload = () => resolve(img);
+                            img.onerror = () => reject(new Error("frame load failed"));
+                            img.src = src;
+                        }),
+                ),
+            );
             const geometry = deps.getGeometry();
             const width = images[0]?.naturalWidth || geometry.width;
             const height = images[0]?.naturalHeight || geometry.height;
@@ -288,18 +319,27 @@ export function createShareReplayController(deps: {
             gif.on("finished", (blob: Blob) => {
                 const safeLabel = clip.label.replace(/[\/:*?"<>|]/g, "_");
                 downloadBlob(blob, `${safeLabel}_${clip.rank}_${clip.finishedCount}.gif`);
-                deps.showPopup(deps.t("GIF保存完了", "GIF saved"), `<p>${deps.t("GIFを保存しました。", "The GIF has been saved.")}</p>`);
+                deps.showPopup(
+                    deps.t("GIF保存完了", "GIF saved"),
+                    `<p>${deps.t("GIFを保存しました。", "The GIF has been saved.")}</p>`,
+                );
             });
             gif.render();
         } catch {
             if (previous) deps.helpOverlay.innerHTML = previous;
-            deps.showPopup(deps.t("GIF保存", "Save GIF"), `<p>${deps.t("GIF保存に失敗しました。もう一度お試しください。", "GIF export failed. Please try again.")}</p>`);
+            deps.showPopup(
+                deps.t("GIF保存", "Save GIF"),
+                `<p>${deps.t("GIF保存に失敗しました。もう一度お試しください。", "GIF export failed. Please try again.")}</p>`,
+            );
         }
     };
 
     const showReplayPopup = (): void => {
         if (miracleClips.length === 0) {
-            deps.showPopup(deps.t("リプレイ", "Replay"), `<p>${deps.t("まだ奇跡クリップがありません。", "No miracle clips yet.")}</p>`);
+            deps.showPopup(
+                deps.t("リプレイ", "Replay"),
+                `<p>${deps.t("まだ奇跡クリップがありません。", "No miracle clips yet.")}</p>`,
+            );
             return;
         }
         const rows = getReplayHtml({
@@ -314,7 +354,9 @@ export function createShareReplayController(deps: {
             (el as HTMLButtonElement).onclick = () => replayClipById((el as HTMLButtonElement).dataset.replayId || "");
         });
         deps.helpOverlay.querySelectorAll("[data-gif-id]").forEach((el) => {
-            (el as HTMLButtonElement).onclick = () => { void exportClipAsGif((el as HTMLButtonElement).dataset.gifId || ""); };
+            (el as HTMLButtonElement).onclick = () => {
+                void exportClipAsGif((el as HTMLButtonElement).dataset.gifId || "");
+            };
         });
     };
 

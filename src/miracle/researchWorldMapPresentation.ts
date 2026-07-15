@@ -8,7 +8,12 @@ type WorldRoomAction = {
 };
 
 function getWorldRoomCardHtml(title: string, subtitle: string, accent: string, actions: WorldRoomAction[]): string {
-    const buttons = actions.map((item) => `<button data-home-action="${escapeHtml(item.action)}" class="miracle-home-button ${item.primary ? "miracle-home-primary" : ""}">${escapeHtml(item.label)}</button>`).join("");
+    const buttons = actions
+        .map(
+            (item) =>
+                `<button data-home-action="${escapeHtml(item.action)}" class="miracle-home-button ${item.primary ? "miracle-home-primary" : ""}">${escapeHtml(item.label)}</button>`,
+        )
+        .join("");
     return `
         <div class="miracle-user-card" style="min-height:190px;display:flex;flex-direction:column;justify-content:space-between;border-left:8px solid ${accent};">
             <div>
@@ -48,11 +53,16 @@ export function getResearchWorldMapHtml(params: {
             { label: "ショップ", action: "shop" },
             { label: "ガチャ履歴", action: "gacha-log" },
         ]),
-        getWorldRoomCardHtml("季節観測塔", "イベントシーズン、限定ミッション、奇跡率ブーストを確認します。", "#f97316", [
-            { label: "シーズン", action: "season", primary: true },
-            { label: "クラフト", action: "craft" },
-            { label: "テーマ", action: "themes" },
-        ]),
+        getWorldRoomCardHtml(
+            "季節観測塔",
+            "イベントシーズン、限定ミッション、奇跡率ブーストを確認します。",
+            "#f97316",
+            [
+                { label: "シーズン", action: "season", primary: true },
+                { label: "クラフト", action: "craft" },
+                { label: "テーマ", action: "themes" },
+            ],
+        ),
         getWorldRoomCardHtml("奇跡工房", "発見済み奇跡の記録を素材条件にして研究報酬を錬成します。", "#14b8a6", [
             { label: "クラフト", action: "craft", primary: true },
             { label: "奇跡合成", action: "fusion" },
@@ -68,10 +78,15 @@ export function getResearchWorldMapHtml(params: {
             { label: "チケット", action: "tickets" },
             { label: "秘密ノート", action: "notes" },
         ]),
-        getWorldRoomCardHtml("オフライン棟", "保存済み演出の図鑑と専用研究所をまとめます。動画保存は主任モード専用です。", "#64748b", [
-            { label: "研究所", action: "offline", primary: true },
-            { label: "図鑑", action: "offline-book" },
-        ]),
+        getWorldRoomCardHtml(
+            "オフライン棟",
+            "保存済み演出の図鑑と専用研究所をまとめます。動画保存は主任モード専用です。",
+            "#64748b",
+            [
+                { label: "研究所", action: "offline", primary: true },
+                { label: "図鑑", action: "offline-book" },
+            ],
+        ),
     ].join("");
     return `
         <div style="display:grid;gap:16px;">
