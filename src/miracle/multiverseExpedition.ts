@@ -24,6 +24,15 @@ export interface MultiverseState {
     bestScore: number;
     discovered: Record<string, number>;
     unlockedRelics: string[];
+    equippedRelics: string[];
+    blessings: string[];
+    curses: string[];
+    familiarForm: string;
+    achievements: string[];
+    titles: string[];
+    chronicle: MultiverseResult[];
+    dailyBest: Record<string, number>;
+    trueEndingUnlocked: boolean;
     active: { universeId: string; seed: string; startedAt: number } | null;
     lastResult: MultiverseResult | null;
 }
@@ -134,7 +143,30 @@ export const UNIVERSES: UniverseDef[] = [
     },
 ];
 
-const RELICS = ["反重力の羽根", "黒星の心臓", "零秒歯車", "生命樹の種", "終焉炉の鍵", "鏡像プリズム", "観測者の王冠"];
+export const RELICS = [
+    "反重力の羽根",
+    "黒星の心臓",
+    "零秒歯車",
+    "生命樹の種",
+    "終焉炉の鍵",
+    "鏡像プリズム",
+    "観測者の王冠",
+];
+export const BLESSINGS = [
+    { id: "golden-division", name: "黄金増殖", effect: "宇宙片報酬 +20%", curse: "重力密度上昇" },
+    { id: "time-thief", name: "時間泥棒", effect: "高速宇宙の評価上昇", curse: "観測時間が不安定化" },
+    { id: "twin-cosmos", name: "双子宇宙", effect: "奇跡反響ボーナス", curse: "必要観測数 +10%" },
+    { id: "familiar-union", name: "使い魔融合", effect: "使い魔共鳴で報酬増加", curse: "通常報酬減少" },
+    { id: "doomsday-pact", name: "終末契約", effect: "高評価閾値を緩和", curse: "崩壊熱が常時発生" },
+    { id: "observer-price", name: "観測者の代償", effect: "航路とボスを先読み", curse: "遺物発見が遅くなる" },
+];
+export const ACHIEVEMENTS = [
+    { id: "first-jump", name: "次元跳躍者" },
+    { id: "six-worlds", name: "六界観測者" },
+    { id: "relic-master", name: "遺物蒐集王" },
+    { id: "omega", name: "確率の外側" },
+    { id: "veteran", name: "百界帰還者" },
+];
 
 export function createInitialMultiverseState(): MultiverseState {
     return {
@@ -145,6 +177,15 @@ export function createInitialMultiverseState(): MultiverseState {
         bestScore: 0,
         discovered: {},
         unlockedRelics: [],
+        equippedRelics: [],
+        blessings: [],
+        curses: [],
+        familiarForm: "原初形態",
+        achievements: [],
+        titles: ["次元研究員"],
+        chronicle: [],
+        dailyBest: {},
+        trueEndingUnlocked: false,
         active: null,
         lastResult: null,
     };
@@ -164,6 +205,21 @@ export function loadMultiverseState(storage: Pick<Storage, "getItem">): Multiver
             unlockedRelics: Array.isArray(parsed.unlockedRelics)
                 ? parsed.unlockedRelics.filter((x): x is string => typeof x === "string")
                 : [],
+            equippedRelics: Array.isArray(parsed.equippedRelics)
+                ? parsed.equippedRelics.filter((x): x is string => typeof x === "string").slice(0, 3)
+                : [],
+            blessings: Array.isArray(parsed.blessings)
+                ? parsed.blessings.filter((x): x is string => typeof x === "string")
+                : [],
+            curses: Array.isArray(parsed.curses) ? parsed.curses.filter((x): x is string => typeof x === "string") : [],
+            achievements: Array.isArray(parsed.achievements)
+                ? parsed.achievements.filter((x): x is string => typeof x === "string")
+                : [],
+            titles: Array.isArray(parsed.titles)
+                ? parsed.titles.filter((x): x is string => typeof x === "string")
+                : ["次元研究員"],
+            chronicle: Array.isArray(parsed.chronicle) ? parsed.chronicle.slice(0, 40) : [],
+            dailyBest: parsed.dailyBest && typeof parsed.dailyBest === "object" ? parsed.dailyBest : {},
         };
     } catch {
         return createInitialMultiverseState();
@@ -208,7 +264,12 @@ export function completeMultiverseExpedition(
     const universe = UNIVERSES.find((world) => world.id === state.active?.universeId);
     if (!universe) return { ...state, active: null };
     const performance = stats.score + stats.finishedCount * 8 + stats.specialCount * 240;
-    const shards = Math.max(8, Math.round((performance / 900 + universe.risk * 7) * (1 + state.rank * 0.025)));
+    const buildMultiplier =
+        (state.blessings.includes("golden-division") ? 1.2 : 1) * (1 + state.equippedRelics.length * 0.06);
+    const shards = Math.max(
+        8,
+        Math.round((performance / 900 + universe.risk * 7) * (1 + state.rank * 0.025) * buildMultiplier),
+    );
     const grade =
         performance >= 18000
             ? "Ω"
@@ -233,6 +294,14 @@ export function completeMultiverseExpedition(
         relic,
         completedAt: now,
     };
+    const dailyKey = state.active.seed.split("-")[0] || "daily";
+    const achievements = [...state.achievements];
+    if (!achievements.includes("first-jump")) achievements.push("first-jump");
+    if (Object.keys(state.discovered).length >= 5 && !achievements.includes("six-worlds"))
+        achievements.push("six-worlds");
+    if (result.grade === "Ω" && !achievements.includes("omega")) achievements.push("omega");
+    const trueEndingUnlocked =
+        state.trueEndingUnlocked || (Object.keys(state.discovered).length >= 5 && state.unlockedRelics.length >= 6);
     return {
         ...state,
         shards: totalShards,
@@ -243,7 +312,56 @@ export function completeMultiverseExpedition(
         unlockedRelics: relic ? [...state.unlockedRelics, relic] : state.unlockedRelics,
         active: null,
         lastResult: result,
+        chronicle: [result, ...state.chronicle].slice(0, 40),
+        dailyBest: { ...state.dailyBest, [dailyKey]: Math.max(state.dailyBest[dailyKey] ?? 0, stats.score) },
+        achievements,
+        titles:
+            trueEndingUnlocked && !state.titles.includes("最後の観測者")
+                ? [...state.titles, "最後の観測者"]
+                : state.titles,
+        trueEndingUnlocked,
     };
+}
+
+export function toggleRelic(state: MultiverseState, relic: string): MultiverseState {
+    if (!state.unlockedRelics.includes(relic)) return state;
+    const equipped = state.equippedRelics.includes(relic)
+        ? state.equippedRelics.filter((x) => x !== relic)
+        : [...state.equippedRelics, relic].slice(-3);
+    return { ...state, equippedRelics: equipped };
+}
+
+export function chooseBlessing(state: MultiverseState, id: string): MultiverseState {
+    const blessing = BLESSINGS.find((x) => x.id === id);
+    if (!blessing || state.blessings.includes(id)) return state;
+    return {
+        ...state,
+        blessings: [...state.blessings, id].slice(-4),
+        curses: [...state.curses, blessing.curse].slice(-4),
+    };
+}
+
+export function evolveFamiliar(state: MultiverseState): MultiverseState {
+    const forms = ["原初形態", "星界共鳴体", "超越融合体", "終極観測獣"];
+    const index = forms.indexOf(state.familiarForm);
+    const cost = (index + 1) * 120;
+    return index < 0 || index >= forms.length - 1 || state.shards < cost
+        ? state
+        : { ...state, shards: state.shards - cost, familiarForm: forms[index + 1] };
+}
+
+export function getSeededRoute(seed: string, universeId: string): Array<{ label: string; icon: string }> {
+    let hash = 2166136261;
+    for (const char of `${seed}:${universeId}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+    const nodes = [
+        { label: "未知現象", icon: "?" },
+        { label: "奇跡祭壇", icon: "✦" },
+        { label: "星間商人", icon: "¤" },
+        { label: "ゴースト競争", icon: "♙" },
+    ];
+    return Array.from({ length: 5 }, (_, i) =>
+        i === 4 ? { label: "宇宙ボス", icon: "♛" } : nodes[Math.abs(hash + i * 7919) % nodes.length],
+    );
 }
 
 export function getActiveUniverse(state: MultiverseState): UniverseDef | null {

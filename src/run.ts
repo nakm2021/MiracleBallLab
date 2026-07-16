@@ -7,7 +7,7 @@ import { getPreparedRoughCanvas, prepareRoughCanvas } from "./miracle/roughCanva
 import { loadAnime, loadTippy, type AnimeApi, type TippyApi } from "./miracle/lazyUiLibraries";
 import { loadSettingsUiZoom, saveSettingsUiZoom, SETTINGS_UI_ZOOM_MAX, SETTINGS_UI_ZOOM_MIN } from "./miracle/settingsUiZoom";
 import { createRandomTelemetry } from "./miracle/randomTelemetry";
-import { completeMultiverseExpedition, createExpeditionSeed, getActiveUniverse, loadMultiverseState, saveMultiverseState, startMultiverseExpedition, type MultiverseResult } from "./miracle/multiverseExpedition";
+import { chooseBlessing, completeMultiverseExpedition, createExpeditionSeed, evolveFamiliar, getActiveUniverse, loadMultiverseState, saveMultiverseState, startMultiverseExpedition, toggleRelic, type MultiverseResult } from "./miracle/multiverseExpedition";
 import { getMultiverseExpeditionHtml, getMultiverseResultHtml } from "./miracle/multiversePresentation";
 import { createAdminLogApi, type AdminLogApi, type AdminLogEntry } from "./miracle/adminLog";
 import { ADMIN_UNLOCK_STORAGE_KEY, verifyAdminPasscode } from "./miracle/admin";
@@ -5080,6 +5080,26 @@ function runLabHomeAction(action: string): void {
     }
     if (action.startsWith("multiverse-start:")) {
         startSelectedMultiverseExpedition(action.slice("multiverse-start:".length));
+        return;
+    }
+    if (action.startsWith("multiverse-blessing:")) {
+        multiverseState = chooseBlessing(multiverseState, action.slice("multiverse-blessing:".length));
+        saveMultiverseState(localStorage, multiverseState);
+        showMultiverseExpeditionPopup();
+        return;
+    }
+    if (action.startsWith("multiverse-relic:")) {
+        multiverseState = toggleRelic(multiverseState, action.slice("multiverse-relic:".length));
+        saveMultiverseState(localStorage, multiverseState);
+        showMultiverseExpeditionPopup();
+        return;
+    }
+    if (action === "multiverse-familiar") {
+        const before = multiverseState.familiarForm;
+        multiverseState = evolveFamiliar(multiverseState);
+        saveMultiverseState(localStorage, multiverseState);
+        showSoftToast(before === multiverseState.familiarForm ? "進化に必要な宇宙片が不足しています" : `使い魔が「${multiverseState.familiarForm}」へ進化しました`);
+        showMultiverseExpeditionPopup();
         return;
     }
     if (action === "start") {
