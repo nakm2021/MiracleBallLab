@@ -1,15 +1,16 @@
 import Matter, { Events } from "matter-js";
-import anime from "animejs";
-import tippy from "tippy.js";
 import "tippy.js/dist/tippy.css";
 import { Howl } from "howler";
 import { createPixiBackground, type PixiBackground } from "./miracle/pixiBackground";
 import { fireCanvasBurst, fireLibraryBurst } from "./miracle/celebrationEffects";
 import { getPreparedRoughCanvas, prepareRoughCanvas } from "./miracle/roughCanvas";
+import { loadAnime, loadTippy, type AnimeApi, type TippyApi } from "./miracle/lazyUiLibraries";
+import { loadSettingsUiZoom, saveSettingsUiZoom, SETTINGS_UI_ZOOM_MAX, SETTINGS_UI_ZOOM_MIN } from "./miracle/settingsUiZoom";
+import { createRandomTelemetry } from "./miracle/randomTelemetry";
 import { createAdminLogApi, type AdminLogApi, type AdminLogEntry } from "./miracle/adminLog";
 import { ADMIN_UNLOCK_STORAGE_KEY, verifyAdminPasscode } from "./miracle/admin";
 import { createDefaultSettings, getThemeOptions, getThemeUiPalette } from "./miracle/settings";
-import { createInitialSkillState, createRandomBuckets } from "./miracle/state";
+import { createInitialSkillState } from "./miracle/state";
 import { getRankBaseScore, getRankScore } from "./miracle/rarity";
 import { applyThemePaletteToPanel } from "./miracle/ui";
 import { shouldPlayRemoteMiracleVideo } from "./miracle/videoEffects";
@@ -331,23 +332,11 @@ const uiFontPx = isMobile ? 25 : 20;
 const uiButtonFontPx = isMobile ? 26 : 20;
 const DEFAULT_BACKGROUND_IMAGE_URL = `${import.meta.env.BASE_URL}favicon.png`;
 const ROUNDED_UI_FONT = `"M PLUS Rounded 1c", "Zen Maru Gothic", "Kosugi Maru", "Hiragino Maru Gothic ProN", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif`;
-const SETTINGS_UI_ZOOM_STORAGE_KEY = "miracle_settings_ui_zoom_v1";
-const SETTINGS_UI_ZOOM_DEFAULT_MIN_MIGRATION_KEY = "miracle_settings_ui_zoom_default_min_migrated_v1";
 const COMMENTARY_DEFAULT_OFF_MIGRATION_KEY = "miracle_commentary_default_off_migrated_v1";
 const PIN_ROWS_DEFAULT_4_MIGRATION_KEY = "miracle_pin_rows_default_4_migrated_v1";
 const BIN_COUNT_DEFAULT_4_MIGRATION_KEY = "miracle_bin_count_default_4_migrated_v1";
 let settings: Settings = createDefaultSettings(isMobile, DEFAULT_BACKGROUND_IMAGE_URL);
-let settingsUiZoom = clamp(Number(localStorage.getItem(SETTINGS_UI_ZOOM_STORAGE_KEY) ?? "0.82"), 0.82, 1.22);
-try {
-    if (!localStorage.getItem(SETTINGS_UI_ZOOM_DEFAULT_MIN_MIGRATION_KEY)) {
-        const savedZoom = localStorage.getItem(SETTINGS_UI_ZOOM_STORAGE_KEY);
-        if (savedZoom === null || Math.abs(Number(savedZoom) - 1) < 0.001) {
-            settingsUiZoom = 0.82;
-            localStorage.setItem(SETTINGS_UI_ZOOM_STORAGE_KEY, String(settingsUiZoom));
-        }
-        localStorage.setItem(SETTINGS_UI_ZOOM_DEFAULT_MIN_MIGRATION_KEY, "1");
-    }
-} catch {}
+let settingsUiZoom = loadSettingsUiZoom(localStorage);
 
 let selectedBackgroundObjectUrl = "";
 let geometry: Geometry;
@@ -470,8 +459,7 @@ let heartHits: number[] = [];
 let blackSunHits: number[] = [];
 let cosmicEggHits: number[] = [];
 
-let randomBuckets = createRandomBuckets(RANDOM_BUCKET_COUNT);
-let randomCallCount = 0;
+const randomTelemetry = createRandomTelemetry(RANDOM_BUCKET_COUNT);
 let floatingTexts: FloatingText[] = [];
 let shakeUntil = 0;
 let shakePower = 0;
@@ -577,8 +565,8 @@ registerAppOpen();
 let pixiEnabled = false;
 let pixiReady = false;
 let pixiBackground: PixiBackground | null = null;
-let animeReady = false;
-let tippyReady = false;
+let animeApi: AnimeApi | null = null;
+let tippyApi: TippyApi | null = null;
 let mobileDockRunButton: HTMLButtonElement | null = null;
 let mobileDockPauseButton: HTMLButtonElement | null = null;
 let mobileDockSettingsButton: HTMLButtonElement | null = null;
@@ -1518,11 +1506,10 @@ settingsZoomInput.max = "122";
 settingsZoomInput.step = "2";
 settingsZoomInput.title = "設定画面の表示倍率";
 settingsZoomInput.oninput = () => {
-    settingsUiZoom = clamp(Number(settingsZoomInput.value) / 100, 0.82, 1.22);
+    settingsUiZoom = saveSettingsUiZoom(localStorage, clamp(Number(settingsZoomInput.value) / 100, SETTINGS_UI_ZOOM_MIN, SETTINGS_UI_ZOOM_MAX));
     applySettingsUiZoom();
 };
 settingsZoomInput.onchange = () => {
-    localStorage.setItem(SETTINGS_UI_ZOOM_STORAGE_KEY, String(settingsUiZoom));
     showSoftToast(`設定画面ズーム: ${Math.round(settingsUiZoom * 100)}%`);
 };
 
@@ -2310,11 +2297,7 @@ window.addEventListener("keydown", (event) => {
 // ======================================================
 
 function appRandom(): number {
-    const value = Math.random();
-    const index = Math.min(RANDOM_BUCKET_COUNT - 1, Math.floor(value * RANDOM_BUCKET_COUNT));
-    randomBuckets[index]++;
-    randomCallCount++;
-    return value;
+    return randomTelemetry.next();
 }
 
 function randomColor(): string {
@@ -2327,14 +2310,22 @@ function randomRgba(alpha: number): string {
 }
 
 async function ensureAnimeReady(): Promise<boolean> {
-    animeReady = true;
-    return true;
+    try {
+        animeApi ??= await loadAnime();
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 async function ensureTippyReady(): Promise<boolean> {
-    tippyReady = true;
-    initButtonTooltips();
-    return true;
+    try {
+        tippyApi ??= await loadTippy();
+        initButtonTooltips();
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 async function ensureGifReady(): Promise<boolean> {
@@ -2342,10 +2333,11 @@ async function ensureGifReady(): Promise<boolean> {
 }
 
 function initButtonTooltips(): void {
+    if (!tippyApi) return;
     updateTooltipText();
     for (const item of tooltipRefs) {
         if ((item.el as any)._tippy) continue;
-        tippy(item.el, {
+        tippyApi(item.el, {
             content: item.el.getAttribute("data-tippy-content") || "",
             placement: isMobile ? "top" : "bottom",
             animation: "shift-away",
@@ -5938,8 +5930,7 @@ function resetExperiment(startNow = false): void {
     heartHits = Array.from({ length: settings.binCount }, () => 0);
     blackSunHits = Array.from({ length: settings.binCount }, () => 0);
     cosmicEggHits = Array.from({ length: settings.binCount }, () => 0);
-    randomBuckets = Array.from({ length: RANDOM_BUCKET_COUNT }, () => 0);
-    randomCallCount = 0;
+    randomTelemetry.reset();
     floatingTexts = [];
     shakeUntil = 0;
     shakePower = 0;
@@ -7472,6 +7463,8 @@ async function playAnimeMiracleEffect(def?: SpecialEventDef): Promise<void> {
     if (settings.simpleMode) return;
     const ok = await ensureAnimeReady();
     if (!ok) return;
+    const anime = animeApi;
+    if (!anime) return;
     const overlayCard = miracleOverlay.firstElementChild as HTMLElement | null;
     if (!overlayCard) return;
     const strength = def?.rank === "GOD" ? 1.35 : def?.rank === "EX" ? 1.18 : 1;
@@ -7931,7 +7924,7 @@ function buildResultCsv(): string {
         finishedCount,
         binCount: settings.binCount,
         pinRows: settings.pinRows,
-        randomCallCount,
+        randomCallCount: randomTelemetry.getCallCount(),
         discardedCount,
         runScore,
         boss: {
