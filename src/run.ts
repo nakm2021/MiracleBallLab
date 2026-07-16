@@ -7,6 +7,8 @@ import { getPreparedRoughCanvas, prepareRoughCanvas } from "./miracle/roughCanva
 import { loadAnime, loadTippy, type AnimeApi, type TippyApi } from "./miracle/lazyUiLibraries";
 import { loadSettingsUiZoom, saveSettingsUiZoom, SETTINGS_UI_ZOOM_MAX, SETTINGS_UI_ZOOM_MIN } from "./miracle/settingsUiZoom";
 import { createRandomTelemetry } from "./miracle/randomTelemetry";
+import { completeMultiverseExpedition, createExpeditionSeed, getActiveUniverse, loadMultiverseState, saveMultiverseState, startMultiverseExpedition, type MultiverseResult } from "./miracle/multiverseExpedition";
+import { getMultiverseExpeditionHtml, getMultiverseResultHtml } from "./miracle/multiversePresentation";
 import { createAdminLogApi, type AdminLogApi, type AdminLogEntry } from "./miracle/adminLog";
 import { ADMIN_UNLOCK_STORAGE_KEY, verifyAdminPasscode } from "./miracle/admin";
 import { createDefaultSettings, getThemeOptions, getThemeUiPalette } from "./miracle/settings";
@@ -438,6 +440,7 @@ let familiarState: FamiliarState = loadFamiliarState();
 let miracleTicketState: MiracleTicketState = loadMiracleTicketState();
 let familiarExpeditionState: FamiliarExpeditionState = loadFamiliarExpeditionState();
 let secretResearchNoteState: SecretResearchNoteState = loadSecretResearchNoteState();
+let multiverseState = loadMultiverseState(localStorage);
 let userProfile: UserProfile = loadUserProfile();
 let userPreferences: UserPreferences = loadUserPreferences();
 let adminLogApi: AdminLogApi;
@@ -560,7 +563,6 @@ let mobileAudioPrimeElement: HTMLAudioElement | null = null;
 let confettiEnabled = true;
 applyUserPreferencesToCurrentState();
 initAdminLogApi();
-installGlobalErrorLogger();
 registerAppOpen();
 let pixiEnabled = false;
 let pixiReady = false;
@@ -1666,6 +1668,8 @@ const craftButton = setTooltip(setButtonLabel(createButton("奇跡クラフト",
 utilityButtons.appendChild(craftButton);
 const bossExperimentButton = setTooltip(setButtonLabel(createButton("ボス実験", () => showBossExperimentPopup()), "ボス実験", "Boss"), "特殊ルール付きの高難度ボス実験を開始します。", "Start high-difficulty boss experiments.");
 utilityButtons.appendChild(bossExperimentButton);
+const multiverseButton = setTooltip(setButtonLabel(createButton("多元宇宙遠征", () => showMultiverseExpeditionPopup()), "多元宇宙遠征", "Multiverse"), "物理法則の異なる宇宙へ遠征し、宇宙片と遺物を持ち帰ります。", "Explore universes with altered laws of physics.");
+utilityButtons.appendChild(multiverseButton);
 const presetButton = setTooltip(setButtonLabel(createButton("実験プリセット", () => showExperimentPresetPopup()), "実験プリセット", "Presets"), "よく使う設定をまとめて反映します。", "Apply bundled experiment settings.");
 utilityButtons.appendChild(presetButton);
 const magicCircleButton = setTooltip(setButtonLabel(createButton("魔法陣を書く", () => enableMagicCircleMode()), "魔法陣を書く", "Magic circle"), "画面を指やマウスでなぞって、大量のの盤面魔法を発動します。", "Draw on the board to trigger magic effects.");
@@ -2419,6 +2423,11 @@ const writeRuntimeErrorToAdminLog = createRuntimeErrorLogWriter({
 function installGlobalErrorLogger(): void {
     installGlobalErrorLoggerBase(writeRuntimeErrorToAdminLog);
 }
+
+// createRuntimeErrorLogWriter is a const initializer, so install only after
+// the writer exists. Calling this near boot used to enter its temporal dead
+// zone and prevented the entire application from starting.
+installGlobalErrorLogger();
 
 function applyUserPreferencesToCurrentState(): void {
     const applied = applyUserPreferences({
@@ -4919,6 +4928,53 @@ function showBossExperimentPopup(): void {
     getBossExperimentController().showPopup();
 }
 
+function showMultiverseExpeditionPopup(): void {
+    showPopup("多元宇宙遠征", getMultiverseExpeditionHtml(multiverseState, createExpeditionSeed()));
+    bindLabHomeButtons();
+}
+
+function startSelectedMultiverseExpedition(universeId: string): void {
+    multiverseState = startMultiverseExpedition(multiverseState, universeId, createExpeditionSeed());
+    saveMultiverseState(localStorage, multiverseState);
+    const universe = getActiveUniverse(multiverseState);
+    if (!universe) return;
+    settings.targetCount = universe.targetCount;
+    settings.activeLimit = universe.activeLimit;
+    settings.probabilityMode = universe.probabilityMode;
+    settings.effectsEnabled = true;
+    settings.boardAnomalyEnabled = true;
+    settings.effectMode = "flashy";
+    currentTheme = universe.theme as ThemeMode;
+    themeAutoMode = "fixed";
+    settings.themeAutoMode = "fixed";
+    targetInput.value = String(universe.targetCount);
+    activeBallInput.value = String(universe.activeLimit);
+    probabilityModeSelect.value = universe.probabilityMode;
+    themeSelect.value = currentTheme;
+    themeAutoModeSelect.value = "fixed";
+    effectModeSelect.value = "flashy";
+    closeHelpPopup();
+    applyTheme();
+    startExperiment();
+    if (universe.law === "reverse") engine.gravity.x = -0.48;
+    if (universe.law === "singularity") triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "gravity");
+    if (universe.law === "overclock") engine.timing.timeScale = Math.max(engine.timing.timeScale, 1.45);
+    if (universe.law === "entropy") triggerRareBoardCatastrophe(SPECIAL_EVENT_DEFS[0], "supernova");
+    if (universe.law === "echo") adminForceNextMiracleEffect = true;
+    showMilestone(`${universe.icon} ${universe.name}：宇宙法則「${universe.lawLabel}」が盤面を支配します`);
+}
+
+function completeActiveMultiverseExpedition(): MultiverseResult | null {
+    if (!multiverseState.active) return null;
+    multiverseState = completeMultiverseExpedition(multiverseState, {
+        score: runScore,
+        finishedCount,
+        specialCount: Object.values(specialCreated).reduce((sum, count) => sum + count, 0),
+    });
+    saveMultiverseState(localStorage, multiverseState);
+    return multiverseState.lastResult;
+}
+
 function startBossExperiment(bossId: string): void {
     getBossExperimentController().start(bossId);
 }
@@ -5022,6 +5078,10 @@ function runLabHomeAction(action: string): void {
         startBossExperiment(action.slice("boss-start:".length));
         return;
     }
+    if (action.startsWith("multiverse-start:")) {
+        startSelectedMultiverseExpedition(action.slice("multiverse-start:".length));
+        return;
+    }
     if (action === "start") {
         closeHelpPopup();
         startExperiment();
@@ -5039,6 +5099,7 @@ function runLabHomeAction(action: string): void {
     if (action === "season") { showEventSeasonPopup(); return; }
     if (action === "craft") { showMiracleCraftPopup(); return; }
     if (action === "boss") { showBossExperimentPopup(); return; }
+    if (action === "multiverse") { showMultiverseExpeditionPopup(); return; }
     if (action === "boss-log") { showBossExperimentPopup(); return; }
     if (action === "fusion") { showFusionPopup(); return; }
     if (action === "gacha-log") { showGachaRewardBookPopup(); return; }
@@ -8028,6 +8089,7 @@ function showFinalResult(): void {
     savedRecords.totalScore += runScore;
     const currentReport = saveCurrentResearchReport();
     const bossResult = recordBossResult();
+    const multiverseResult = completeActiveMultiverseExpedition();
     saveRecords();
     const ranking = binCounts.map((count, index) => ({ label: labels[index], count, percent: finishedCount > 0 ? (count / finishedCount) * 100 : 0 })).sort((a, b) => b.count - a.count);
     const rankingHtml = ranking.map((item, index) => `<div style="margin:7px 0;">${index + 1}位：${item.label}　${item.count.toLocaleString()}回　${item.percent.toFixed(2)}%</div>`).join("");
@@ -8046,7 +8108,7 @@ function showFinalResult(): void {
         currentGachaPoint: getGachaPoint(),
         finishGachaPoint,
         dailyGachaPoint,
-        bossResultHtml: getBossResultHtml(bossResult),
+        bossResultHtml: getMultiverseResultHtml(multiverseResult) + getBossResultHtml(bossResult),
         evaluationGrade: evaluation.grade,
         evaluationType: evaluation.type,
         evaluationDensity: evaluation.density,

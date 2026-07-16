@@ -158,6 +158,7 @@ export function getLabHomeHtml(params: {
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:2px 0 2px;">
                 <button data-home-action="start" class="miracle-home-button miracle-home-primary">実験を開始</button>
+                <button data-home-action="multiverse" class="miracle-home-button miracle-home-primary" style="background:linear-gradient(135deg,#2563eb,#7e22ce,#0891b2);box-shadow:0 0 24px rgba(103,232,249,.28);">多元宇宙遠征</button>
                 <button data-home-action="map" class="miracle-home-button miracle-home-primary">研究所マップ</button>
                 <button data-home-action="presets" class="miracle-home-button">プリセット</button>
                 <button data-home-action="shop" class="miracle-home-button">ショップ</button>
